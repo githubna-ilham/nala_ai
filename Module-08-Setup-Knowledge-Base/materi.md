@@ -128,8 +128,8 @@ Buat extract_text() di app/ingest.py, plus dependency pypdf
 
 GOAL:
 - Tambah `pypdf==5.1.0` di baris baru akhir
-  resources/starter-code/nala/requirements.txt.
-- Buat resources/starter-code/nala/app/ingest.py berisi: `from
+  Nala/requirements.txt.
+- Buat Nala/app/ingest.py berisi: `from
   pypdf import PdfReader` di baris paling atas, lalu satu fungsi
   extract_text(file_path: str) -> str: kalau file_path berakhiran
   ".pdf", buka lewat PdfReader, gabungkan page.extract_text()
@@ -166,7 +166,7 @@ Begitu keempat hal ini terverifikasi, lanjut ke Module 9 — mengubah isi dokume
 
 ### Prasyarat
 - Sudah menyelesaikan **Module 7** (Konsep RAG)
-- Container `ollama`+`api` dari `resources/starter-code/nala/` masih berjalan (kalau tidak, ulangi Module 5 Langkah 2) — module ini belum butuh `opensearch`/`airflow`
+- Container `ollama`+`api` dari `Nala/` masih berjalan (kalau tidak, ulangi Module 5 Langkah 2) — module ini belum butuh `opensearch`/`airflow`
 
 ### Langkah 1: Verifikasi data seed dan `extract_text()`
 

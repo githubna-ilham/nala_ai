@@ -121,7 +121,7 @@ Tambahkan juga class CSS baru di `app/static/style.css`:
 **▶️ Jalankan & lihat hasilnya**
 
 ```
-file:///path/ke/resources/starter-code/nala/app/templates/upload.html
+file:///path/ke/Nala/app/templates/upload.html
 ```
 
 ✅ **Indikator sukses**: struktur halaman (judul, input file, tombol "Upload") tampil, tapi styling tidak muncul benar dan submit form belum berfungsi (tidak ada server di `file://`). Ini **normal** — sambungan sungguhannya di Tahap B.
@@ -134,7 +134,7 @@ Buat halaman upload dokumen NALA (Module 13, Tahap A) — upload.html,
 belum terhubung ke FastAPI.
 
 GOAL:
-- Buat resources/starter-code/nala/app/templates/upload.html:
+- Buat Nala/app/templates/upload.html:
   form HTML biasa (method="post", action="/upload",
   enctype="multipart/form-data") dengan satu <input type="file"
   name="file" accept=".md,.txt,.pdf" required> dan tombol submit, nav
@@ -144,7 +144,7 @@ GOAL:
   {% endfor %}...{% else %}...{% endif %} untuk daftar dokumen.
   TIDAK ADA JavaScript di file ini.
 - Tambah class CSS baru di akhir
-  resources/starter-code/nala/app/static/style.css: .success,
+  Nala/app/static/style.css: .success,
   .hint, .doc-list, .doc-list li.
 
 CONTEXT:
@@ -272,9 +272,9 @@ langsung memanggil ingest_documents() versi chunking (Module 13,
 Tahap B).
 
 GOAL:
-- Di resources/starter-code/nala/requirements.txt: tambah baris
+- Di Nala/requirements.txt: tambah baris
   `python-multipart==0.0.12` di akhir file.
-- Di resources/starter-code/nala/app/main.py:
+- Di Nala/app/main.py:
   - Tambah import File, UploadFile dari fastapi (gabungkan dengan
     import yang sudah ada, jangan duplikat).
   - Tambah `import httpx` dan `from app.ingest import
@@ -291,7 +291,7 @@ GOAL:
     ingest_documents(KNOWLEDGE_BASE_PATH), set message dengan jumlah
     chunk; except httpx.HTTPError: set message fallback. Render ulang
     upload.html dengan message dan documents yang baru.
-- Di resources/starter-code/nala/app/templates/chat.html: ganti
+- Di Nala/app/templates/chat.html: ganti
   <nav><a href="/">Chat</a></nav> jadi <nav><a href="/">Chat</a> |
   <a href="/upload">Knowledge Base</a></nav> kalau belum ada.
 

@@ -339,7 +339,7 @@ Tambah service airflow di docker-compose.yml dan buat DAG
 ingest_documents (Module 14).
 
 GOAL:
-- Di resources/starter-code/nala/docker-compose.yml: tambah
+- Di Nala/docker-compose.yml: tambah
   service baru `airflow` (image apache/airflow:2.10.2, command
   standalone, environment AIRFLOW__CORE__LOAD_EXAMPLES=false,
   AIRFLOW__CORE__DAGS_FOLDER=/opt/airflow/dags,
@@ -351,7 +351,7 @@ GOAL:
   ./app:/opt/airflow/dags/app,
   ../../../sample-knowledge-base:/opt/airflow/knowledge-base,
   depends_on opensearch dan ollama).
-- Buat resources/starter-code/nala/airflow/dags/ingest_documents_dag.py
+- Buat Nala/airflow/dags/ingest_documents_dag.py
   persis seperti kode di Bagian 4.2 materi.md (DAG dag_id
   "ingest_documents", satu PythonOperator yang panggil wrapper
   run_ingest() yang memanggil ingest_documents("/opt/airflow/knowledge-base")

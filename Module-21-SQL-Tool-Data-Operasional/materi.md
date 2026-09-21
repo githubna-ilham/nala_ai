@@ -201,7 +201,7 @@ Bangun tool query SQL yang dibatasi (bukan SQL bebas) untuk data
 operasional (Module 21, Tahap A).
 
 GOAL:
-- Buat resources/starter-code/nala/app/tools/sql_tool.py:
+- Buat Nala/app/tools/sql_tool.py:
   - SQL_TOOL_SCHEMA (dict skema tool, nama "query_data_operasional",
     parameter: tabel (enum pengajuan_kredit/klaim_asuransi, wajib),
     mode (enum hitung_per_status/detail_nasabah, wajib), status
@@ -331,7 +331,7 @@ Daftarkan tool query SQL sebagai tool kedua di agent (Module 21,
 Tahap B).
 
 GOAL:
-- Di resources/starter-code/nala/app/agent.py: import
+- Di Nala/app/agent.py: import
   SQL_TOOL_SCHEMA dan query_data_operasional dari app.tools.sql_tool;
   tambahkan SQL_TOOL_SCHEMA ke list tools_schema (sekarang berisi dua
   skema); tambah cabang elif di dalam loop call_tool: kalau name ==

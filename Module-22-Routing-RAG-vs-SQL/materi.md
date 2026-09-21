@@ -195,7 +195,7 @@ Tambah pengaman batas putaran tool ke agent supaya tidak berpotensi
 loop tak berhenti (Module 22, Langkah 4).
 
 GOAL:
-- Di resources/starter-code/nala/app/agent.py:
+- Di Nala/app/agent.py:
   1. Tambah konstanta modul MAX_TOOL_ROUNDS = 3 dan fungsi
      _count_tool_rounds(messages: list[dict]) -> int yang menghitung
      sum(1 for m in messages if m.get("role") == "tool").

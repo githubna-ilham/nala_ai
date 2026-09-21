@@ -160,7 +160,7 @@ I/O.
 GOAL:
 - Tambah fungsi chunk_text(text: str, chunk_size: int = 500,
   overlap: int = 50) -> list[str] di
-  resources/starter-code/nala/app/ingest.py, di BAWAH
+  Nala/app/ingest.py, di BAWAH
   extract_text() yang sudah ada. Logikanya: potong text jadi
   potongan chunk_size karakter, tiap potongan berikutnya mundur
   overlap karakter dari akhir potongan sebelumnya sebelum maju lagi,
@@ -243,7 +243,7 @@ panjang.
 
 GOAL:
 - Tambah `import re` di baris atas
-  resources/starter-code/nala/app/ingest.py, sejajar dengan
+  Nala/app/ingest.py, sejajar dengan
   `import os` yang sudah ada.
 - Tambah fungsi baru chunk_markdown(text: str, chunk_size: int = 500,
   overlap: int = 50) -> list[str] di BAWAH chunk_text() (jangan ubah
@@ -337,7 +337,7 @@ Upgrade ingest_documents() untuk memakai chunking, dan naikkan top_k
 di /chat/stream (Module 12, Langkah 3-4).
 
 GOAL:
-- Di resources/starter-code/nala/app/ingest.py: ganti ISI fungsi
+- Di Nala/app/ingest.py: ganti ISI fungsi
   ingest_documents(folder_path: str) -> int yang sudah ada (dari
   Module 11) supaya: setelah content = extract_text(...), tambah
   chunks = chunk_markdown(content) if filename.endswith(".md") else
@@ -346,7 +346,7 @@ GOAL:
   text=chunk, embedding=embedding, metadata={"source": filename}),
   total_chunks += 1. Return total_chunks. JANGAN ubah signature fungsi
   atau bagian ensure_index()/VectorStore setup di awal fungsi.
-- Di resources/starter-code/nala/app/main.py: cari pemanggilan
+- Di Nala/app/main.py: cari pemanggilan
   vector_store.search(query_embedding, top_k=2) di dalam chat_stream()
   (satu-satunya endpoint chat), ganti top_k=2 jadi top_k=6.
 

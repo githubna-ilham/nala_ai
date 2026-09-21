@@ -257,7 +257,7 @@ Langkah eksekusi lengkap (menjalankan Langfuse, mengecek trace, menjalankan `/st
 
 ### Prasyarat
 
-- Module 24 sudah selesai — seluruh stack (`ollama`, `api`, `opensearch`, `opensearch-dashboards`, `airflow`, `postgres`, `adminer`, `langfuse`, `langfuse-db`) sudah jalan lewat `docker compose up -d` di `resources/starter-code/nala/`, mengikuti Module 24 materi.md, bagian Panduan Praktik.
+- Module 24 sudah selesai — seluruh stack (`ollama`, `api`, `opensearch`, `opensearch-dashboards`, `airflow`, `postgres`, `adminer`, `langfuse`, `langfuse-db`) sudah jalan lewat `docker compose up -d` di `Nala/`, mengikuti Module 24 materi.md, bagian Panduan Praktik.
 - Kalau Anda mematikan Langfuse sementara untuk menghemat RAM (lihat troubleshooting Module 24), nyalakan lagi sekarang sebelum lanjut — bukan pull/start dari awal:
 
 ```bash

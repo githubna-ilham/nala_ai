@@ -106,7 +106,7 @@ Tambah ingest_documents() v1 ke app/ingest.py yang sudah ada
 (Module 9) dan VectorStore (Module 10). BELUM ADA CHUNKING.
 
 GOAL:
-- Di resources/starter-code/nala/app/ingest.py (saat ini berisi
+- Di Nala/app/ingest.py (saat ini berisi
   extract_text(), plus import `from pypdf import PdfReader`):
   - Tambah di baris PALING ATAS file: `import os`, `from
     app.embeddings import embed_text`, `from app.vector_store import
@@ -198,14 +198,14 @@ Tambah NALA_SYSTEM_PROMPT_NO_CONTEXT dan setup VectorStore di main.py
 endpoint apa pun.
 
 GOAL:
-- Di resources/starter-code/nala/app/system_prompt.py: tambah
+- Di Nala/app/system_prompt.py: tambah
   konstanta baru NALA_SYSTEM_PROMPT_NO_CONTEXT (string multi-baris)
   di bawah NALA_SYSTEM_PROMPT yang sudah ada — isinya sama persis
   dengan NALA_SYSTEM_PROMPT kecuali aturan terakhir diganti jadi:
   "Belum ada dokumen internal yang terhubung ke kamu saat ini, jadi
   jawab berdasarkan pengetahuan umum saja dan sebutkan bahwa jawaban
   akan lebih akurat setelah dokumen SOP diunggah."
-- Di resources/starter-code/nala/app/main.py:
+- Di Nala/app/main.py:
   - Ganti `from app.system_prompt import NALA_SYSTEM_PROMPT` jadi
     `from app.system_prompt import NALA_SYSTEM_PROMPT,
     NALA_SYSTEM_PROMPT_NO_CONTEXT`.
@@ -294,7 +294,7 @@ Ubah endpoint POST /chat/stream supaya retrieval-augmented (Module 11,
 Langkah 3).
 
 GOAL:
-- Di resources/starter-code/nala/app/main.py, di dalam fungsi
+- Di Nala/app/main.py, di dalam fungsi
   chat_stream() (endpoint POST /chat/stream), SETELAH baris
   `recent = request.messages[-HISTORY_WINDOW:]` yang sudah ada,
   tambahkan: last_user_message = recent[-1].content; try/except:

@@ -60,22 +60,22 @@ Tapi kontrak ini **tidak dirancang untuk bertahan selamanya**. Begitu Module 6 b
 
 ## 3. Struktur Kode yang Ditambahkan
 
-Dibanding starter code Module 1-4, ada tiga penambahan di `resources/starter-code/nala/`. Daripada langsung ditunjukkan kode lengkap, mari bangun **secara bertahap dalam 3 tahap besar** — tiap tahap menambah satu kemampuan baru di atas tahap sebelumnya, dan bisa langsung dites sebelum lanjut ke tahap berikutnya:
+Dibanding starter code Module 1-4, ada tiga penambahan di `Nala/`. Daripada langsung ditunjukkan kode lengkap, mari bangun **secara bertahap dalam 3 tahap besar** — tiap tahap menambah satu kemampuan baru di atas tahap sebelumnya, dan bisa langsung dites sebelum lanjut ke tahap berikutnya:
 
 1. **Tahap A — Verifikasi kode Module 1-4**, belum ada HTML sama sekali. Fokus: pastikan fondasi (FastAPI + Ollama + `NALA_SYSTEM_PROMPT`) masih jalan persis seperti Module 1-4, sebelum menambah apa pun.
 2. **Tahap B — Buat file halaman dulu** (`chat.html`, `style.css`), belum terhubung ke FastAPI sama sekali. Fokus: menulis halamannya sendiri dulu sebagai unit yang berdiri sendiri, sebelum dipikirkan cara "menyambungkannya".
 3. **Tahap C — Hubungkan**: tambah dependency `jinja2`, pasang `Jinja2Templates`/`StaticFiles`, dan buat endpoint `GET "/"` yang merender file dari Tahap B.
 
-**Target akhirnya satu file yang sama: `resources/starter-code/nala/app/main.py`** (plus `chat.html`, `style.css`) — file yang sama yang sudah Anda edit sejak Module 1-4, langsung di tempat. Ikuti Langkah 1-6 berikut untuk menulis kodenya bertahap.
+**Target akhirnya satu file yang sama: `Nala/app/main.py`** (plus `chat.html`, `style.css`) — file yang sama yang sudah Anda edit sejak Module 1-4, langsung di tempat. Ikuti Langkah 1-6 berikut untuk menulis kodenya bertahap.
 
 ### Tahap A — Verifikasi kode Module 1-4 (belum ada HTML)
 
 **Langkah 1 — Pastikan fondasi Module 1-4 masih utuh**
 
-`docker-compose.yml`, `Dockerfile`, `requirements.txt`, `app/ollama_client.py`, `app/system_prompt.py`, dan `app/main.py` **tidak berubah sama sekali** dari Module 1-4 di titik ini — file-file ini sudah ada di `resources/starter-code/nala/` dari module sebelumnya, tidak perlu disalin ulang atau ditulis ulang. Cukup pastikan `app/__init__.py` dan `tests/__init__.py` sudah ada (buat kalau belum):
+`docker-compose.yml`, `Dockerfile`, `requirements.txt`, `app/ollama_client.py`, `app/system_prompt.py`, dan `app/main.py` **tidak berubah sama sekali** dari Module 1-4 di titik ini — file-file ini sudah ada di `Nala/` dari module sebelumnya, tidak perlu disalin ulang atau ditulis ulang. Cukup pastikan `app/__init__.py` dan `tests/__init__.py` sudah ada (buat kalau belum):
 
 ```bash
-cd resources/starter-code/nala
+cd Nala
 touch app/__init__.py tests/__init__.py
 ```
 
@@ -84,7 +84,7 @@ Belum ada alasan untuk mengubah isi file yang sudah ada — perubahan baru muncu
 **▶️ Jalankan & lihat hasilnya**
 
 ```bash
-cd resources/starter-code/nala
+cd Nala
 docker compose up --build --no-deps ollama api
 ```
 
@@ -107,7 +107,7 @@ curl -X POST http://localhost:8000/chat \
 <summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 1</strong></summary>
 
 ```
-Pastikan file-file inti Module 1-4 masih utuh di resources/starter-code/nala/
+Pastikan file-file inti Module 1-4 masih utuh di Nala/
 (tidak perlu disalin — sudah ada di sana dari module sebelumnya), lalu
 buat 2 file kosong baru yang belum ada.
 
@@ -120,10 +120,10 @@ GOAL:
   - app/system_prompt.py
   - app/main.py
 - Buat 2 file kosong (0 baris) kalau belum ada: app/__init__.py dan
-  tests/__init__.py di dalam resources/starter-code/nala/
+  tests/__init__.py di dalam Nala/
 
 CONTEXT:
-- Semua file berada di satu folder: resources/starter-code/nala/
+- Semua file berada di satu folder: Nala/
   (folder app/, app/templates/, app/static/, tests/ sudah ada tapi kosong)
 
 GUARDRAIL:
@@ -289,7 +289,7 @@ nav a {
 Belum ada server yang tahu kedua file ini ada (`main.py` belum diubah) — jadi belum bisa dites lewat `curl`/`docker compose`. Cukup buka filenya langsung di browser lewat path lokal (bukan `http://localhost:8000`):
 
 ```
-file:///path/ke/resources/starter-code/nala/app/templates/chat.html
+file:///path/ke/Nala/app/templates/chat.html
 ```
 
 ✅ **Indikator sukses**: struktur halaman (judul, kolom input, tombol "Kirim") tampil — tapi **styling tidak akan muncul benar** (CSS-nya `404`, karena path `/static/style.css` cuma valid kalau diakses lewat server FastAPI, bukan `file://`), dan tombol "Kirim" belum berfungsi (`fetch("/chat")` akan gagal, tidak ada server di `file://`). Itu **normal** — bukti keduanya sudah tertulis benar secara struktur; sambungan sungguhannya baru terjadi di Tahap C.
@@ -302,15 +302,15 @@ Buat halaman chat NALA (Module 5, Tahap B) — chat.html dan style.css,
 BELUM dihubungkan ke FastAPI (main.py TIDAK diubah di tahap ini).
 
 GOAL:
-1. Buat folder resources/starter-code/nala/app/templates/ dan
+1. Buat folder Nala/app/templates/ dan
    app/static/ (boleh sudah ada).
-2. Buat resources/starter-code/nala/app/templates/chat.html —
+2. Buat Nala/app/templates/chat.html —
    HTML biasa dengan form input pesan (id="chat-form"), area riwayat
    (id="history"), dan JavaScript fetch() ke POST /chat (kirim
    {message}, tampilkan data.reply). WAJIB ada fungsi escapeHtml()
    yang membungkus setiap teks sebelum dimasukkan ke innerHTML —
    baik pesan user maupun balasan NALA.
-3. Buat resources/starter-code/nala/app/static/style.css —
+3. Buat Nala/app/static/style.css —
    styling dasar: body max-width 640px center, #history dengan
    border+scroll, .user dan .nala dibedakan warna teks.
 
@@ -403,9 +403,9 @@ tambah dependency jinja2, pasang StaticFiles/Jinja2Templates, dan
 endpoint GET "/".
 
 GOAL:
-1. Di resources/starter-code/nala/requirements.txt: tambahkan
+1. Di Nala/requirements.txt: tambahkan
    satu baris baru di akhir file: jinja2==3.1.4
-2. Di resources/starter-code/nala/app/main.py:
+2. Di Nala/app/main.py:
    a. Tambahkan ke import yang sudah ada: `Request` dari `fastapi`,
       `StaticFiles` dari `fastapi.staticfiles`, `Jinja2Templates`
       dari `fastapi.templating`, `HTMLResponse` dari
@@ -515,7 +515,7 @@ Begitu ketiga hal ini terverifikasi, lanjut ke Module 6 — yang membuat balasan
 
 ### Satu folder kode untuk Module 5-27
 
-- **`resources/starter-code/nala/`** — satu-satunya folder kerja Anda, dipakai sejak Module 1-4 dan terus sama sepanjang Module 5-27. Panduan Module 5-14 membangunnya **bertahap, module demi module, langsung di tempat**: setiap module menambah/mengubah file di folder ini, tidak ada penyalinan ke folder lain. Semua perintah di panduan ini dijalankan di folder ini.
+- **`Nala/`** — satu-satunya folder kerja Anda, dipakai sejak Module 1-4 dan terus sama sepanjang Module 5-27. Panduan Module 5-14 membangunnya **bertahap, module demi module, langsung di tempat**: setiap module menambah/mengubah file di folder ini, tidak ada penyalinan ke folder lain. Semua perintah di panduan ini dijalankan di folder ini.
 
 ### Prasyarat
 - Sudah menyelesaikan **Module 1-4** (Docker Desktop terinstall, `llama3.2:3b` pernah dipakai, familiar dengan `docker compose up --build`)
@@ -523,7 +523,7 @@ Begitu ketiga hal ini terverifikasi, lanjut ke Module 6 — yang membuat balasan
 
 #### Melanjutkan dari Module 1-4 — folder yang sama, tidak ada yang perlu dimatikan
 
-`resources/starter-code/nala/` adalah folder yang **sama persis** dengan yang Anda pakai di Module 1-4 — `ollama_client.py`, `system_prompt.py`, `main.py`, `docker-compose.yml`, dan seterusnya sudah ada di sana, dan fitur-fitur baru Module 5-14 (streaming, multi-turn, RAG chain, chunking, embedding, vector store, upload, Airflow) ditambahkan langsung di atasnya, di tempat yang sama.
+`Nala/` adalah folder yang **sama persis** dengan yang Anda pakai di Module 1-4 — `ollama_client.py`, `system_prompt.py`, `main.py`, `docker-compose.yml`, dan seterusnya sudah ada di sana, dan fitur-fitur baru Module 5-14 (streaming, multi-turn, RAG chain, chunking, embedding, vector store, upload, Airflow) ditambahkan langsung di atasnya, di tempat yang sama.
 
 Konsekuensinya: **tidak ada folder lain untuk dipindahkan, dan tidak ada container yang perlu dimatikan** — container Ollama yang sudah jalan sejak Module 1-4 terus dipakai apa adanya (project Docker Compose-nya sama, karena foldernya sama), model yang sudah di-pull otomatis ikut terbawa, tidak perlu di-pull ulang. Cukup jalankan compose seperti biasa (Langkah 2 di bawah) — Docker Compose otomatis merecreate container yang definisinya berubah.
 
@@ -549,7 +549,7 @@ Kalau disk mulai penuh, bersihkan image/volume lama yang tidak terpakai (lihat p
 ### Langkah 1: Masuk ke folder starter code
 
 ```bash
-cd resources/starter-code/nala
+cd Nala
 ```
 
 ### Langkah 2: Jalankan Ollama + API dulu (belum semua service)
@@ -562,7 +562,7 @@ docker compose up --build --no-deps ollama api
 
 Flag `--no-deps` penting: tanpa itu, Docker Compose otomatis ikut menyalakan `opensearch` karena `api` punya `depends_on: opensearch` di `docker-compose.yml`. Dengan `--no-deps`, benar-benar hanya 2 container yang jalan.
 
-Ini aman meski `api` "seharusnya" nantinya butuh OpenSearch — belum sekarang. Di titik ini (`resources/starter-code/nala/` baru sampai Module 5), `/chat` belum menyentuh OpenSearch sama sekali. Nanti begitu Module 11 (`/chat/stream` jadi RAG-aware) dan Module 13 (`/upload`) selesai dibangun, kedua endpoint itu akan membungkus setiap panggilan ke OpenSearch dalam `try/except httpx.HTTPError` — kalau `opensearch` tidak jalan, koneksi gagal secara terkontrol dan otomatis fallback (mode tanpa-konteks untuk chat, "tersimpan tapi belum ter-index" untuk upload), bukan crash. Lihat Module 11 Bagian 2 Langkah 3 dan Module 13 Bagian 2 Tahap B untuk penjelasan desainnya begitu Anda sampai di situ.
+Ini aman meski `api` "seharusnya" nantinya butuh OpenSearch — belum sekarang. Di titik ini (`Nala/` baru sampai Module 5), `/chat` belum menyentuh OpenSearch sama sekali. Nanti begitu Module 11 (`/chat/stream` jadi RAG-aware) dan Module 13 (`/upload`) selesai dibangun, kedua endpoint itu akan membungkus setiap panggilan ke OpenSearch dalam `try/except httpx.HTTPError` — kalau `opensearch` tidak jalan, koneksi gagal secara terkontrol dan otomatis fallback (mode tanpa-konteks untuk chat, "tersimpan tapi belum ter-index" untuk upload), bukan crash. Lihat Module 11 Bagian 2 Langkah 3 dan Module 13 Bagian 2 Tahap B untuk penjelasan desainnya begitu Anda sampai di situ.
 
 Tunggu sampai log `api` menunjukkan `Uvicorn running on http://0.0.0.0:8000`. Prosesnya jauh lebih cepat dari menyalakan keempat service sekaligus, karena tidak perlu menunggu inisialisasi cluster OpenSearch atau database metadata Airflow.
 
@@ -570,7 +570,7 @@ Tunggu sampai log `api` menunjukkan `Uvicorn running on http://0.0.0.0:8000`. Pr
 
 Sama seperti Module 1-4, Ollama di dalam container punya storage terpisah — model perlu di-pull ulang khusus untuk container ini. Di titik ini kita baru butuh **satu model**: `llama3.2:3b` untuk chat/generation. Model untuk embedding (`nomic-embed-text`) belum dibutuhkan — itu baru dipakai mulai Module 9, jadi baru kita pull nanti di Module 9 Langkah 1 (bukan sekarang, supaya jelas step mana yang butuh apa).
 
-Buka **terminal baru** (biarkan terminal Langkah 2 tetap berjalan), masuk ke folder yang sama (`resources/starter-code/nala`), lalu:
+Buka **terminal baru** (biarkan terminal Langkah 2 tetap berjalan), masuk ke folder yang sama (`Nala`), lalu:
 
 ```bash
 docker compose exec ollama ollama pull llama3.2:3b
@@ -606,7 +606,7 @@ curl -X POST http://localhost:8000/chat \
 
 ### Troubleshooting
 
-- **`no configuration file provided: not found`**: `docker compose` dijalankan bukan dari folder yang berisi `docker-compose.yml`. Pastikan Anda berada persis di `resources/starter-code/nala/` (cek dengan `ls`).
+- **`no configuration file provided: not found`**: `docker compose` dijalankan bukan dari folder yang berisi `docker-compose.yml`. Pastikan Anda berada persis di `Nala/` (cek dengan `ls`).
 - **`failed to read dockerfile: open Dockerfile: no such file or directory`**: nama file salah — harus persis `Dockerfile`. Cek dengan `ls` dan rename kalau perlu: `mv DockerFile Dockerfile`.
 - **`Internal Server Error` saat chat**: cek dulu model Ollama sudah ter-pull (`docker compose exec ollama ollama list`) — di titik ini baru `llama3.2:3b` (Langkah 3) yang dibutuhkan. Detail traceback Python bisa dilihat di log container `api` (terminal yang menjalankan Langkah 2).
 - **Port sudah dipakai (8000/11434)**: ubah mapping port di `docker-compose.yml` untuk service yang bentrok (misal `8001:8000`).

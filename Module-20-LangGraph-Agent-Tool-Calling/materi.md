@@ -162,7 +162,7 @@ Pola kerjanya:
 
 ## 4. Struktur Kode yang Ditambahkan
 
-Melanjutkan langsung di `resources/starter-code/nala/` (folder yang sama sejak Module 1 — lihat bagian Panduan Praktik di materi Module 19). Tiga tahap di module ini:
+Melanjutkan langsung di `Nala/` (folder yang sama sejak Module 1 — lihat bagian Panduan Praktik di materi Module 19). Tiga tahap di module ini:
 
 1. **Tahap A — Tambah kemampuan tool-calling ke `OllamaClient`**, tanpa membuat atau menyentuh endpoint apa pun dulu.
 2. **Tahap B — Tulis tool pertama**: bungkus RAG chain Module 7-18 jadi fungsi `rag_search()` yang berdiri sendiri, plus skema tool-nya.
@@ -222,9 +222,9 @@ tools) ke OllamaClient (Module 20, Tahap A) — belum mengubah
 endpoint apa pun.
 
 GOAL:
-1. Di resources/starter-code/nala/requirements.txt: tambah baris
+1. Di Nala/requirements.txt: tambah baris
    baru di akhir: langgraph==0.2.39
-2. Di resources/starter-code/nala/app/ollama_client.py: tambah
+2. Di Nala/app/ollama_client.py: tambah
    method baru `chat(self, messages: list[dict], tools: list[dict] |
    None = None) -> dict` di dalam class OllamaClient (setelah method
    generate() yang sudah ada). Method ini POST ke f"{self.base_url}/
@@ -328,9 +328,9 @@ jadi tool berdiri sendiri (Module 20, Tahap B) — belum
 disambungkan ke agent atau endpoint mana pun.
 
 GOAL:
-1. Buat folder resources/starter-code/nala/app/tools/ + file
+1. Buat folder Nala/app/tools/ + file
    kosong __init__.py di dalamnya.
-2. Buat resources/starter-code/nala/app/tools/rag_tool.py berisi:
+2. Buat Nala/app/tools/rag_tool.py berisi:
    a. Konstanta RAG_TOOL_SCHEMA (dict) — skema tool bergaya OpenAI
       function-calling: {"type": "function", "function": {"name":
       "cari_dokumen_sop", "description": "...", "parameters": {"type":
@@ -520,12 +520,12 @@ hardcoded di /chat/stream, TAPI /chat/stream sendiri tidak diubah
 (Module 20, Tahap C).
 
 GOAL:
-1. Di resources/starter-code/nala/app/system_prompt.py: tambah
+1. Di Nala/app/system_prompt.py: tambah
    konstanta baru NALA_SYSTEM_PROMPT_AGENT (string) yang menjelaskan
    NALA punya tool pencarian dokumen SOP dan harus memakainya untuk
    pertanyaan prosedur/syarat/kebijakan, TANPA menyebut "konteks akan
    disisipkan" (beda dari NALA_SYSTEM_PROMPT lama).
-2. Buat resources/starter-code/nala/app/agent.py berisi:
+2. Buat Nala/app/agent.py berisi:
    - class AgentState(TypedDict) dengan field messages: Annotated[list
      [dict], operator.add]
    - fungsi build_agent(ollama_client, vector_store, ollama_base_url)
@@ -542,7 +542,7 @@ GOAL:
      call_model pakai should_continue ke {"call_tool": "call_tool",
      END: END}, add_edge("call_tool", "call_model"), return
      graph.compile().
-3. Di resources/starter-code/nala/app/main.py:
+3. Di Nala/app/main.py:
    - Tambah import build_agent dari app.agent dan
      NALA_SYSTEM_PROMPT_AGENT dari app.system_prompt.
    - Buat instance nala_agent = build_agent(ollama_client=ollama_client,
@@ -713,11 +713,11 @@ Module ini tidak menambah kemampuan baru yang terasa dari sisi user — jawaban 
 
 **Panduan Praktik — Module 20: Desain Agent dengan LangGraph — Tool-Calling**
 
-Lanjutan langsung dari bagian Panduan Praktik di materi Module 19 — folder `resources/starter-code/nala/` dan service `postgres` (dengan data operasional yang sudah Anda isi lewat form) harus sudah siap sebelum mulai di sini. Penomoran Langkah di bawah melanjutkan penomoran global dari Module 19 (Langkah 1-5), supaya referensi silang antar-bagian tetap konsisten.
+Lanjutan langsung dari bagian Panduan Praktik di materi Module 19 — folder `Nala/` dan service `postgres` (dengan data operasional yang sudah Anda isi lewat form) harus sudah siap sebelum mulai di sini. Penomoran Langkah di bawah melanjutkan penomoran global dari Module 19 (Langkah 1-5), supaya referensi silang antar-bagian tetap konsisten.
 
 ### Prasyarat
 - Module 19 selesai: service `postgres` sehat, tabel `pengajuan_kredit`/`klaim_asuransi` sudah berisi data (7 baris + 4 baris) lewat form `/data-operasional`, role `nala_readonly`/`nala_writer` terverifikasi dua arah.
-- `docker compose up -d --build` sudah pernah dijalankan dari `resources/starter-code/nala/` — kalau container belum jalan, jalankan ulang dari folder itu sebelum melanjutkan.
+- `docker compose up -d --build` sudah pernah dijalankan dari `Nala/` — kalau container belum jalan, jalankan ulang dari folder itu sebelum melanjutkan.
 
 ### Langkah 6: Tambah dependency `langgraph`, method `chat()` di `OllamaClient` (Module 20 Tahap A)
 

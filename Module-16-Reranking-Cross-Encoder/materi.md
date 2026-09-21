@@ -214,13 +214,13 @@ Buat app/reranker.py dengan class Reranker berbasis CrossEncoder
 (Module 16, Tahap A) — belum dipakai endpoint apa pun.
 
 GOAL:
-1. Di resources/starter-code/nala/requirements.txt: tambah
+1. Di Nala/requirements.txt: tambah
    baris baru sentence-transformers==3.2.1.
-2. Di resources/starter-code/nala/docker-compose.yml, service
+2. Di Nala/docker-compose.yml, service
    api: tambah environment HF_HOME=/app/.cache/huggingface dan
    volume baru hf_cache:/app/.cache/huggingface; tambah hf_cache ke
    daftar top-level volumes.
-3. Buat resources/starter-code/nala/app/reranker.py:
+3. Buat Nala/app/reranker.py:
    - import CrossEncoder dari sentence_transformers
    - class Reranker dengan __init__(self, model_name: str =
      "cross-encoder/ms-marco-MiniLM-L-6-v2") yang menyimpan
@@ -302,7 +302,7 @@ curl -N -X POST http://localhost:8000/chat/stream \
 Wiring Reranker ke /chat/stream (Module 16, Tahap B).
 
 GOAL:
-1. Di resources/starter-code/nala/app/main.py:
+1. Di Nala/app/main.py:
    - Tambah `from app.reranker import Reranker` ke import.
    - Tambah dekat instance vector_store: RERANK_ENABLED =
      os.environ.get("RERANK_ENABLED", "true").lower() == "true", lalu
@@ -505,7 +505,7 @@ Sejauh ini, klaim "reranking membuat retrieval lebih baik" masih berdasarkan pen
 > **Catatan penomoran**: "Langkah N" di bagian Panduan Praktik ini adalah urutan eksekusi tersendiri (langkah demi langkah menjalankan perintah), terpisah dari "Langkah N" yang sudah dipakai di bagian kode/struktur di atas (langkah menulis kode). Keduanya kebetulan memakai nomor yang sama tapi menghitung hal yang berbeda — jangan disamakan urutannya.
 
 ### Prasyarat
-- Sudah menyelesaikan **Module 15** — `resources/starter-code/nala/` sudah punya `search_hybrid()` bekerja dan terhubung ke `/chat/stream`
+- Sudah menyelesaikan **Module 15** — `Nala/` sudah punya `search_hybrid()` bekerja dan terhubung ke `/chat/stream`
 - Docker Desktop dinaikkan alokasi RAM-nya untuk menampung reranker:
 
 | Setting | Minimal | Direkomendasikan | Alasan |
@@ -519,7 +519,7 @@ Sejauh ini, klaim "reranking membuat retrieval lebih baik" masih berdasarkan pen
 Ikuti Module 16 Bagian 5 Tahap A Langkah 1-2 di `materi.md`: tambah `sentence-transformers` ke `requirements.txt`, tambah `HF_HOME` dan volume `hf_cache` ke service `api` di `docker-compose.yml`.
 
 ```bash
-cd resources/starter-code/nala
+cd Nala
 docker compose up --build api
 ```
 

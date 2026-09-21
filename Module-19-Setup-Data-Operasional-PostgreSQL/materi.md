@@ -167,7 +167,7 @@ Tambah service PostgreSQL, skema data operasional minimal, dan dua
 role terpisah (read-only vs write-only) — Module 19, Tahap A.
 
 GOAL:
-1. Di resources/starter-code/nala/docker-compose.yml: tambah
+1. Di Nala/docker-compose.yml: tambah
    service baru "postgres" (image postgres:16, POSTGRES_DB=
    nala_operasional, POSTGRES_USER=nala_admin, POSTGRES_PASSWORD dari
    env var POSTGRES_ADMIN_PASSWORD default changeme_dev_only, port
@@ -176,7 +176,7 @@ GOAL:
    pg_isready). Tambah postgres_data ke volumes: top-level. Tambah
    depends_on postgres (condition service_healthy) ke service api
    (ubah depends_on api ke bentuk mapping kalau masih list).
-2. Buat resources/starter-code/nala/db/seed.sql: CREATE TABLE
+2. Buat Nala/db/seed.sql: CREATE TABLE
    pengajuan_kredit (id SERIAL PK, nasabah_id VARCHAR(10), nama_nasabah
    VARCHAR(100), jumlah_pengajuan NUMERIC(15,2), status VARCHAR(20)
    CHECK IN ('pending','disetujui','ditolak','pencairan'),
@@ -470,20 +470,20 @@ pengajuan kredit dan klaim asuransi secara manual — Module 19,
 Tahap B.
 
 GOAL:
-1. Di resources/starter-code/nala/requirements.txt: tambah baris
+1. Di Nala/requirements.txt: tambah baris
    psycopg[binary]==3.2.3
-2. Buat resources/starter-code/nala/app/db.py: dua konstanta DSN
+2. Buat Nala/app/db.py: dua konstanta DSN
    dari env var (POSTGRES_READONLY_DSN, POSTGRES_WRITER_DSN, dengan
    default masing-masing memakai nala_readonly/nala_writer), dua fungsi
    get_connection() dan get_write_connection() yang psycopg.connect()
    ke DSN masing-masing (connect_timeout=5).
-3. Buat resources/starter-code/nala/app/templates/data_operasional.html:
+3. Buat Nala/app/templates/data_operasional.html:
    dua form (pengajuan kredit, klaim asuransi) dengan field sesuai
    kolom tabel masing-masing, plus dua tabel daftar data di bawah tiap
    form (loop Jinja2 atas pengajuan_kredit/klaim_asuransi dari context).
    Nav link baru "Data Operasional" ditambahkan juga ke chat.html dan
    upload.html yang sudah ada.
-4. Di resources/starter-code/nala/app/main.py: import Form dari
+4. Di Nala/app/main.py: import Form dari
    fastapi, dict_row dari psycopg.rows, get_connection/get_write_connection
    dari app.db. Tambah fungsi fetch_pengajuan_kredit()/fetch_klaim_asuransi()
    (SELECT via get_connection(), row_factory=dict_row). Tambah endpoint
@@ -545,22 +545,22 @@ Module 20 selanjutnya membangun agent LangGraph (fokus pada tool dokumen SOP dul
 
 #### Melanjutkan langsung di folder starter code yang sudah ada
 
-Semua kode dari Module 1-18 hidup di satu folder: `resources/starter-code/nala/` (lihat Module 19 bagian Tujuan di atas). Langkah 1 di bawah **tidak** menyalin ke folder baru — rangkaian Module 19-23 di bagian Panduan Praktik berikutnya menambah lapisan data operasional/agent/tool/RBAC **langsung di atas file-file yang sudah ada** di folder ini, module demi module.
+Semua kode dari Module 1-18 hidup di satu folder: `Nala/` (lihat Module 19 bagian Tujuan di atas). Langkah 1 di bawah **tidak** menyalin ke folder baru — rangkaian Module 19-23 di bagian Panduan Praktik berikutnya menambah lapisan data operasional/agent/tool/RBAC **langsung di atas file-file yang sudah ada** di folder ini, module demi module.
 
-Karena tidak ada folder referensi terpisah — satu-satunya kode adalah `resources/starter-code/nala/` yang Anda edit langsung — setiap kali panduan ini menyebut "kode lengkap", itu merujuk ke bagian **"📄 Kode lengkap"** di `materi.md` module terkait.
+Karena tidak ada folder referensi terpisah — satu-satunya kode adalah `Nala/` yang Anda edit langsung — setiap kali panduan ini menyebut "kode lengkap", itu merujuk ke bagian **"📄 Kode lengkap"** di `materi.md` module terkait.
 
 ### Prasyarat
-- Sudah menyelesaikan **Module 1-18** (`llama3.2:3b` sudah biasa dipakai, `resources/starter-code/nala/` berjalan dengan hybrid search + reranking + evaluasi + Langfuse)
+- Sudah menyelesaikan **Module 1-18** (`llama3.2:3b` sudah biasa dipakai, `Nala/` berjalan dengan hybrid search + reranking + evaluasi + Langfuse)
 - Docker Desktop sudah dialokasikan resource yang cukup — lihat catatan RAM di bawah
 
 #### Container yang sama dipakai sepanjang Module 19-23
 
-Karena hanya ada satu folder kode (`resources/starter-code/nala/`) yang dipakai sejak Module 1, seluruh service (`ollama`, `opensearch`, `airflow`) yang sudah berjalan dari module-module sebelumnya otomatis ikut terpakai di sini — tidak ada folder baru dan tidak ada project Docker baru yang perlu disiapkan; data yang sudah ada (index OpenSearch, model Ollama yang sudah di-pull) tetap tersedia tanpa langkah pemindahan apa pun.
+Karena hanya ada satu folder kode (`Nala/`) yang dipakai sejak Module 1, seluruh service (`ollama`, `opensearch`, `airflow`) yang sudah berjalan dari module-module sebelumnya otomatis ikut terpakai di sini — tidak ada folder baru dan tidak ada project Docker baru yang perlu disiapkan; data yang sudah ada (index OpenSearch, model Ollama yang sudah di-pull) tetap tersedia tanpa langkah pemindahan apa pun.
 
-Setelah `docker-compose.yml` diperbarui (Langkah 1 menambah service `postgres`), jalankan `docker compose` seperti biasa **dari folder `resources/starter-code/nala/`**:
+Setelah `docker-compose.yml` diperbarui (Langkah 1 menambah service `postgres`), jalankan `docker compose` seperti biasa **dari folder `Nala/`**:
 
 ```bash
-cd resources/starter-code/nala
+cd Nala
 docker compose up --build -d
 ```
 
@@ -581,7 +581,7 @@ Kalau sudah di 16GB+ sejak Module 5-18, tidak perlu diubah lagi kecuali ingin me
 ### Langkah 1: Masuk ke folder starter code
 
 ```bash
-cd resources/starter-code/nala
+cd Nala
 ```
 
 Folder ini sudah berisi seluruh kode dari Module 1-18 (`app/`, `docker-compose.yml`, `requirements.txt`, dan konfigurasi hybrid search/reranking/Langfuse dari Module 15-18) — rangkaian Module 19-23 **menambah** lapisan data operasional/agent/tool langsung di atas file-file yang sudah ada di sini, bukan menulis ulang dari nol dan bukan menyalin ke folder lain. Verifikasi dulu fondasinya masih utuh sebelum menambah apa pun:

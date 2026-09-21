@@ -172,7 +172,7 @@ Tambah service langfuse-db dan langfuse di docker-compose.yml (Module
 18, Langkah 1) — belum ada instrumentasi kode Python.
 
 GOAL:
-- Di resources/starter-code/nala/docker-compose.yml, tambah dua
+- Di Nala/docker-compose.yml, tambah dua
   service baru:
   1. langfuse-db: image postgres:15-alpine, environment
      POSTGRES_USER=langfuse, POSTGRES_PASSWORD=langfuse,
@@ -345,9 +345,9 @@ trace ditutup DI DALAM generator, bukan di badan fungsi endpoint
 (Module 18, Tahap B, Langkah 4).
 
 GOAL:
-- Di resources/starter-code/nala/requirements.txt: tambah
+- Di Nala/requirements.txt: tambah
   baris langfuse>=2.0,<3.0.
-- Di resources/starter-code/nala/app/main.py:
+- Di Nala/app/main.py:
   - Tambah `from langfuse import Langfuse`.
   - Tambah instance modul-level langfuse_client = Langfuse(public_key=
     os.environ.get("LANGFUSE_PUBLIC_KEY"), secret_key=os.environ.get(
@@ -477,7 +477,7 @@ Module ini menutup rangkaian Module 15-18 dengan lapisan yang membungkus **selur
 > **Catatan penomoran**: "Langkah N" di bagian Panduan Praktik ini adalah urutan eksekusi tersendiri (langkah demi langkah menjalankan perintah), terpisah dari "Langkah N" yang sudah dipakai di bagian kode/struktur di atas (langkah menulis kode). Keduanya kebetulan memakai nomor yang sama tapi menghitung hal yang berbeda — jangan disamakan urutannya.
 
 ### Prasyarat
-- Sudah menyelesaikan **Module 17** — `resources/starter-code/nala/` sudah punya framework evaluasi bekerja
+- Sudah menyelesaikan **Module 17** — `Nala/` sudah punya framework evaluasi bekerja
 - Docker Desktop dinaikkan lagi alokasi RAM-nya untuk menampung dua service baru:
 
 | Setting | Minimal | Direkomendasikan | Alasan |
@@ -492,7 +492,7 @@ Kalau laptop mulai terasa berat, pertimbangkan mematikan sementara `airflow` (ti
 Ikuti Module 18 Bagian 4 Tahap A Langkah 1: tambah service `langfuse-db` dan `langfuse` di `docker-compose.yml`.
 
 ```bash
-cd resources/starter-code/nala
+cd Nala
 docker compose up -d --build langfuse-db langfuse
 ```
 
@@ -569,4 +569,4 @@ Airflow tidak dipakai lagi setelah ingest dokumen awal selesai — mematikannya 
 - **Trace tidak muncul sama sekali di UI Langfuse**: cek `LANGFUSE_PUBLIC_KEY`/`LANGFUSE_SECRET_KEY`/`LANGFUSE_HOST` di environment service `api` — key yang salah biasanya gagal secara diam-diam (SDK Langfuse dirancang tidak mengganggu aplikasi utama kalau pengiriman trace gagal). Cek juga apakah `langfuse_client.flush()` benar-benar terpanggil di dalam `traced_chat_stream()` (Module 18 Bagian 4).
 - **Trace `chat_stream` tidak pernah muncul, walau curl berhasil menerima seluruh stream**: kemungkinan besar instrumentasi masih ditulis di badan fungsi `chat_stream()` setelah baris `return StreamingResponse(...)` (baris itu tidak akan pernah tereksekusi tepat waktu) — pastikan `trace.update()`/`flush()` ada di dalam `traced_chat_stream()` (generator terpisah), bukan di `chat_stream()` sendiri. Lihat penjelasan lengkap Module 18 Bagian 4 Tahap B.
 - **Semua service terasa sangat lambat / laptop panas / container ter-*kill***: alokasi RAM Docker Desktop kurang — lihat bagian Prasyarat di atas, naikkan ke 20GB+ kalau tersedia, atau matikan sementara `airflow` (Langkah 6) selama eksplorasi berlangsung.
-- **Port sudah dipakai (3000/8000/9200/11434)**: ubah mapping port yang bentrok di `docker-compose.yml`, atau pastikan container lama sudah benar-benar dimatikan (`docker compose down` di `resources/starter-code/nala`).
+- **Port sudah dipakai (3000/8000/9200/11434)**: ubah mapping port yang bentrok di `docker-compose.yml`, atau pastikan container lama sudah benar-benar dimatikan (`docker compose down` di `Nala`).

@@ -324,7 +324,7 @@ VectorStore (Module 15, Tahap A, Langkah 1-2) — belum dipakai endpoint
 apa pun.
 
 GOAL:
-- Di resources/starter-code/nala/app/vector_store.py:
+- Di Nala/app/vector_store.py:
   - Di method search() yang sudah ada, tambahkan key "_id": hit["_id"]
     ke setiap dict di list yang dikembalikan (selain "text", "score",
     "metadata" yang sudah ada).
@@ -335,7 +335,7 @@ GOAL:
     _id), return list of dict {_id, text, score, metadata}.
 
 CONTEXT:
-- File ini (`app/vector_store.py`) sudah ada di `resources/starter-code/nala/`
+- File ini (`app/vector_store.py`) sudah ada di `Nala/`
   sejak Module 10 — edit langsung di file yang sama, tidak ada
   folder lain yang perlu disalin.
 - Field "text" di mapping index nala-docs (dibuat ensure_index())
@@ -421,7 +421,7 @@ VectorStore (Module 15, Tahap A, Langkah 3) — belum dipakai endpoint
 apa pun.
 
 GOAL:
-- Di resources/starter-code/nala/app/vector_store.py, tambah
+- Di Nala/app/vector_store.py, tambah
   method search_hybrid(self, query_text: str, query_embedding:
   list[float], top_k: int = 3, candidate_pool: int = 20, rrf_k: int
   = 60) -> list[dict]:
@@ -622,7 +622,7 @@ Ganti vector_store.search() jadi vector_store.search_hybrid() di
 /chat/stream (Module 15, Tahap B, Langkah 4).
 
 GOAL:
-- Di resources/starter-code/nala/app/main.py:
+- Di Nala/app/main.py:
   - Di dalam fungsi chat_stream() (endpoint /chat/stream — satu-
     satunya endpoint chat NALA): ganti pemanggilan `results =
     vector_store.search(query_embedding, top_k=3)` jadi `results =
@@ -781,22 +781,22 @@ Yang belum diselesaikan (dan sudah dibuktikan langsung dengan angka di Bagian 8)
 
 #### Catatan penting sebelum mulai
 
-`resources/starter-code/nala/` sudah dibangun bertahap sejak Module 1 dan berjalan lengkap sampai akhir Module 14 (chat UI, streaming/multi-turn, upload, embedding/vector store, chunking, Airflow, RAG chain) — module ini melanjutkan **edit langsung di folder yang sama**, tidak ada folder baru yang perlu dibuat atau disalin. Perintah-perintah di bawah ini mendeskripsikan apa yang akan dijalankan peserta mengikuti panduan ini; kalau ada perintah yang tidak berjalan persis seperti yang tertulis begitu Anda benar-benar menjalankannya, cocokkan dulu dengan kode lengkap ("📄 Kode lengkap") di `materi.md` — itu sumber kebenaran yang lebih rinci dari sekadar cuplikan perintah di sini.
+`Nala/` sudah dibangun bertahap sejak Module 1 dan berjalan lengkap sampai akhir Module 14 (chat UI, streaming/multi-turn, upload, embedding/vector store, chunking, Airflow, RAG chain) — module ini melanjutkan **edit langsung di folder yang sama**, tidak ada folder baru yang perlu dibuat atau disalin. Perintah-perintah di bawah ini mendeskripsikan apa yang akan dijalankan peserta mengikuti panduan ini; kalau ada perintah yang tidak berjalan persis seperti yang tertulis begitu Anda benar-benar menjalankannya, cocokkan dulu dengan kode lengkap ("📄 Kode lengkap") di `materi.md` — itu sumber kebenaran yang lebih rinci dari sekadar cuplikan perintah di sini.
 
-Sepanjang seluruh kurikulum (Module 1 sampai Module 27) hanya ada **satu** folder kode: `resources/starter-code/nala/` — dibangun dan diedit langsung di situ, module demi module, memakai kode lengkap di tiap `materi.md` sebagai rujukan kalau ingin membandingkan hasil.
+Sepanjang seluruh kurikulum (Module 1 sampai Module 27) hanya ada **satu** folder kode: `Nala/` — dibangun dan diedit langsung di situ, module demi module, memakai kode lengkap di tiap `materi.md` sebagai rujukan kalau ingin membandingkan hasil.
 
 ### Prasyarat
-- Sudah menyelesaikan **Module 14** (`resources/starter-code/nala/` berjalan lengkap: chat UI, streaming/multi-turn, upload, embedding/vector store, chunking, Airflow, RAG chain)
+- Sudah menyelesaikan **Module 14** (`Nala/` berjalan lengkap: chat UI, streaming/multi-turn, upload, embedding/vector store, chunking, Airflow, RAG chain)
 - Docker Desktop sudah dialokasikan resource yang cukup — minimal 16GB RAM (sama seperti kebutuhan sejak Module 10-14); module ini sendiri tidak menambah service Docker baru, jadi belum perlu menaikkan alokasi lagi
 
 #### Container Module 5-14 tetap dipakai
 
-Container dan volume Docker (`ollama`, `opensearch`, `airflow`, dst) yang sudah berjalan sejak Module 5-14 tetap dipakai apa adanya di module ini — karena folder kerja dan `docker-compose.yml` yang dipakai memang tetap sama satu-satunya (`resources/starter-code/nala/`), data yang sudah ada (index OpenSearch yang sudah terisi dari ingest sebelumnya, model Ollama yang sudah di-pull) otomatis ikut terbawa, tidak perlu diulang dari nol.
+Container dan volume Docker (`ollama`, `opensearch`, `airflow`, dst) yang sudah berjalan sejak Module 5-14 tetap dipakai apa adanya di module ini — karena folder kerja dan `docker-compose.yml` yang dipakai memang tetap sama satu-satunya (`Nala/`), data yang sudah ada (index OpenSearch yang sudah terisi dari ingest sebelumnya, model Ollama yang sudah di-pull) otomatis ikut terbawa, tidak perlu diulang dari nol.
 
 ### Langkah 1: Masuk ke folder starter code, mulai service yang sudah ada sejak Module 5-14
 
 ```bash
-cd resources/starter-code/nala
+cd Nala
 docker compose up --build ollama opensearch api
 ```
 
@@ -885,5 +885,5 @@ curl -N -X POST http://localhost:8000/chat/stream \
 ### Troubleshooting
 
 - **`search_hybrid()` melempar error field `text` tidak ditemukan / query `match` gagal**: index `nala-docs` yang dipakai kemungkinan dibuat sebelum field `text` ada di mapping (versi index yang sangat lama) — hapus dan buat ulang index (`curl -X DELETE http://localhost:9200/nala-docs`) lalu jalankan ulang `ingest_documents()` (lihat Langkah 1).
-- **Port sudah dipakai (8000/9200/11434)**: ubah mapping port yang bentrok di `docker-compose.yml`, atau pastikan container lama sudah benar-benar dimatikan (`docker compose down` di `resources/starter-code/nala`).
+- **Port sudah dipakai (8000/9200/11434)**: ubah mapping port yang bentrok di `docker-compose.yml`, atau pastikan container lama sudah benar-benar dimatikan (`docker compose down` di `Nala`).
 - **`docker compose exec ollama ollama list` tidak menampilkan model**: model belum pernah di-pull ke volume container ini — jalankan ulang `docker compose exec ollama ollama pull <nama-model>` (lihat Langkah 1).

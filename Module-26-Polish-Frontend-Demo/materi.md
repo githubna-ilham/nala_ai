@@ -389,7 +389,7 @@ GUARDRAIL:
 
 ### Prasyarat
 
-- Module 24 (full-stack deployment) dan Module 25 (status page + checklist keamanan) sudah selesai — stack lengkap sudah jalan di `resources/starter-code/nala/`.
+- Module 24 (full-stack deployment) dan Module 25 (status page + checklist keamanan) sudah selesai — stack lengkap sudah jalan di `Nala/`.
 
 ### Langkah 1: Implementasikan Module 26 (Polish Frontend)
 

@@ -435,12 +435,12 @@ Kalau draft sudah stabil dan ingin dipakai berulang tanpa mengetik ulang tiap se
    FROM llama3.2:3b
    SYSTEM """Kamu adalah NALA, asisten AI internal PT Nusantara Finance. Tugasmu adalah menjawab pertanyaan staff seputar SOP, kebijakan, dan data operasional perusahaan. Jawab singkat, jelas, dan dalam Bahasa Indonesia. Jika kamu tidak yakin, katakan dengan jujur bahwa kamu tidak memiliki informasi tersebut."""
    ```
-3. Simpan file dengan **nama persis `Modelfile`** — tanpa ekstensi apa pun (bukan `Modelfile.txt`). Simpan di folder mana saja yang mudah diingat, misalnya `resources/starter-code/nala/`.
+3. Simpan file dengan **nama persis `Modelfile`** — tanpa ekstensi apa pun (bukan `Modelfile.txt`). Simpan di folder mana saja yang mudah diingat, misalnya `Nala/`.
 
 **Langkah B — Baru sekarang buka Terminal, dan jalankan perintahnya di sana:**
 
 ```bash
-cd resources/starter-code/nala   # masuk ke folder tempat Modelfile disimpan
+cd Nala   # masuk ke folder tempat Modelfile disimpan
 ollama create nala-v1 -f Modelfile     # baca file itu, buat model baru "nala-v1"
 ollama run nala-v1                     # coba jalankan model yang baru dibuat
 ```

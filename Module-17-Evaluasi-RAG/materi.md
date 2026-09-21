@@ -194,7 +194,7 @@ Buat app/evaluation.py dengan fungsi metrik precision/hit-rate/MRR
 (Module 17, Langkah 1) — belum dihubungkan ke retrieval sungguhan.
 
 GOAL:
-- Buat resources/starter-code/nala/app/evaluation.py berisi 4
+- Buat Nala/app/evaluation.py berisi 4
   fungsi:
   1. is_relevant(chunk_text: str, must_contain: list[str]) -> bool:
      hitung berapa kata di must_contain (case-insensitive) muncul di
@@ -306,11 +306,11 @@ Buat app/eval_testset.py (test set QA) dan app/run_evaluation.py
 2-3.
 
 GOAL:
-1. Buat resources/starter-code/nala/app/eval_testset.py berisi
+1. Buat Nala/app/eval_testset.py berisi
    satu konstanta QA_TESTSET: list of dict {"question": str,
    "must_contain": list[str]} — isi persis seperti yang tertulis di
    materi Module 17 Bagian 4 (10 pertanyaan tentang sop-pengajuan-kredit.md).
-2. Buat resources/starter-code/nala/app/run_evaluation.py:
+2. Buat Nala/app/run_evaluation.py:
    - Import QA_TESTSET, hit_rate_at_k/precision_at_k/reciprocal_rank
      dari app.evaluation, VectorStore, Reranker, embed_text.
    - Fungsi evaluate(retrieved_fn, label): loop QA_TESTSET, panggil
@@ -429,7 +429,7 @@ Yang jujur belum terselesaikan: framework ini kecil dan proxy-based (Bagian 7), 
 > **Catatan penomoran**: "Langkah N" di bagian Panduan Praktik ini adalah urutan eksekusi tersendiri (langkah demi langkah menjalankan perintah), terpisah dari "Langkah N" yang sudah dipakai di bagian kode/struktur di atas (langkah menulis kode). Keduanya kebetulan memakai nomor yang sama tapi menghitung hal yang berbeda — jangan disamakan urutannya.
 
 ### Prasyarat
-- Sudah menyelesaikan **Module 16** — `resources/starter-code/nala/` sudah punya reranking bekerja dan terhubung ke `/chat/stream`
+- Sudah menyelesaikan **Module 16** — `Nala/` sudah punya reranking bekerja dan terhubung ke `/chat/stream`
 - Tidak ada service Docker baru di module ini — alokasi RAM yang sama seperti Module 16 sudah cukup
 
 ### Langkah 1: Bangun `app/evaluation.py`, test set, dan skrip perbandingan
@@ -437,7 +437,7 @@ Yang jujur belum terselesaikan: framework ini kecil dan proxy-based (Bagian 7), 
 Ikuti Module 17 Bagian 5 Langkah 1-3: `app/evaluation.py` (fungsi metrik), `app/eval_testset.py` (10 pertanyaan berlabel), `app/run_evaluation.py` (skrip perbandingan).
 
 ```bash
-cd resources/starter-code/nala
+cd Nala
 docker compose up --build api
 ```
 
