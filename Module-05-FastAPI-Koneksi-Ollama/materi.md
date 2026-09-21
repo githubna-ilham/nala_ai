@@ -8,7 +8,7 @@ Kita memahami FastAPI sebagai framework API, lalu membangun sendiri secara berta
 
 **FastAPI** adalah *framework* Python untuk membangun REST API — lapisan yang menerima request HTTP dari luar (browser, `curl`, aplikasi lain), memvalidasi bentuk datanya, memprosesnya, lalu mengembalikan response. Di NALA, FastAPI berperan sebagai "resepsionis" yang menerima pertanyaan user dan meneruskannya ke Ollama.
 
-**REST API** (di module ini spesifik ke API bawaan Ollama sendiri, bukan API yang kita bangun) adalah sekumpulan endpoint HTTP yang sudah disediakan Ollama begitu servicenya menyala — dipakai lewat `curl` atau library HTTP seperti `httpx`, tanpa perlu CLI `ollama`. `OllamaClient` yang dibangun di module ini pada dasarnya cuma "membungkus" satu endpoint tertentu (`/api/generate`) dengan kode Python yang lebih nyaman dipakai berulang.
+**REST API** (di module ini spesifik ke API bawaan Ollama sendiri, bukan API yang kita bangun) adalah sekumpulan endpoint HTTP yang sudah disediakan Ollama begitu servicenya menyala — dipakai lewat `curl` atau library HTTP seperti `httpx`, tanpa perlu CLI `ollama`. `OllamaClient` yang dibangun di module ini pada dasarnya cuma "membungkus" satu endpoint tertentu (`/api/generate`) dengan kode Python yang lebih nyaman dipakai berulang — permukaan lengkap REST API Ollama (`/api/chat`, `/api/tags`, `/api/embed`, dst) sudah dibahas di Module 4.
 
 **Pydantic** adalah library Python untuk mendefinisikan "bentuk data yang wajib dipenuhi" — dipakai FastAPI untuk memvalidasi request yang masuk (`ChatRequest`) dan menstrukturkan response yang keluar (`ChatResponse`), otomatis menolak data yang salah bentuk sebelum kode kita sempat dijalankan.
 
@@ -27,7 +27,6 @@ flowchart LR
 - Endpoint `/health` dan `/chat` di `app/main.py` berfungsi — `/chat` memanggil Ollama lewat `OllamaClient` dan mengembalikan jawaban
 - Endpoint `/chat` sudah memakai `NALA_SYSTEM_PROMPT` hasil Module 3, terbukti dari jawaban yang berkarakter NALA, bukan lagi generik
 - Kita paham kapan menggunakan `docker compose up --build` vs `up` vs `down` setiap kali kode diubah
-- Kita kenal permukaan lengkap REST API Ollama (bukan cuma `/api/generate` yang dipakai `OllamaClient`), supaya tahu apa lagi yang tersedia kalau nanti dibutuhkan
 
 ## 1. Konsep Dasar FastAPI
 
@@ -135,6 +134,59 @@ Harus muncul `{"status":"ok"}` — beda dari `{"detail":"Not Found"}` di Langkah
 Endpoint `/health` tadi gampang — dia tidak butuh apa-apa dari orang yang mengaksesnya, cuma dipanggil lalu jawab "ok". Tapi `/chat` beda: NALA perlu tahu dulu **apa pertanyaan** yang mau ditanyakan user. Di sinilah **Pydantic** dipakai — library Python untuk mendefinisikan "bentuk data yang wajib dipenuhi".
 
 **Bayangkan begini:** sebelum kotak saran boleh diisi orang, biasanya disediakan dulu selembar formulir kosong, bukan kertas polos. Formulirnya sudah ada kolom bertuliskan "Pertanyaan Anda: ___________". Siapa pun yang mau bertanya, **wajib** isi kolom itu — tidak bisa kirim kertas kosong atau coret-coretan bebas. Pydantic itu fungsinya persis seperti formulir ini, tapi ditulis dalam kode.
+
+### Apa Sebenarnya Pydantic Itu
+
+Tanpa Pydantic, setiap endpoint yang menerima data harus divalidasi **manual**: cek apakah field-nya ada, cek tipe datanya benar, cek formatnya sesuai — semua ditulis sendiri dengan `if`/`else` berlapis, dan gampang ada yang kelupaan. Pydantic mengotomatiskan seluruh pengecekan itu lewat satu mekanisme: **Python type hints**.
+
+```python
+class ChatRequest(BaseModel):
+    message: str
+```
+
+Baris `message: str` ini bukan sekadar komentar/dokumentasi seperti type hint biasa di Python murni — Pydantic benar-benar **membaca** anotasi tipe itu dan menegakkannya saat runtime. Kalau `message` tidak dikirim, atau dikirim sebagai angka bukan teks, Pydantic akan menolak data itu **sebelum** kode `def chat(...)` sempat dijalankan sama sekali.
+
+**Contoh konkret — apa yang terjadi kalau data yang dikirim salah bentuk** (baru bisa dicoba nanti setelah endpoint `/chat` aktif di Langkah 5, tapi perilakunya sudah ditentukan oleh `ChatRequest` yang ditulis di langkah ini):
+
+```bash
+curl -X POST http://localhost:8000/chat \
+  -H "Content-Type: application/json" \
+  -d '{"pesan": "Halo"}'
+```
+
+Karena field yang dikirim namanya `pesan` (bukan `message`), FastAPI/Pydantic otomatis menjawab dengan status `422 Unprocessable Entity` dan detail error seperti ini — tanpa kode `chat()` Anda menulis satu baris pun logika validasi:
+
+```json
+{
+  "detail": [
+    {
+      "type": "missing",
+      "loc": ["body", "message"],
+      "msg": "Field required"
+    }
+  ]
+}
+```
+
+### Field Wajib vs Opsional, dan Tipe Data Lain
+
+`ChatRequest` di NALA sengaja cuma punya satu field wajib (`message: str`) — tapi Pydantic mendukung pola yang lebih kaya, berguna diketahui walau belum dipakai NALA sekarang:
+
+| Pola | Contoh | Artinya |
+|---|---|---|
+| Field wajib | `message: str` | Harus selalu dikirim, tipe harus `str` |
+| Field opsional dengan default | `top_k: int = 3` | Boleh tidak dikirim — kalau tidak ada, otomatis bernilai `3` |
+| Field opsional, boleh kosong (`None`) | `session_id: str \| None = None` | Boleh tidak dikirim, atau dikirim `null` — dua-duanya valid |
+| Tipe list | `history: list[str] = []` | Menerima daftar/array, default-nya list kosong |
+| Tipe bersarang (nested model) | `metadata: Metadata` (`Metadata` adalah `BaseModel` lain) | Menerima objek JSON bersarang, divalidasi rekursif |
+
+**Kenapa `ChatRequest` NALA tidak pakai semua ini sekaligus?** Konsisten dengan pola berulang sepanjang training: mulai sesederhana mungkin (satu field wajib), baru diperluas **tepat saat dibutuhkan**. Kalau nanti NALA butuh parameter tambahan (misal `top_k` yang bisa diatur user), `ChatRequest` akan ditambah field baru dengan default value — bukan mengganti struktur yang sudah ada.
+
+### Kenapa Validasi Otomatis Ini Penting untuk NALA
+
+- **Keamanan dasar**: mencegah data yang bentuknya aneh/tidak terduga sampai ke `ollama_client.generate()` (dibangun Tahap B) — kalau `message` bisa berupa apa saja (termasuk `null` atau angka), kode di bawahnya harus menangani semua kemungkinan itu sendiri.
+- **Dokumentasi otomatis**: definisi `ChatRequest`/`ChatResponse` ini juga yang dibaca FastAPI untuk membuat Swagger UI (`/docs`, dibahas Bagian 1.2.6) — jadi satu definisi, dua manfaat sekaligus (validasi + dokumentasi).
+- **Error message yang jelas**: dibanding error generik "Internal Server Error", klien (misal `chat.html` nanti di Module 6) dapat tahu persis field mana yang salah dan kenapa, langsung dari response `422` di atas.
 
 Masih di file `main.py` yang sama:
 
@@ -851,54 +903,6 @@ async def agent_ask(query: str):
 
 ---
 
-## 2. Referensi Lengkap: Ollama REST API
-
-`OllamaClient` (Tahap B di atas) cuma memanggil **satu** endpoint Ollama — `POST /api/generate`. Tapi Ollama sendiri, begitu servicenya menyala di port `11434`, sudah menyediakan **seluruh** REST API ini — hampir semua yang bisa dilakukan lewat CLI `ollama <sesuatu>` punya endpoint HTTP yang setara di baliknya. Mengenal permukaan lengkapnya berguna supaya kita tahu apa lagi yang tersedia kalau NALA nanti butuh lebih dari sekadar "kirim prompt, terima jawaban".
-
-### 2.1 Endpoint yang Sudah Dipakai NALA
-
-| Endpoint | Fungsi | Dipakai di NALA |
-|---|---|---|
-| `POST /api/generate` | Single-prompt completion — kirim satu prompt, terima satu jawaban | `OllamaClient.generate()` (Tahap B di atas) — inti dari endpoint `/chat` NALA |
-| `POST /api/chat` | Sama seperti `/api/generate`, tapi menerima `messages[]` (riwayat percakapan multi-turn dengan role `system`/`user`/`assistant`) alih-alih satu `prompt` string | Belum dipakai di module ini — relevan begitu NALA butuh riwayat percakapan multi-turn |
-| `GET /api/tags` | Daftar model yang sudah ter-*pull* (setara `ollama list`) | Dipakai untuk verifikasi manual di Module 4 (`curl http://localhost:11434/api/tags`) |
-| `POST /api/show` | Detail satu model (parameter, template, system prompt bawaan) | Belum dipakai langsung dari kode NALA, tapi berguna untuk debugging manual |
-
-### 2.2 Endpoint Lain yang Tersedia (Belum Dipakai NALA)
-
-| Endpoint | Fungsi |
-|---|---|
-| `POST /api/pull` | Download model — setara `ollama pull`, tapi bisa dipicu dari kode, bukan cuma terminal |
-| `DELETE /api/delete` | Hapus model dari disk — setara `ollama rm` |
-| `POST /api/copy` | Duplikasi model dengan nama baru — setara `ollama cp` |
-| `POST /api/create` | Build model custom dari Modelfile — setara `ollama create` (dipakai manual di Module 3, lewat CLI) |
-| `POST /api/push` | Upload model ke registry Ollama sendiri — jarang relevan untuk NALA (tidak mendistribusikan model custom) |
-| `POST /api/embed` | Generate embedding vector dari teks — **ini yang dipanggil** fungsi `embed_text()` NALA nanti di Module 9, di balik layar |
-| `GET /api/ps` | Model yang sedang di-*load* di memori — setara `ollama ps` |
-| `GET /api/version` | Versi Ollama yang terinstall |
-| `HEAD` / `POST /api/blobs/:digest` | Cek/upload file model mentah (GGUF) — dipakai internal oleh `push`/`create`, jarang dipanggil langsung |
-
-### 2.3 Contoh Cepat: Memanggil Beberapa Endpoint Lain Lewat `curl`
-
-Endpoint-endpoint di Bagian 2.2 tidak dipakai kode NALA saat ini, tapi bisa dicoba langsung untuk memastikan pemahamannya — jalankan sambil `ollama serve`/container `ollama` aktif:
-
-```bash
-# Cek versi Ollama
-curl http://localhost:11434/api/version
-
-# Model yang sedang di-load di memori
-curl http://localhost:11434/api/ps
-
-# Detail satu model (parameter, template)
-curl http://localhost:11434/api/show -d '{"model": "llama3.2:3b"}'
-```
-
-### 2.4 Kenapa `OllamaClient` Cuma Membungkus Satu Endpoint
-
-Dilihat dari daftar di atas, `OllamaClient.generate()` (Tahap B) sengaja **tidak** membungkus semua endpoint Ollama — cuma `/api/generate`, karena itulah satu-satunya yang dibutuhkan endpoint `/chat` NALA saat ini. Ini konsisten dengan pola yang berulang sepanjang training: tambahkan kemampuan **tepat saat dibutuhkan**, bukan diborong di awal. Kalau nanti NALA butuh riwayat percakapan multi-turn, `OllamaClient` akan diperluas dengan method baru yang memanggil `/api/chat` — bukan mengganti `generate()` yang sudah ada.
-
----
-
 ## Panduan Praktik
 
 > 📌 Langkah di bagian ini (Langkah 1-4) bernomor terpisah dari Langkah pembangunan kode `main.py` di section 1.2 di atas (Langkah 1-7, Tahap A-C) — keduanya adalah dua urutan "Langkah" yang berbeda dan tidak saling melanjutkan satu sama lain.
@@ -962,7 +966,6 @@ Anda telah memahami:
 
 ✅ **Konsep dasar FastAPI** — HTTP framework untuk build API, request/response models, routing, async support
 ✅ **Endpoint `/health` dan `/chat`** — dibangun bertahap (Tahap A-C), dari FastAPI murni sampai tersambung ke Ollama dengan `NALA_SYSTEM_PROMPT`
-✅ **Permukaan lengkap REST API Ollama** — bukan cuma `/api/generate` yang dipakai `OllamaClient`, tapi seluruh endpoint yang tersedia
 ✅ **Service `api` di `docker-compose.yml`** — berjalan berdampingan dengan `ollama` yang sudah diverifikasi di Module 4
 
 **Next Steps:**

@@ -2,12 +2,13 @@
 
 ## Tujuan
 
-Kita memahami konsep dasar Docker/Docker Compose, lalu membangun `docker-compose.yml` NALA secara bertahap — dimulai dari service `ollama` sendirian, diverifikasi benar-benar sehat di dalam container, sebelum Module 5 menambahkan service `api` (FastAPI) di atasnya.
+Kita memahami konsep dasar Docker/Docker Compose, lalu membangun `docker-compose.yml` NALA secara bertahap — dimulai dari service `ollama` sendirian, diverifikasi benar-benar sehat di dalam container — sekaligus mengenal permukaan lengkap REST API Ollama, sebelum Module 5 menambahkan service `api` (FastAPI) di atasnya.
 
 ## Hasil Akhir yang Diharapkan
 
 - Kita paham konsep image, container, dan fungsi tiap bagian `docker-compose.yml` (services, ports, volumes, environment, depends_on)
 - Service `ollama` berhasil dijalankan & diverifikasi sendirian di Docker — model ter-pull, `ollama list`/`curl .../api/tags` merespons, dan bisa diajak tanya-jawab langsung lewat `docker compose exec`
+- Kita kenal permukaan lengkap REST API Ollama (`generate`, `chat`, `tags`, `show`, `pull`, `embed`, `ps`, dst) — bukan cuma satu endpoint yang nanti dipakai `OllamaClient`
 - Kita paham kapan menggunakan `docker compose up --build` vs `up` vs `down`
 - Kita siap lanjut ke Module 5 untuk menambahkan service `api` (FastAPI) di atas fondasi Ollama yang sudah terverifikasi ini
 
@@ -282,6 +283,56 @@ docker-compose build
 docker-compose exec api bash
 ```
 
+---
+
+## 4. Referensi Lengkap: Ollama REST API
+
+Bagian 3.4 tadi sudah memanggil satu endpoint Ollama lewat `curl` (`/api/tags`) untuk verifikasi. Tapi Ollama sendiri, begitu servicenya menyala di port `11434`, sudah menyediakan **seluruh** REST API ini — hampir semua yang bisa dilakukan lewat CLI `ollama <sesuatu>` punya endpoint HTTP yang setara di baliknya. Mengenal permukaan lengkapnya berguna supaya kita tahu apa lagi yang tersedia, sebelum Module 5 membangun `OllamaClient` yang cuma membungkus satu endpoint tertentu.
+
+### 4.1 Endpoint yang Sudah Dipakai/Akan Dipakai NALA
+
+| Endpoint | Fungsi | Dipakai di NALA |
+|---|---|---|
+| `POST /api/generate` | Single-prompt completion — kirim satu prompt, terima satu jawaban | `OllamaClient.generate()` (dibangun Module 5, Tahap B) — inti dari endpoint `/chat` NALA |
+| `POST /api/chat` | Sama seperti `/api/generate`, tapi menerima `messages[]` (riwayat percakapan multi-turn dengan role `system`/`user`/`assistant`) alih-alih satu `prompt` string | Belum dipakai sampai module ini — relevan begitu NALA butuh riwayat percakapan multi-turn |
+| `GET /api/tags` | Daftar model yang sudah ter-*pull* (setara `ollama list`) | Dipakai untuk verifikasi manual di Bagian 3.4 di atas (`curl http://localhost:11434/api/tags`) |
+| `POST /api/show` | Detail satu model (parameter, template, system prompt bawaan) | Belum dipakai langsung dari kode NALA, tapi berguna untuk debugging manual |
+
+### 4.2 Endpoint Lain yang Tersedia (Belum Dipakai NALA)
+
+| Endpoint | Fungsi |
+|---|---|
+| `POST /api/pull` | Download model — setara `ollama pull`, tapi bisa dipicu dari kode, bukan cuma terminal |
+| `DELETE /api/delete` | Hapus model dari disk — setara `ollama rm` |
+| `POST /api/copy` | Duplikasi model dengan nama baru — setara `ollama cp` |
+| `POST /api/create` | Build model custom dari Modelfile — setara `ollama create` (dipakai manual di Module 3, lewat CLI) |
+| `POST /api/push` | Upload model ke registry Ollama sendiri — jarang relevan untuk NALA (tidak mendistribusikan model custom) |
+| `POST /api/embed` | Generate embedding vector dari teks — **ini yang dipanggil** fungsi `embed_text()` NALA nanti di Module 10, di balik layar |
+| `GET /api/ps` | Model yang sedang di-*load* di memori — setara `ollama ps` |
+| `GET /api/version` | Versi Ollama yang terinstall |
+| `HEAD` / `POST /api/blobs/:digest` | Cek/upload file model mentah (GGUF) — dipakai internal oleh `push`/`create`, jarang dipanggil langsung |
+
+### 4.3 Contoh Cepat: Memanggil Beberapa Endpoint Lain Lewat `curl`
+
+Endpoint-endpoint di Bagian 4.2 tidak dipakai kode NALA saat ini, tapi bisa dicoba langsung untuk memastikan pemahamannya — jalankan sambil container `ollama` dari Bagian 3.4 masih aktif:
+
+```bash
+# Cek versi Ollama
+curl http://localhost:11434/api/version
+
+# Model yang sedang di-load di memori
+curl http://localhost:11434/api/ps
+
+# Detail satu model (parameter, template)
+curl http://localhost:11434/api/show -d '{"model": "llama3.2:3b"}'
+```
+
+### 4.4 Kenapa `OllamaClient` (Module 5) Nanti Cuma Membungkus Satu Endpoint
+
+Dari daftar di atas, `OllamaClient.generate()` yang dibangun Module 5 sengaja **tidak** membungkus semua endpoint Ollama — cuma `/api/generate`, karena itulah satu-satunya yang dibutuhkan endpoint `/chat` NALA saat itu. Ini konsisten dengan pola yang berulang sepanjang training: tambahkan kemampuan **tepat saat dibutuhkan**, bukan diborong di awal. Kalau nanti NALA butuh riwayat percakapan multi-turn, `OllamaClient` akan diperluas dengan method baru yang memanggil `/api/chat` — bukan mengganti `generate()` yang sudah ada.
+
+---
+
 ## Panduan Praktik
 
 ### Prasyarat
@@ -390,6 +441,7 @@ Anda telah memahami:
 ✅ **Kenapa Docker Compose** — menyatukan multiple services dalam satu environment yang consistent  
 ✅ **Anatomi docker-compose.yml** — struktur services, image, ports, volumes, environment, depends_on  
 ✅ **Ollama berjalan sendirian & terverifikasi di Docker** — model ter-pull, API merespons, bisa diajak tanya-jawab — fondasi yang siap disambungkan ke service lain  
+✅ **Permukaan lengkap REST API Ollama** — `generate`, `chat`, `tags`, `show`, `pull`, `embed`, `ps`, dan lainnya — bukan cuma satu endpoint yang nanti dipakai `OllamaClient`  
 
 **Next Steps:**
 - **Praktik langsung**: lihat bagian Panduan Praktik di atas — setup docker-compose.yml, jalankan container `ollama`
