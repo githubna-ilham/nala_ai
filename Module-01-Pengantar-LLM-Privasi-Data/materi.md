@@ -59,7 +59,7 @@ Itulah alasan mengapa kurikulum ini dirancang bertahap lintas modul — setiap m
 
 Sepanjang program pelatihan ini (27 modul), kita akan membangun **NALA (Nusantara Assistant)** — sebuah sistem LLM privat yang dirancang khusus untuk PT Nusantara Finance. NALA mampu menjawab pertanyaan dari dua sumber data utama: (1) **Dokumen SOP Internal** — panduan operasional, policy perusahaan, prosedur kredit, dan tata cara layanan; (2) **Data Operasional** — data pengajuan kredit, data klaim, riwayat transaksi, dan informasi nasabah (dengan akses terenkripsi dan kontrol ketat).
 
-Gambaran akhir NALA pada **akhir program pelatihan (Module 27)** adalah sistem yang dapat menerima pertanyaan dalam bahasa Indonesia natural (misalnya: "Apa persyaratan untuk pengajuan kredit modal kerja?", "Berapa lama proses klaim asuransi diproses?") dan memberikan jawaban akurat berdasarkan dokumen dan data internal, tanpa mengirim informasi sensitif ke layanan cloud eksternal. NALA akan menjadi assistant yang meningkatkan efisiensi operasional PT Nusantara Finance dan kepuasan nasabah melalui respons cepat dan akurat, sambil tetap menjaga keamanan dan privasi data tertinggi.
+Gambaran akhir NALA pada **akhir program pelatihan (Module 28)** adalah sistem yang dapat menerima pertanyaan dalam bahasa Indonesia natural (misalnya: "Apa persyaratan untuk pengajuan kredit modal kerja?", "Berapa lama proses klaim asuransi diproses?") dan memberikan jawaban akurat berdasarkan dokumen dan data internal, tanpa mengirim informasi sensitif ke layanan cloud eksternal. NALA akan menjadi assistant yang meningkatkan efisiensi operasional PT Nusantara Finance dan kepuasan nasabah melalui respons cepat dan akurat, sambil tetap menjaga keamanan dan privasi data tertinggi.
 
 ---
 

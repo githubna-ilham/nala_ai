@@ -70,7 +70,7 @@ Sama seperti di atas, biarkan berjalan di terminal terpisah.
 ollama pull llama3.2:3b
 ```
 
-Model ini berukuran ~1.87GB — proses download akan menampilkan progress bar. Sambil menunggu, baca sekilas kenapa model ini yang dipilih: model 3B parameter, sudah mendukung tool-calling (dipakai nanti di Module 20), cukup kecil untuk berjalan nyaman di laptop 16GB RAM sekaligus menjalankan service lain (OpenSearch, PostgreSQL, dst di modul-modul berikutnya).
+Model ini berukuran ~1.87GB — proses download akan menampilkan progress bar. Sambil menunggu, baca sekilas kenapa model ini yang dipilih: model 3B parameter, sudah mendukung tool-calling (dipakai nanti di Module 21), cukup kecil untuk berjalan nyaman di laptop 16GB RAM sekaligus menjalankan service lain (OpenSearch, PostgreSQL, dst di modul-modul berikutnya).
 
 **Checkpoint:**
 ```bash
@@ -206,7 +206,7 @@ Dari Langkah 9, Anda sudah membuktikan sendiri dua keterbatasan mendasar LLM lok
 1. **Knowledge cutoff** — tidak tahu kejadian setelah tanggal training
 2. **Tidak ada akses ke data privat/internal** — model dasar dilatih dari data publik, bukan dokumen SOP PT Nusantara Finance
 
-Kedua keterbatasan ini adalah alasan utama kenapa Module 7 dan seterusnya memperkenalkan **RAG (Retrieval-Augmented Generation)**: alih-alih berharap model "sudah tahu" dari hasil training, sistem **mencari (retrieve)** potongan dokumen relevan lebih dulu, menyisipkannya ke prompt sebagai konteks tambahan, baru model menjawab berdasarkan konteks itu — bukan hanya dari memori training-nya.
+Kedua keterbatasan ini adalah alasan utama kenapa Module 8 dan seterusnya memperkenalkan **RAG (Retrieval-Augmented Generation)**: alih-alih berharap model "sudah tahu" dari hasil training, sistem **mencari (retrieve)** potongan dokumen relevan lebih dulu, menyisipkannya ke prompt sebagai konteks tambahan, baru model menjawab berdasarkan konteks itu — bukan hanya dari memori training-nya.
 
 **Refleksi:** Bayangkan Anda bertanya ke NALA: *"Apa syarat pengajuan restrukturisasi kredit untuk nasabah yang telat bayar 3 bulan?"* — kenapa `llama3.2:3b` tanpa RAG kemungkinan besar akan menjawab ngasal atau generik untuk pertanyaan ini? Dokumen apa yang perlu di-retrieve lebih dulu supaya NALA bisa menjawab akurat?
 
@@ -677,7 +677,7 @@ time ollama run qwen2.5:7b "Tuliskan contoh singkat Python script untuk load mod
 | Overfitting | ___ detik | | | ___ detik |
 | Kode Python | ___ detik | | | ___ detik |
 
-**Refleksi:** model mana yang lebih cepat? Model mana yang jawabannya lebih baik dalam Bahasa Indonesia? Untuk kasus NALA (asisten internal, RAM laptop kita saat training dibatasi 16GB total termasuk service lain di Module 24+), apakah selisih kualitas ini sepadan dengan selisih kebutuhan RAM (~6GB vs ~8GB) dan kecepatan?
+**Refleksi:** model mana yang lebih cepat? Model mana yang jawabannya lebih baik dalam Bahasa Indonesia? Untuk kasus NALA (asisten internal, RAM laptop kita saat training dibatasi 16GB total termasuk service lain di Module 25+), apakah selisih kualitas ini sepadan dengan selisih kebutuhan RAM (~6GB vs ~8GB) dan kecepatan?
 
 ### Langkah 32: Baca Log KV Cache — Komponen Memori yang Sering Terlewat (~10-15 menit)
 
@@ -700,7 +700,7 @@ llama_kv_cache: size = XXXX.XX MiB (XXXXX cells, XX layers, 1 seqs)
 
 Bandingkan dengan contoh `llama3.2:3b` di `materi.md` Module 2 Bagian 4.1: KV cache-nya ~3.5GB — **hampir dua kali lipat** ukuran file model itu sendiri (~1.87GB). Ini kenapa rule of thumb `(ukuran file × 2) + 1GB` (dipakai di Langkah 11) sudah memperhitungkan KV cache, bukan cuma ukuran file model.
 
-**Refleksi penutup Bagian F:** kalau nanti di Module 4 (Docker Compose) atau Module 24 (Full-Stack Deployment) Anda perlu menjalankan Ollama **bersamaan** dengan banyak service lain, komponen memori mana yang paling penting diperhitungkan — ukuran file model, atau KV cache? Kenapa?
+**Refleksi penutup Bagian F:** kalau nanti di Module 4 (Docker Compose) atau Module 25 (Full-Stack Deployment) Anda perlu menjalankan Ollama **bersamaan** dengan banyak service lain, komponen memori mana yang paling penting diperhitungkan — ukuran file model, atau KV cache? Kenapa?
 
 **Bersih-bersih (opsional):** kalau tidak ingin menyimpan model besar ini, hapus setelah selesai:
 ```bash
@@ -787,7 +787,7 @@ curl http://localhost:11434/api/generate -d '{
 | Pada mode non-streaming, apa yang terlihat di terminal selama menunggu? | |
 | Pada mode streaming, bagaimana bentuk output-nya berbeda? (petunjuk: banyak baris JSON kecil-kecil berturut-turut, satu per token, field `"done": false` sampai baris terakhir `"done": true`) | |
 
-**Refleksi:** Module 2 membangun `/chat` (non-streaming), lalu Module 6 menggantinya total dengan `/chat/stream`. Sekarang Anda sudah melihat **langsung** di level API mentah kenapa keduanya butuh cara handling berbeda di kode Python — `stream: false` cukup satu `response.json()`, sedangkan `stream: true` butuh membaca response baris-per-baris selagi data mengalir masuk.
+**Refleksi:** Module 2 membangun `/chat` (non-streaming), lalu Module 7 menggantinya total dengan `/chat/stream`. Sekarang Anda sudah melihat **langsung** di level API mentah kenapa keduanya butuh cara handling berbeda di kode Python — `stream: false` cukup satu `response.json()`, sedangkan `stream: true` butuh membaca response baris-per-baris selagi data mengalir masuk.
 
 ### Langkah 36: `/api/chat` — Percakapan Multi-Turn via API (~20 menit)
 
@@ -863,7 +863,7 @@ ollama ps
 
 **Checkpoint:** apakah **kedua** model muncul di `ollama ps` secara bersamaan? Berapa total SIZE gabungan keduanya — apakah mendekati/melebihi RAM laptop Anda?
 
-**Refleksi:** ini relevan langsung untuk Module 24 (Full-Stack Deployment) — kalau NALA production nanti perlu menjalankan model utama (`llama3.2:3b`) sekaligus model reranker (Module 16, lewat `sentence-transformers`, bukan Ollama) atau model embedding (`nomic-embed-text`, Module 9) **bersamaan**, `OLLAMA_MAX_LOADED_MODELS` dan total RAM tersedia jadi constraint nyata, bukan cuma teori.
+**Refleksi:** ini relevan langsung untuk Module 25 (Full-Stack Deployment) — kalau NALA production nanti perlu menjalankan model utama (`llama3.2:3b`) sekaligus model reranker (Module 17, lewat `sentence-transformers`, bukan Ollama) atau model embedding (`nomic-embed-text`, Module 10) **bersamaan**, `OLLAMA_MAX_LOADED_MODELS` dan total RAM tersedia jadi constraint nyata, bukan cuma teori.
 
 ### Langkah 39: Custom Bind Address — `OLLAMA_HOST` (~10 menit)
 
@@ -885,9 +885,9 @@ Matikan lagi (`Ctrl+C`), nyalakan ulang **tanpa** `OLLAMA_HOST` custom (kembali 
 
 ### Langkah 40: Refleksi Penutup Bagian G — Menghubungkan ke Module 4 (~10 menit)
 
-1. Kode Python di Module 4 (`OllamaClient`, dibahas di `Module-04-Setup-Infra-Docker-Compose/materi.md`) pada dasarnya adalah **pembungkus** di atas `curl` yang baru saja Anda jalankan manual — memanggil `/api/generate` atau `/api/chat` lewat library `httpx`/`requests`, bukan lewat CLI `ollama`. Endpoint mana (`/api/generate` atau `/api/chat`) yang menurut Anda lebih cocok dipakai NALA, yang harus mengingat riwayat percakapan multi-turn (Module 6)?
-2. Dari environment variable di Langkah 33, mana yang menurut Anda **wajib** di-set eksplisit saat NALA di-deploy di Docker Compose (Module 4 dan Module 24), dan mana yang aman dibiarkan default?
-3. `stream: true` vs `stream: false` (Langkah 35) — hubungkan dengan keputusan desain yang sudah dibahas: Module 2 sengaja membangun `/chat` non-streaming dulu (sederhana), baru Module 6 mengganti total ke `/chat/stream`. Sekarang setelah melihat perbedaan bentuk response JSON-nya langsung, menurut Anda kenapa tim menunda streaming ke modul terpisah, bukan langsung di Module 2?
+1. Kode Python di Module 4 (`OllamaClient`, dibahas di `Module-04-Setup-Infra-Docker-Compose/materi.md`) pada dasarnya adalah **pembungkus** di atas `curl` yang baru saja Anda jalankan manual — memanggil `/api/generate` atau `/api/chat` lewat library `httpx`/`requests`, bukan lewat CLI `ollama`. Endpoint mana (`/api/generate` atau `/api/chat`) yang menurut Anda lebih cocok dipakai NALA, yang harus mengingat riwayat percakapan multi-turn (Module 7)?
+2. Dari environment variable di Langkah 33, mana yang menurut Anda **wajib** di-set eksplisit saat NALA di-deploy di Docker Compose (Module 4 dan Module 25), dan mana yang aman dibiarkan default?
+3. `stream: true` vs `stream: false` (Langkah 35) — hubungkan dengan keputusan desain yang sudah dibahas: Module 2 sengaja membangun `/chat` non-streaming dulu (sederhana), baru Module 7 mengganti total ke `/chat/stream`. Sekarang setelah melihat perbedaan bentuk response JSON-nya langsung, menurut Anda kenapa tim menunda streaming ke modul terpisah, bukan langsung di Module 2?
 
 ---
 

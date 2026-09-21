@@ -129,7 +129,7 @@ Satukan hasil Bagian 1-3 ke satu tabel, supaya dampak prompt engineering terliha
 
 1. Dari tiga kondisi di atas, mana yang paling siap dipakai sebagai fondasi `NALA_SYSTEM_PROMPT` di kode Python (Module 4)? Kenapa?
 2. Worksheet ini menguji prompt engineering **secara manual lewat terminal** — apa yang menurut Anda akan berubah/perlu disesuaikan ketika system prompt yang sama nanti dipanggil otomatis lewat API oleh aplikasi FastAPI NALA (Module 4), bukan diketik manual?
-3. Modul-modul mendatang akan memperluas system prompt ini lebih jauh: Module 11 menambah instruksi *grounding* (jawab hanya dari dokumen yang di-retrieve), Module 22 menambah instruksi *tool-use* (RAG vs SQL). Berdasarkan hasil eksperimen `temperature` di Bagian 3, apakah Anda akan mengubah nilai `temperature` seiring NALA bertambah kompleks? Kenapa/kenapa tidak?
+3. Modul-modul mendatang akan memperluas system prompt ini lebih jauh: Module 12 menambah instruksi *grounding* (jawab hanya dari dokumen yang di-retrieve), Module 23 menambah instruksi *tool-use* (RAG vs SQL). Berdasarkan hasil eksperimen `temperature` di Bagian 3, apakah Anda akan mengubah nilai `temperature` seiring NALA bertambah kompleks? Kenapa/kenapa tidak?
 
 ---
 
