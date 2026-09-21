@@ -132,3 +132,14 @@ Tidak ada checklist teknis di module ini (tidak ada kode yang ditulis) — sebag
 ## Kesimpulan
 
 Module ini tidak menulis kode apa pun — tapi menjadi fondasi kenapa Module 8-14 layak dibangun sama sekali. Halusinasi adalah masalah nyata dan struktural pada LLM murni, terutama untuk pertanyaan spesifik perusahaan yang tidak pernah ada di data training model mana pun. RAG mengatasinya bukan dengan melatih ulang model, tapi dengan mengubah LLM dari "siswa ujian closed-book" jadi "siswa ujian open-book" — memberi rujukan yang relevan tepat sebelum menjawab. Alur kerjanya (retrieval → augmented → generation) akan dibangun bertahap, sesederhana mungkin dulu: Module 8 menyiapkan data seed (belum ada chunking), Module 9 mengenalkan cara teks diubah jadi sesuatu yang bisa dicari (embedding), Module 10 menyimpannya di vector store, Module 11 menyatukan semuanya jadi satu alur tanya-jawab yang benar-benar berfungsi — **RAG mulai hidup di sini**, memakai satu vektor per dokumen — sebelum akhirnya Module 12 menambahkan chunking (memecah dokumen jadi potongan yang lebih presisi) sekaligus form upload web, dan Module 13 (Airflow) menambahkan cara lain data terus bertambah di atas fondasi yang sudah bekerja. Tapi RAG bukan solusi ajaib untuk semua masalah — memahami kapan RAG tidak tepat (data transaksional, kebutuhan reasoning, sumber yang belum ter-index) sama pentingnya, dan akan terus relevan sampai Module 19 saat NALA belajar memutuskan sendiri kapan pakai RAG dan kapan pakai tool lain.
+
+## Panduan Praktik
+
+### Prasyarat
+- Sudah menyelesaikan **Module 6** (Streaming & Multi-Turn Conversation)
+
+### Langkah 1: Diskusi Konsep RAG
+
+Tidak ada kode atau perintah terminal di langkah ini — Module 7 murni sesi konsep/diskusi, tidak butuh container apa pun menyala. Sebelum lanjut membangun potongan-potongan teknis RAG (Module 8 dan seterusnya), pastikan poin-poin berikut sudah didiskusikan bersama fasilitator: kenapa LLM bisa berhalusinasi, analogi ujian *closed-book* vs *open-book*, definisi RAG, alur kerja RAG secara garis besar (retrieval → augmented → generation), dan kapan RAG **bukan** solusi yang tepat. Lihat bagian-bagian di atas (Bagian 1-5) untuk materi lengkapnya.
+
+Tidak ada Troubleshooting untuk module ini — lanjut ke Module 8 begitu diskusi selesai.

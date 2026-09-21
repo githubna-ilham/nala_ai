@@ -464,7 +464,7 @@ print('Turn 2 (tanpa sebut \'pengajuan kredit\' lagi):', turn2['reply'])
 
 ## 5. Checkpoint Praktik
 
-Langkah eksekusi lengkap ada di **Langkah 11-13 `PANDUAN-PRAKTIK.md`**. Yang perlu dipastikan sebelum lanjut ke Module 22:
+Langkah eksekusi lengkap ada di bagian **Panduan Praktik** di bawah (Langkah 11-13). Yang perlu dipastikan sebelum lanjut ke Module 22:
 
 - [ ] `app/tools/sql_tool.py` berhasil dibuat, `query_data_operasional` memakai `get_connection()` yang sudah ada (bukan koneksi baru)
 - [ ] `/chat` bisa menjawab pertanyaan jumlah/status dari data operasional lewat `query_data_operasional`, dan angkanya cocok dengan data yang sudah Anda tambahkan di Module 19
@@ -496,3 +496,68 @@ Ini konsisten dengan pola yang sudah berulang kali ditemukan sepanjang kurikulum
 ## Kesimpulan
 
 Tool kedua ini membuktikan pola dari Module 20 memang bisa berkembang: menambah kemampuan baru ke agent tidak berarti menulis ulang graph, cukup menambah skema tool dan cabang eksekusi. Module ini sengaja tidak menyentuh setup database sama sekali — Postgres, skema, data, dan pemisahan role sudah selesai di Module 19, jadi pekerjaan di sini murni soal **keamanan tool**: NALA sengaja tidak pernah membiarkan LLM menulis SQL bebas — pilihannya dibatasi lewat `enum` skema tool, divalidasi ulang di kode Python, dieksekusi lewat parameterized query, dan dijalankan lewat role database (`nala_readonly`, dari Module 19) yang secara struktural cuma bisa membaca. Lapisan-lapisan ini bekerja bersama supaya kesalahan di satu lapisan (termasuk model yang berhalusinasi atau salah paham) tidak otomatis berarti kebocoran atau kerusakan data.
+
+## Panduan Praktik
+
+> Catatan penomoran: bagian ini memakai penomoran "Langkah" tersendiri (melanjutkan urutan global lintas-module: Module 19 = Langkah 1-5, Module 20 = Langkah 6-10, module ini = Langkah 11-13) yang berbeda dari "Langkah 1-4" di dalam bagian struktur kode materi.md di atas — keduanya kebetulan bertumpang tindih penomoran tapi berasal dari dua urutan yang terpisah, peninggalan dari saat panduan ini masih satu dokumen gabungan Module 19-23.
+
+**Panduan Praktik — Module 21: Tool Baru — Query SQL ke Data Operasional (PostgreSQL)**
+
+Lanjutan langsung dari bagian Panduan Praktik di materi Module 20 — agent LangGraph dengan tool `cari_dokumen_sop` harus sudah jalan lewat `/chat` sebelum mulai di sini. Penomoran Langkah melanjutkan penomoran global (Module 19: Langkah 1-5, Module 20: Langkah 6-10).
+
+### Prasyarat
+- Module 20 selesai: endpoint `/chat` sudah membalas lewat agent (tool RAG), `/chat/stream` tidak berubah.
+- Data operasional dari Module 19 (7 baris `pengajuan_kredit`, 4 baris `klaim_asuransi`) masih ada di database.
+
+### Langkah 11: Tool query-builder untuk data operasional (Module 21)
+
+Ikuti Module 21 `materi.md` bagian tool query-builder (`app/tools/sql_tool.py`) — dibangun di atas `get_connection()` (`app/db.py`) dan role `nala_readonly` yang sudah disiapkan Module 19, bukan raw SQL bebas dari LLM.
+
+```bash
+docker compose exec api python -c "
+from app.tools.sql_tool import query_data_operasional
+print(query_data_operasional(tabel='pengajuan_kredit', mode='hitung_per_status'))
+"
+```
+
+✅ **Indikator sukses**: daftar status beserta jumlahnya (mis. `pending: 3`, dst.) sesuai data yang sudah dimasukkan lewat form di Module 19 Langkah 5.
+
+### Langkah 12: Daftarkan tool SQL ke agent (Module 21)
+
+Ikuti Module 21 `materi.md` bagian pendaftaran tool SQL ke agent (`app/agent.py`).
+
+```bash
+docker compose up --build api
+```
+
+```bash
+curl -X POST http://localhost:8000/chat \
+  -H "Content-Type: application/json" \
+  -d '{"message": "Berapa banyak pengajuan kredit yang statusnya pending?"}'
+```
+
+✅ **Indikator sukses**: jawaban menyebut angka yang sesuai (`3`, mengikuti distribusi data Module 19 Langkah 5).
+
+### Langkah 13: Uji detail nasabah, pastikan tool RAG tidak rusak
+
+```bash
+curl -X POST http://localhost:8000/chat \
+  -H "Content-Type: application/json" \
+  -d '{"message": "Bagaimana status pengajuan kredit nasabah N-00231?"}'
+
+curl -X POST http://localhost:8000/chat \
+  -H "Content-Type: application/json" \
+  -d '{"message": "Apa saja syarat pengajuan kredit untuk nasabah perorangan?"}'
+```
+
+✅ **Indikator sukses**: pertanyaan pertama menyebut status `pending` untuk N-00231; pertanyaan kedua tetap menjawab dari dokumen SOP seperti sebelumnya. Module 21 selesai — lanjut ke bagian Panduan Praktik di materi Module 22.
+
+### Troubleshooting
+
+- **`permission denied for table ...` padahal seharusnya diizinkan**: tool SQL (Module 21) harus memakai `nala_readonly` (bukan `nala_admin`/`nala_writer`) — tertukar salah satunya akan memicu `permission denied` untuk operasi yang seharusnya sah.
+- **Angka yang dijawab `/chat` tidak cocok dengan database**: verifikasi manual dulu isi tabel (`docker compose exec postgres psql -U nala_admin -d nala_operasional -c "SELECT status, COUNT(*) FROM pengajuan_kredit GROUP BY status;"`) — kalau datanya beda dari yang diasumsikan, ulangi Module 19 Langkah 5 sampai datanya sesuai target (7 baris `pengajuan_kredit`, 4 baris `klaim_asuransi`).
+- **Error umum lain** (`no configuration file provided`, `failed to read dockerfile`, port sudah dipakai, dsb.): lihat bagian Panduan Praktik > Troubleshooting di materi.md module-module sebelumnya (Module 5-14) — penyebab dan solusinya sama, tidak spesifik rangkaian Module 19-23.
+
+---
+
+Untuk informasi lebih lanjut, lihat [README utama](../README.md).

@@ -79,3 +79,13 @@ Kita akan dibagi menjadi kelompok kecil (3-5 orang). Setiap kelompok mendapat pe
 - Kelompok Marketing: data pelanggan, strategi bisnis, data kampanye (sensitif karena keunggulan kompetitif)
 
 Diskusi ini membantu kita menyadari bahwa privasi data bukan hanya konsep abstrak, tetapi relevan langsung dengan pekerjaan kita sehari-hari. Ini juga membangun motivasi mengapa NALA dan sistem LLM privat sangat penting untuk organisasi kita.
+
+---
+
+## Panduan Praktik
+
+Module ini adalah sesi konsep (lihat bagian-bagian di atas) — tidak ada langkah hands-on/terminal tersendiri.
+
+Satu-satunya aktivitas praktik di module ini adalah **Diskusi Kelompok** (lihat bagian "6. Diskusi Kelompok" di atas), yang tidak membutuhkan setup infra apa pun.
+
+Setup Docker/Ollama/terminal pertama kali dimulai di **Module 2** (`Module-02-Setup-Ollama-Evaluasi-Model/WORKSHEET-Percobaan-Ollama.md`).

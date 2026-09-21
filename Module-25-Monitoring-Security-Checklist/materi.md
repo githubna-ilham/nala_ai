@@ -244,12 +244,64 @@ Ini **dibahas secara jujur**, bukan diklaim sudah diselesaikan:
 
 ## 4. Checkpoint Praktik
 
-Langkah eksekusi lengkap (menjalankan Langfuse, mengecek trace, menjalankan `/status`) ada di **Langkah PANDUAN-PRAKTIK.md** bagian Module 25. Yang perlu dipastikan sebelum lanjut ke Module 26:
+Langkah eksekusi lengkap (menjalankan Langfuse, mengecek trace, menjalankan `/status`) ada di bagian **Panduan Praktik** di bawah. Yang perlu dipastikan sebelum lanjut ke Module 26:
 
 - [ ] Dashboard Langfuse (`http://localhost:3000`) menampilkan trace dari percakapan yang baru saja dilakukan
 - [ ] `GET /status` mengembalikan `200 OK` dengan status tiap service, tidak crash walau satu service dimatikan
 - [ ] `/status/view` menampilkan halaman yang sama secara visual dan auto-refresh
 - [ ] Checklist keamanan Bagian 3 sudah dibahas per kelompok/peserta — untuk poin yang statusnya "belum ada"/"di luar cakupan", kita memahami **kenapa**, bukan menganggapnya sudah selesai
+
+## Panduan Praktik
+
+> Catatan penomoran: bagian ini punya urutan **Langkah 1-4** sendiri (langkah eksekusi praktik), terpisah dari Langkah 1-2 yang sudah muncul di Bagian 2.b di atas (langkah penjelasan konsep/kode untuk endpoint `/status`). Nomor di bawah ini merujuk ke urutan eksekusi panduan praktik, bukan ke Bagian 2.b.
+
+### Prasyarat
+
+- Module 24 sudah selesai — seluruh stack (`ollama`, `api`, `opensearch`, `opensearch-dashboards`, `airflow`, `postgres`, `adminer`, `langfuse`, `langfuse-db`) sudah jalan lewat `docker compose up -d` di `resources/starter-code/day-5/nala/`, mengikuti Module 24 materi.md, bagian Panduan Praktik.
+- Kalau Anda mematikan Langfuse sementara untuk menghemat RAM (lihat troubleshooting Module 24), nyalakan lagi sekarang sebelum lanjut — bukan pull/start dari awal:
+
+```bash
+docker compose start langfuse langfuse-db
+```
+
+### Langkah 1: Implementasikan endpoint `/status` dan `/status/view`
+
+Ikuti Langkah 1-2 di Bagian 2.b di atas untuk menambahkan fungsi `system_status()`, endpoint `GET /status`, dan halaman `status.html`.
+
+Setiap kali mengubah `app/main.py` atau file di `app/`, rebuild `api` saja (bukan seluruh stack):
+
+```bash
+docker compose up -d --build api
+```
+
+### Langkah 2: Verifikasi status page
+
+```bash
+curl http://localhost:8000/status
+```
+
+Lalu buka `http://localhost:8000/status/view` di browser. Coba matikan salah satu service (`docker compose stop opensearch`) dan refresh — `opensearch` di `/status` harus berubah jadi `unreachable`, bukan hang atau error 500 di endpoint `/status` itu sendiri. Nyalakan lagi setelahnya:
+
+```bash
+docker compose start opensearch
+```
+
+✅ **Indikator sukses**: `/status` selalu mengembalikan `200 OK` dengan JSON yang menyebutkan status tiap service, tidak pernah crash walau salah satu/semua service down. `/status/view` menampilkan halaman yang sama secara visual, auto-refresh.
+
+### Langkah 3: Review Dashboard Langfuse
+
+Kirim beberapa pertanyaan ke `http://localhost:8000` (RAG dan SQL tool), lalu buka `http://localhost:3000` dan cek trace-nya muncul — latency per trace, tool yang dipilih agent, dan trace error kalau ada. Lihat Bagian 2.a di atas untuk daftar lengkap yang perlu dicek rutin.
+
+### Langkah 4: Checklist Review Keamanan
+
+Bersama kelompok/instruktur, bahas checklist keamanan di Bagian 3 di atas (Secrets & Credentials, RBAC & Audit Logging, Prompt Injection, Rate Limiting, Data Retention). Untuk tiap poin, catat status jujur: **sudah diatasi**, **sebagian diatasi**, atau **secara eksplisit di luar cakupan** — jangan menandai selesai kalau belum benar-benar diverifikasi.
+
+Pastikan poin Checkpoint Praktik (Bagian 4 di atas) terpenuhi sebelum lanjut ke **Module 26 materi.md, bagian Panduan Praktik** (`../Module-26-Polish-Frontend-Demo/materi.md`).
+
+### Troubleshooting
+
+- **`/status` selalu melaporkan `postgres: unreachable` padahal `docker compose ps` bilang `healthy`**: cek `DATABASE_URL`/koneksi SQLAlchemy (atau `get_connection()` psycopg) yang dipakai `system_status()` memakai host `postgres` (nama service di Docker network), bukan `localhost` — dari dalam container `api`, `localhost` merujuk ke container itu sendiri, bukan container `postgres`.
+- **Dashboard Langfuse tidak menampilkan trace baru**: cek `LANGFUSE_HOST`, `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY` di environment `api` sudah benar dan mengarah ke instance Langfuse yang sama dengan yang dibuka di browser — gejala umum kalau `.env` sempat diregenerasi ulang tanpa update key project Langfuse.
 
 ## Kesimpulan
 

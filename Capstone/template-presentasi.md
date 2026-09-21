@@ -31,7 +31,7 @@ Skenario demo yang disarankan (sesuaikan dengan studi kasus Anda):
 4. **Pertanyaan di luar cakupan** — tanyakan sesuatu yang sengaja tidak ada di dokumen/data, tunjukkan NALA jujur mengaku tidak tahu (grounding, Module 11 Bagian 4) alih-alih mengarang.
 5. **(Opsional tapi dianjurkan)** Tunjukkan trace pertanyaan-pertanyaan di atas lewat dashboard Langfuse (`http://localhost:3000`) untuk membuktikan observability berjalan.
 
-**Siapkan fallback** (screenshot/rekaman singkat dari uji coba sebelumnya) kalau demo live gagal di tengah presentasi — lihat catatan di `../Module-27-Ethics-Governance/PANDUAN-PRAKTIK.md` Troubleshooting. Kegagalan teknis yang ditangani dengan tenang **tidak** otomatis menjatuhkan nilai (lihat `rubrik-penilaian.md` Kriteria 4).
+**Siapkan fallback** (screenshot/rekaman singkat dari uji coba sebelumnya) kalau demo live gagal di tengah presentasi — lihat catatan di Module 27 materi.md, bagian Panduan Praktik > Troubleshooting. Kegagalan teknis yang ditangani dengan tenang **tidak** otomatis menjatuhkan nilai (lihat `rubrik-penilaian.md` Kriteria 4).
 
 ## 4. Trade-off yang Diambil (± 3 menit)
 

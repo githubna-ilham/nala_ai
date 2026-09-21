@@ -133,4 +133,4 @@ Satukan hasil Bagian 1-3 ke satu tabel, supaya dampak prompt engineering terliha
 
 ---
 
-**Next:** Lanjut ke `Module-04-Setup-Infra-Docker-Compose/PANDUAN-PRAKTIK.md` untuk memindahkan draft system prompt yang sudah divalidasi di sini menjadi konstanta `NALA_SYSTEM_PROMPT` di kode FastAPI.
+**Next:** Lanjut ke `Module-04-Setup-Infra-Docker-Compose/materi.md`, bagian Panduan Praktik, untuk memindahkan draft system prompt yang sudah divalidasi di sini menjadi konstanta `NALA_SYSTEM_PROMPT` di kode FastAPI.

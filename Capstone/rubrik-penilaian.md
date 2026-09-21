@@ -53,5 +53,5 @@ Seberapa jelas dan meyakinkan peserta mengomunikasikan apa yang dibangun — kep
 ## Catatan untuk Penilai
 
 - Rubrik ini dinilai **per kelompok/peserta**, bukan relatif dibanding kelompok lain — dua kelompok bisa sama-sama mendapat skor tinggi kalau memang sama-sama layak.
-- Kegagalan teknis kecil saat demo live (lihat catatan fallback di `../Module-27-Ethics-Governance/PANDUAN-PRAKTIK.md` Troubleshooting) **tidak otomatis** menjatuhkan skor Kriteria 1 ke level terendah — nilai bagaimana presenter menangani kegagalan itu di bawah Kriteria 4, bukan menghukum dua kali di kedua kriteria untuk masalah yang sama.
+- Kegagalan teknis kecil saat demo live (lihat catatan fallback di Module 27 materi.md, bagian Panduan Praktik > Troubleshooting) **tidak otomatis** menjatuhkan skor Kriteria 1 ke level terendah — nilai bagaimana presenter menangani kegagalan itu di bawah Kriteria 4, bukan menghukum dua kali di kedua kriteria untuk masalah yang sama.
 - Skor akhir = rata-rata (atau rata-rata berbobot, kalau bobot disesuaikan) dari keempat kriteria, dibulatkan sesuai kebijakan standar penilaian institusi penyelenggara.

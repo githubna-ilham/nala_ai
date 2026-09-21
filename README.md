@@ -106,4 +106,4 @@ Model default yang dipakai konsisten sepanjang seluruh 27 modul adalah **`llama3
 
 ---
 
-**Informasi Lebih Lanjut:** Lihat folder `Module-01-*` sampai `Module-27-*` untuk materi tiap modul dan panduan praktik hands-on (`PANDUAN-PRAKTIK.md` di masing-masing folder) — dan `Capstone/` untuk paket evaluasi akhir (rubrik penilaian, template presentasi, studi kasus capstone).
+**Informasi Lebih Lanjut:** Lihat folder `Module-01-*` sampai `Module-27-*` — tiap folder berisi satu `materi.md` yang mencakup materi konsep sekaligus panduan praktik hands-on (bagian "Panduan Praktik" di akhir file) — dan `Capstone/` untuk paket evaluasi akhir (rubrik penilaian, template presentasi, studi kasus capstone).

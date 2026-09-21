@@ -169,7 +169,7 @@ curl http://localhost:3000/api/public/health
 
 ```
 Tambah service langfuse-db dan langfuse di docker-compose.yml (Module
-4, Tahap A, Langkah 1) — belum ada instrumentasi kode Python.
+18, Langkah 1) — belum ada instrumentasi kode Python.
 
 GOAL:
 - Di resources/starter-code/day-3/nala/docker-compose.yml, tambah dua
@@ -454,12 +454,12 @@ Koneksi yang belum dimanfaatkan di sini: `judge_answer()` dari Module 17 (`app/l
 
 **Yang dibayar:**
 - **Latensi tambahan per request** — setiap `trace.span()`/`.generation()` dan `flush()` adalah kerja tambahan (walau SDK Langfuse mem-buffer dan mengirim secara batch di background, `flush()` eksplisit di akhir `traced_chat_stream()` menunggu pengiriman selesai). Untuk `/chat/stream`, ini terjadi **setelah** token terakhir dikirim ke user, jadi user tidak merasakan langsung — tapi tetap menahan koneksi/proses sedikit lebih lama di sisi server.
-- **Dua service tambahan** (`langfuse`, `langfuse-db`) menambah beban RAM di atas stack yang sudah berat sejak Module 16 (reranker). Ini kemungkinan besar titik dengan jumlah service **terbanyak** sepanjang Module 1-18: `ollama`, `opensearch`, `airflow`, `api` (dengan reranker), `langfuse`, `langfuse-db` — enam container berjalan bersamaan. Kalau laptop mulai terasa berat, pertimbangkan mematikan sementara `airflow` (tidak dipakai lagi setelah ingest awal selesai, lihat pola staged startup di Module 14 `PANDUAN-PRAKTIK.md`) selama sesi eksplorasi Langfuse berlangsung.
+- **Dua service tambahan** (`langfuse`, `langfuse-db`) menambah beban RAM di atas stack yang sudah berat sejak Module 16 (reranker). Ini kemungkinan besar titik dengan jumlah service **terbanyak** sepanjang Module 1-18: `ollama`, `opensearch`, `airflow`, `api` (dengan reranker), `langfuse`, `langfuse-db` — enam container berjalan bersamaan. Kalau laptop mulai terasa berat, pertimbangkan mematikan sementara `airflow` (tidak dipakai lagi setelah ingest awal selesai, lihat pola staged startup di Module 14 materi.md, bagian Panduan Praktik) selama sesi eksplorasi Langfuse berlangsung.
 - **Data trace berisi potongan dokumen internal** (chunk SOP yang di-retrieve, muncul di `output` span `hybrid_search`/`rerank`) — karena Langfuse dijalankan self-hosted (Bagian 2), ini tidak masalah untuk skenario pelatihan/privasi data. Kalau suatu saat Langfuse dipindah ke layanan cloud (bukan self-hosted), ini jadi pertimbangan privasi data yang serius dan tidak boleh dilakukan tanpa tinjauan keamanan — dicatat di sini sebagai pengingat prinsip, bukan skenario yang direncanakan.
 
 ## 7. Checkpoint Praktik
 
-Langkah eksekusi lengkap ada di **Langkah 1-6 `PANDUAN-PRAKTIK.md`**. Yang perlu dipastikan sebelum Module 15-18 dianggap selesai:
+Langkah eksekusi lengkap ada di bagian **Panduan Praktik** di bawah, Langkah 1-6. Yang perlu dipastikan sebelum Module 15-18 dianggap selesai:
 
 - [ ] `http://localhost:3000` bisa diakses, akun dan Project sudah dibuat, API key sudah tersambung ke service `api`
 - [ ] Trace baru muncul di Langfuse setiap kali `/chat/stream` dipanggil, dengan span `hybrid_search`, `rerank`, dan generation `llm_generate_stream` tersusun bersarang, muncul setelah stream selesai (bukan gagal/tidak muncul sama sekali)
@@ -471,3 +471,102 @@ Langkah eksekusi lengkap ada di **Langkah 1-6 `PANDUAN-PRAKTIK.md`**. Yang perlu
 Module ini menutup rangkaian Module 15-18 dengan lapisan yang membungkus **seluruh** yang sudah dibangun — hybrid search (Module 15), reranking (Module 16), dan evaluasi batch (Module 17) — dengan visibilitas per-request. Sebelumnya, kalau ada satu jawaban NALA yang terlihat buruk, jalan satu-satunya adalah menduga-duga atau membaca log mentah; sekarang, tiap trace menunjukkan persis apa yang terjadi di tiap tahap (kandidat yang ditemukan, urutan setelah rerank, prompt lengkap yang dikirim ke LLM, jawaban akhir), lengkap dengan waktu eksekusinya.
 
 **Module 15-18 secara keseluruhan** mengangkat NALA dari sistem RAG dasar (Module 5-14, retrieval vector murni, tidak terukur) menjadi sistem yang lebih akurat retrievalnya (hybrid search + reranking), terukur kualitasnya (framework evaluasi), dan bisa didiagnosis per-request (observability). Yang **belum** disentuh sejauh ini: NALA masih hanya bisa menjawab dari dokumen SOP — belum bisa menjawab pertanyaan yang jawabannya ada di data operasional terstruktur (status pengajuan kredit tertentu, riwayat klaim seorang nasabah, dst). Module 19-23 menambah agentic tools: NALA belajar memilih kapan menjawab dari RAG dokumen (yang baru saja disempurnakan sepanjang Module 15-18 ini) dan kapan menjalankan query SQL langsung ke database operasional — dengan Langfuse yang sudah terpasang di module ini siap merekam trace kedua jalur itu sekaligus.
+
+## Panduan Praktik
+
+> **Catatan penomoran**: "Langkah N" di bagian Panduan Praktik ini adalah urutan eksekusi tersendiri (langkah demi langkah menjalankan perintah), terpisah dari "Langkah N" yang sudah dipakai di bagian kode/struktur di atas (langkah menulis kode). Keduanya kebetulan memakai nomor yang sama tapi menghitung hal yang berbeda — jangan disamakan urutannya.
+
+### Prasyarat
+- Sudah menyelesaikan **Module 17** — `resources/starter-code/day-3/nala/` sudah punya framework evaluasi bekerja
+- Docker Desktop dinaikkan lagi alokasi RAM-nya untuk menampung dua service baru:
+
+| Setting | Minimal | Direkomendasikan | Alasan |
+|---|---|---|---|
+| **Memory (RAM)** | 16 GB | 20 GB+ jika tersedia | Semua service sebelumnya (Ollama, OpenSearch, Airflow, api dengan reranker) + Langfuse & Postgres-nya (`langfuse-db`, terpisah dari Postgres data operasional yang baru akan muncul di Module 19) berjalan bersamaan di titik puncak. |
+| **Disk image size** | 100 GB | 120 GB+ | Image `langfuse/langfuse` menambah beberapa GB lagi di atas image sebelumnya. |
+
+Kalau laptop mulai terasa berat, pertimbangkan mematikan sementara `airflow` (tidak dipakai lagi setelah ingest, lihat Langkah 6 di bawah).
+
+### Langkah 1: Nyalakan Langfuse
+
+Ikuti Module 18 Bagian 4 Tahap A Langkah 1: tambah service `langfuse-db` dan `langfuse` di `docker-compose.yml`.
+
+```bash
+cd resources/starter-code/day-3/nala
+docker compose up -d --build langfuse-db langfuse
+```
+
+**Proses ini akan terasa lama** — Langfuse perlu migrasi skema database saat pertama kali jalan.
+
+```bash
+docker compose logs -f langfuse
+```
+
+Tunggu sampai log menunjukkan service siap menerima koneksi, lalu `Ctrl+C`.
+
+### Langkah 2: Buat akun, Project, dan API key Langfuse
+
+Ikuti Module 18 Bagian 4 Langkah 2:
+
+1. Buka `http://localhost:3000`, buat akun lokal (email + password apa saja).
+2. Buat Project baru, misalnya "NALA Observability".
+3. Di halaman Settings project, salin **Public Key** dan **Secret Key**.
+4. Tambahkan `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_HOST=http://langfuse:3000` ke environment service `api` di `docker-compose.yml`.
+
+```bash
+docker compose up --build -d api
+```
+
+### Langkah 3: Instrumentasi `/chat/stream`
+
+Ikuti Module 18 Bagian 4 Tahap B Langkah 3-4 — perhatikan baik-baik penjelasan di sana tentang kenapa `generation` (pemanggilan LLM) harus ditutup **di dalam generator**, bukan di badan fungsi endpoint, sementara span `hybrid_search`/`rerank` tetap bisa dibuka/ditutup langsung di badan `chat_stream()`.
+
+```bash
+docker compose up --build api
+```
+
+```bash
+curl -N -X POST http://localhost:8000/chat/stream \
+  -H "Content-Type: application/json" \
+  -d '{"messages": [{"role": "user", "content": "Apa saja syarat pengajuan kredit untuk nasabah perorangan?"}]}'
+```
+
+✅ **Indikator sukses**: endpoint tetap berfungsi seperti sebelumnya (tidak ada perubahan perilaku dari sisi user), dan trace baru muncul di `http://localhost:3000` halaman Traces **setelah** stream selesai diterima.
+
+### Langkah 4: Telusuri trace di UI Langfuse
+
+Buka trace yang baru dibuat di Langkah 3, klik untuk membuka detail. Verifikasi span `hybrid_search`, `rerank`, dan generation `llm_generate_stream` tersusun bersarang dengan `input`/`output` yang masuk akal, dan perhatikan durasi tiap span. Ikuti alur diagnosis lengkap di Module 18 Bagian 5 sebagai latihan.
+
+### Langkah 5: Uji fallback tetap tercatat
+
+```bash
+docker compose stop opensearch
+```
+
+```bash
+curl -N -X POST http://localhost:8000/chat/stream \
+  -H "Content-Type: application/json" \
+  -d '{"messages": [{"role": "user", "content": "Apa saja syarat pengajuan kredit?"}]}'
+```
+
+✅ **Indikator sukses**: `/chat/stream` tetap membalas (fallback `NALA_SYSTEM_PROMPT_NO_CONTEXT`, jawaban generik) — bukan error 500 — dan trace baru tetap muncul di Langfuse, dengan `level="ERROR"` tercatat di trace tersebut. Nyalakan lagi OpenSearch setelahnya:
+
+```bash
+docker compose start opensearch
+```
+
+### Langkah 6: (Opsional) Matikan Airflow sementara kalau laptop terasa berat
+
+```bash
+docker compose stop airflow
+```
+
+Airflow tidak dipakai lagi setelah ingest dokumen awal selesai — mematikannya sementara selama eksplorasi Module 17-18 membebaskan RAM untuk reranker dan Langfuse tanpa mengganggu `/chat/stream`, yang tidak bergantung pada Airflow sama sekali. Nyalakan lagi (`docker compose up -d airflow`) kapan pun dibutuhkan lagi (misalnya untuk ingest dokumen baru).
+
+### Troubleshooting
+
+- **`langfuse` container gagal start / `langfuse-db` connection refused**: `langfuse` butuh `langfuse-db` sudah siap menerima koneksi sebelum migrasi database berhasil — tunggu beberapa saat lebih lama, atau restart `langfuse` saja setelah `langfuse-db` benar-benar `healthy`: `docker compose restart langfuse`.
+- **Trace tidak muncul sama sekali di UI Langfuse**: cek `LANGFUSE_PUBLIC_KEY`/`LANGFUSE_SECRET_KEY`/`LANGFUSE_HOST` di environment service `api` — key yang salah biasanya gagal secara diam-diam (SDK Langfuse dirancang tidak mengganggu aplikasi utama kalau pengiriman trace gagal). Cek juga apakah `langfuse_client.flush()` benar-benar terpanggil di dalam `traced_chat_stream()` (Module 18 Bagian 4).
+- **Trace `chat_stream` tidak pernah muncul, walau curl berhasil menerima seluruh stream**: kemungkinan besar instrumentasi masih ditulis di badan fungsi `chat_stream()` setelah baris `return StreamingResponse(...)` (baris itu tidak akan pernah tereksekusi tepat waktu) — pastikan `trace.update()`/`flush()` ada di dalam `traced_chat_stream()` (generator terpisah), bukan di `chat_stream()` sendiri. Lihat penjelasan lengkap Module 18 Bagian 4 Tahap B.
+- **Semua service terasa sangat lambat / laptop panas / container ter-*kill***: alokasi RAM Docker Desktop kurang — lihat bagian Prasyarat di atas, naikkan ke 20GB+ kalau tersedia, atau matikan sementara `airflow` (Langkah 6) selama eksplorasi berlangsung.
+- **Port sudah dipakai (3000/8000/9200/11434)**: ubah mapping port yang bentrok di `docker-compose.yml`, atau pastikan container lama sudah benar-benar dimatikan (`docker compose down` di `resources/starter-code/day-2/nala`).
