@@ -1,0 +1,10 @@
+services:                         # daftar semua container yang akan dijalankan
+  ollama:                         # nama service (bebas, tapi jadi hostname internal Docker)
+    image: ollama/ollama:latest   # pakai image resmi dari Docker Hub, bukan build sendiri
+    ports:
+      - '11434:11434'             # port 11434 di laptop <-> port 11434 di dalam container
+    volumes:
+      - ollama_data:/root/.ollama # simpan model Ollama ke volume, tidak hilang saat container dihapus
+
+volumes:                          # deklarasi named volume di level top (bukan di dalam service)
+  ollama_data:                    # nama volume yang dipakai service ollama di atas, kosong = default Docker
