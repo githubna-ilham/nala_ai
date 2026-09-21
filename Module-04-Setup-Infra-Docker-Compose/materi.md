@@ -372,11 +372,15 @@ FastAPI adalah framework Python modern untuk membangun API (Application Programm
 Jika NALA adalah "asisten AI", maka FastAPI adalah "resepsionis" yang menerima pertanyaan dari klien (user, aplikasi lain, website) dan melempar pertanyaan tersebut ke asisten. Setelah asisten menjawab, resepsionis mengirim jawaban kembali ke klien.
 
 **Alur Komunikasi (Non-teknis):**
-1. **Klien mengirim pertanyaan**: "Halo NALA, apa itu machine learning?"
-2. **FastAPI (resepsionis) menerima**: Catat pertanyaan, validasi format
-3. **FastAPI melempar ke Ollama**: "Ollama, tolong jawab pertanyaan ini"
-4. **Ollama (asisten AI) menjawab**: "Machine learning adalah..."
-5. **FastAPI mengirim jawaban kembali**: Resepsionis memberikan jawaban ke klien
+
+```mermaid
+flowchart LR
+    A["Klien\n'Halo NALA, apa itu\nmachine learning?'"] -->|"1. Kirim pertanyaan"| B["FastAPI\n(resepsionis)"]
+    B -->|"2. Catat & validasi format"| B
+    B -->|"3. 'Ollama, tolong\njawab ini'"| C["Ollama\n(asisten AI)"]
+    C -->|"4. 'Machine learning\nadalah...'"| B
+    B -->|"5. Kirim jawaban kembali"| A
+```
 
 **Keuntungan FastAPI untuk NALA:**
 - **Cepat**: Salah satu framework tercepat di Python (comparable dengan Node.js)
