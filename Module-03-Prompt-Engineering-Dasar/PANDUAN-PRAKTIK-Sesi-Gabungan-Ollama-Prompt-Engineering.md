@@ -379,11 +379,11 @@ Perintah pendukung: `/show system` (lihat system prompt aktif), `/clear` (hapus 
    PARAMETER temperature 0.3
    PARAMETER num_ctx 4096
    ```
-3. Simpan dengan nama persis `Modelfile` (**tanpa** ekstensi apa pun), di folder yang mudah diingat, misal `resources/starter-code/day-1/nala/`
+3. Simpan dengan nama persis `Modelfile` (**tanpa** ekstensi apa pun), di folder yang mudah diingat, misal `resources/starter-code/nala/`
 
 **Langkah B — Build & jalankan (di Terminal):**
 ```bash
-cd resources/starter-code/day-1/nala
+cd resources/starter-code/nala
 ollama create nala-v1 -f Modelfile
 ollama run nala-v1
 ```

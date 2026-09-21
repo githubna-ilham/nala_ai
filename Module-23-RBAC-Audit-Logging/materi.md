@@ -129,7 +129,7 @@ Tambah tabel audit_log dan role database khusus untuk menulis log
 DELETE.
 
 GOAL:
-- Di akhir resources/starter-code/day-4/nala/db/seed.sql (setelah
+- Di akhir resources/starter-code/nala/db/seed.sql (setelah
   GRANT nala_readonly yang sudah ada dari Module 21), tambahkan: CREATE
   TABLE audit_log (id SERIAL PK, waktu TIMESTAMPTZ NOT NULL DEFAULT
   now(), user_id VARCHAR(50) NOT NULL, role VARCHAR(20) NOT NULL,
@@ -236,7 +236,7 @@ terbatas (Module 23, Tahap B) — belum disambungkan ke endpoint
 mana pun.
 
 GOAL:
-- Buat resources/starter-code/day-4/nala/app/audit.py berisi:
+- Buat resources/starter-code/nala/app/audit.py berisi:
   - konstanta POSTGRES_APP_DSN dari env var POSTGRES_APP_DSN (default
     postgresql://nala_app:app_dev_only@localhost:5432/nala_operasional)
   - logger = logging.getLogger("nala.audit")
@@ -346,7 +346,7 @@ LLM, DAN diverifikasi ulang saat eksekusi tool (pertahanan berlapis)
 (Module 23, Tahap C).
 
 GOAL:
-- Di resources/starter-code/day-4/nala/app/agent.py:
+- Di resources/starter-code/nala/app/agent.py:
   1. Tambah field baru ke AgentState: role: str, dan called_tools:
      Annotated[list[dict], operator.add].
   2. Tambah konstanta modul SQL_ALLOWED_ROLES = {"staff_finance",
@@ -489,7 +489,7 @@ Sambungkan role ke request /chat dan panggil audit logging setelah
 agent selesai memproses (Module 23, Tahap D).
 
 GOAL:
-- Di resources/starter-code/day-4/nala/app/main.py:
+- Di resources/starter-code/nala/app/main.py:
   1. Tambah import log_audit dari app.audit.
   2. Tambah dua field baru ke class ChatRequest: user_id: str =
      "anonim", role: str = "staff_umum" (keduanya punya default,

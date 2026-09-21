@@ -75,13 +75,13 @@ Ada dua pilihan desain di titik ini: (a) tambah `/chat/stream` **di samping** `/
 
 ## 3. Struktur Kode yang Ditambahkan
 
-Dibanding akhir Module 5, ada beberapa perubahan di `resources/starter-code/day-2/nala/`. Sama seperti Module 5, dibangun **bertahap dalam 3 tahap**:
+Dibanding akhir Module 5, ada beberapa perubahan di `resources/starter-code/nala/`. Sama seperti Module 5, dibangun **bertahap dalam 3 tahap**:
 
 1. **Tahap A — Tambah kemampuan streaming di `OllamaClient`**, method baru `chat_stream()` di `app/ollama_client.py`. Belum ada yang memanggilnya — murni menambah kapabilitas di client, tanpa menyentuh `generate()` (masih dipakai `/chat` sampai Tahap B).
 2. **Tahap B — Endpoint `/chat/stream` baru** di `app/main.py`, memakai `chat_stream()` dari Tahap A — **dan endpoint `/chat` lama dihapus** di langkah yang sama, bukan dibiarkan menumpuk di samping yang baru.
 3. **Tahap C — Frontend**: ubah `chat.html` supaya membaca stream secara bertahap dan mengirim riwayat percakapan, bukan satu pesan.
 
-Kode lengkapnya sudah tersedia di `resources/starter-code/day-2-reference/nala/` sebagai referensi/jawaban.
+Kode lengkap tiap tahap ditunjukkan langsung di bawah, sebagai referensi/jawaban setelah Anda mencoba menulisnya sendiri.
 
 ### Tahap A — Tambah `chat_stream()` di `app/ollama_client.py`
 
@@ -167,7 +167,7 @@ Tambah method chat_stream() di OllamaClient (Module 6, Tahap A) —
 kemampuan streaming baru, belum dipakai endpoint apa pun.
 
 GOAL:
-- Di resources/starter-code/day-2/nala/app/ollama_client.py:
+- Di resources/starter-code/nala/app/ollama_client.py:
   - Tambah `import json` di baris paling atas file.
   - Tambah method baru `chat_stream(self, messages: list[dict])`
     di dalam class OllamaClient, generator (pakai yield) yang
@@ -178,7 +178,7 @@ GOAL:
     isinya, dan break setelah baris dengan "done": true.
 
 CONTEXT:
-- File: resources/starter-code/day-2/nala/app/ollama_client.py
+- File: resources/starter-code/nala/app/ollama_client.py
   (saat ini cuma berisi class OllamaClient dengan method generate())
 - generate() dipakai `/api/generate` (non-streaming), chat_stream()
   baru ini dipakai `/api/chat` (streaming, format messages array)
@@ -283,7 +283,7 @@ hapus total endpoint POST /chat lama (Module 5) — bukan menambah di
 sampingnya.
 
 GOAL:
-- Di resources/starter-code/day-2/nala/app/main.py:
+- Di resources/starter-code/nala/app/main.py:
   - Ubah import `from fastapi import FastAPI` jadi
     `from fastapi import FastAPI, HTTPException, Request` (kalau
     Request belum ada dari Module 5) dan tambah baris baru
@@ -308,7 +308,7 @@ GOAL:
     endpoint ini.
 
 CONTEXT:
-- File: resources/starter-code/day-2/nala/app/main.py
+- File: resources/starter-code/nala/app/main.py
 - chat_stream() generator sudah ada di app/ollama_client.py (Tahap A)
 - NALA_SYSTEM_PROMPT sudah diimpor sejak Module 5
 - Ini penggantian, bukan penambahan — /chat/stream jadi satu-satunya
@@ -516,7 +516,7 @@ Ubah chat.html supaya membaca /chat/stream secara bertahap dan
 mengirim riwayat percakapan (Module 6, Tahap C).
 
 GOAL:
-- Di resources/starter-code/day-2/nala/app/templates/chat.html:
+- Di resources/starter-code/nala/app/templates/chat.html:
   - Tambah variabel `let conversation = [];` di awal <script>.
   - Ubah handler submit form: push pesan user ke conversation, fetch
     ke "/chat/stream" (bukan "/chat") dengan body
@@ -533,7 +533,7 @@ GOAL:
     sebelum mengosongkan conversation dan #history.
 
 CONTEXT:
-- File: resources/starter-code/day-2/nala/app/templates/chat.html
+- File: resources/starter-code/nala/app/templates/chat.html
   (saat ini dari Module 5: fetch ke "/chat" dengan body {message},
   tanpa riwayat, tanpa streaming)
 - Endpoint /chat/stream sudah ada sejak Tahap B, terima
@@ -664,7 +664,7 @@ Begitu kelima hal ini terverifikasi, lanjut ke Module 7 — yang menjawab pertan
 ## Panduan Praktik
 
 ### Prasyarat
-- Sudah menyelesaikan **Module 5** (Chat UI Dasar) — container `ollama`+`api` dari `resources/starter-code/day-2/nala/` masih berjalan (kalau tidak, ulangi Module 5 Langkah 2)
+- Sudah menyelesaikan **Module 5** (Chat UI Dasar) — container `ollama`+`api` dari `resources/starter-code/nala/` masih berjalan (kalau tidak, ulangi Module 5 Langkah 2)
 - Belum butuh `opensearch` atau `airflow` di module ini
 
 ### Langkah 1: `/chat/stream` menggantikan `/chat` total, coba streaming

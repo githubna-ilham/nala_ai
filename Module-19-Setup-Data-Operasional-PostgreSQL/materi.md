@@ -167,7 +167,7 @@ Tambah service PostgreSQL, skema data operasional minimal, dan dua
 role terpisah (read-only vs write-only) — Module 19, Tahap A.
 
 GOAL:
-1. Di resources/starter-code/day-4/nala/docker-compose.yml: tambah
+1. Di resources/starter-code/nala/docker-compose.yml: tambah
    service baru "postgres" (image postgres:16, POSTGRES_DB=
    nala_operasional, POSTGRES_USER=nala_admin, POSTGRES_PASSWORD dari
    env var POSTGRES_ADMIN_PASSWORD default changeme_dev_only, port
@@ -176,7 +176,7 @@ GOAL:
    pg_isready). Tambah postgres_data ke volumes: top-level. Tambah
    depends_on postgres (condition service_healthy) ke service api
    (ubah depends_on api ke bentuk mapping kalau masih list).
-2. Buat resources/starter-code/day-4/nala/db/seed.sql: CREATE TABLE
+2. Buat resources/starter-code/nala/db/seed.sql: CREATE TABLE
    pengajuan_kredit (id SERIAL PK, nasabah_id VARCHAR(10), nama_nasabah
    VARCHAR(100), jumlah_pengajuan NUMERIC(15,2), status VARCHAR(20)
    CHECK IN ('pending','disetujui','ditolak','pencairan'),
@@ -470,20 +470,20 @@ pengajuan kredit dan klaim asuransi secara manual — Module 19,
 Tahap B.
 
 GOAL:
-1. Di resources/starter-code/day-4/nala/requirements.txt: tambah baris
+1. Di resources/starter-code/nala/requirements.txt: tambah baris
    psycopg[binary]==3.2.3
-2. Buat resources/starter-code/day-4/nala/app/db.py: dua konstanta DSN
+2. Buat resources/starter-code/nala/app/db.py: dua konstanta DSN
    dari env var (POSTGRES_READONLY_DSN, POSTGRES_WRITER_DSN, dengan
    default masing-masing memakai nala_readonly/nala_writer), dua fungsi
    get_connection() dan get_write_connection() yang psycopg.connect()
    ke DSN masing-masing (connect_timeout=5).
-3. Buat resources/starter-code/day-4/nala/app/templates/data_operasional.html:
+3. Buat resources/starter-code/nala/app/templates/data_operasional.html:
    dua form (pengajuan kredit, klaim asuransi) dengan field sesuai
    kolom tabel masing-masing, plus dua tabel daftar data di bawah tiap
    form (loop Jinja2 atas pengajuan_kredit/klaim_asuransi dari context).
    Nav link baru "Data Operasional" ditambahkan juga ke chat.html dan
    upload.html yang sudah ada.
-4. Di resources/starter-code/day-4/nala/app/main.py: import Form dari
+4. Di resources/starter-code/nala/app/main.py: import Form dari
    fastapi, dict_row dari psycopg.rows, get_connection/get_write_connection
    dari app.db. Tambah fungsi fetch_pengajuan_kredit()/fetch_klaim_asuransi()
    (SELECT via get_connection(), row_factory=dict_row). Tambah endpoint
@@ -543,28 +543,28 @@ Module 20 selanjutnya membangun agent LangGraph (fokus pada tool dokumen SOP dul
 
 **Panduan Praktik — Module 19: Setup Data Operasional — PostgreSQL & UI Form**
 
-#### Folder kode belum ada — Anda akan membangunnya dari salinan Module 18
+#### Melanjutkan langsung di folder starter code yang sudah ada
 
-Berbeda dari module-module sebelumnya yang sudah punya `resources/starter-code/day-N/nala/` siap pakai, **`resources/starter-code/day-4/nala/` belum ada** saat panduan ini ditulis (lihat Module 19 bagian Tujuan di atas). Langkah 1 di bawah membangunnya dengan menyalin seluruh isi `resources/starter-code/day-3/nala/` (hybrid search, reranking, evaluasi RAG, Langfuse — dari Module 15-18), lalu module demi module (Module 19-23) di bagian Panduan Praktik berikutnya menambah lapisan data operasional/agent/tool/RBAC di atasnya — pola yang sama seperti panduan praktik Module 5 menyalin dari Module 1-4.
+Semua kode dari Module 1-18 hidup di satu folder: `resources/starter-code/nala/` (lihat Module 19 bagian Tujuan di atas). Langkah 1 di bawah **tidak** menyalin ke folder baru — rangkaian Module 19-23 di bagian Panduan Praktik berikutnya menambah lapisan data operasional/agent/tool/RBAC **langsung di atas file-file yang sudah ada** di folder ini, module demi module.
 
-Karena belum ada kode referensi (`day-4-reference/`) untuk rangkaian Module 19-23, setiap kali panduan ini menyebut "kode lengkap", itu merujuk ke bagian **"📄 Kode lengkap"** di `materi.md` module terkait — bukan folder referensi terpisah seperti sebelumnya.
+Karena tidak ada folder referensi terpisah — satu-satunya kode adalah `resources/starter-code/nala/` yang Anda edit langsung — setiap kali panduan ini menyebut "kode lengkap", itu merujuk ke bagian **"📄 Kode lengkap"** di `materi.md` module terkait.
 
 ### Prasyarat
-- Sudah menyelesaikan **Module 1-18** (`llama3.2:3b` sudah biasa dipakai, `resources/starter-code/day-3/nala/` berjalan dengan hybrid search + reranking + evaluasi + Langfuse)
+- Sudah menyelesaikan **Module 1-18** (`llama3.2:3b` sudah biasa dipakai, `resources/starter-code/nala/` berjalan dengan hybrid search + reranking + evaluasi + Langfuse)
 - Docker Desktop sudah dialokasikan resource yang cukup — lihat catatan RAM di bawah
 
-#### Container Module 15-18 tetap dipakai — bukan project terpisah
+#### Container yang sama dipakai sepanjang Module 19-23
 
-Sama seperti transisi antar-module sebelumnya, folder `day-2/nala`, `day-3/nala`, dan `day-4/nala` semuanya bernama `nala` — Docker Compose memakai **nama folder** (bukan path lengkap) sebagai *project name* secara default, jadi ketiganya diperlakukan sebagai **project yang sama**. Ini disengaja: kalau tiap kelompok module punya project Docker terpisah, `ollama`/`opensearch`/`airflow` akan berjalan berkali-kali lipat, membengkakkan RAM tanpa perlu — satu project yang tumbuh bertahap jauh lebih hemat, dan data (index OpenSearch, model Ollama yang sudah di-pull) otomatis ikut terbawa.
+Karena hanya ada satu folder kode (`resources/starter-code/nala/`) yang dipakai sejak Module 1, seluruh service (`ollama`, `opensearch`, `airflow`) yang sudah berjalan dari module-module sebelumnya otomatis ikut terpakai di sini — tidak ada folder baru dan tidak ada project Docker baru yang perlu disiapkan; data yang sudah ada (index OpenSearch, model Ollama yang sudah di-pull) tetap tersedia tanpa langkah pemindahan apa pun.
 
-Setelah `day-4/nala/docker-compose.yml` dipakai, jalankan `docker compose` **dari folder `day-4/nala/`** untuk seterusnya:
+Setelah `docker-compose.yml` diperbarui (Langkah 1 menambah service `postgres`), jalankan `docker compose` seperti biasa **dari folder `resources/starter-code/nala/`**:
 
 ```bash
-cd resources/starter-code/day-4/nala
+cd resources/starter-code/nala
 docker compose up --build -d
 ```
 
-`day-4/nala` memakai port yang sama (`8000` api, `11434` ollama, `9200` opensearch, `8080` airflow) plus port baru `5432` untuk PostgreSQL — semuanya otomatis ter-declare begitu compose dijalankan dari sini, tidak ada langkah "matikan dulu" yang diperlukan (compose merecreate container yang berubah definisinya, container lain yang tidak berubah tetap jalan apa adanya).
+Folder ini memakai port yang sama (`8000` api, `11434` ollama, `9200` opensearch, `8080` airflow) plus port baru `5432` untuk PostgreSQL — semuanya otomatis ter-declare begitu compose dijalankan, tidak ada langkah "matikan dulu" yang diperlukan (compose merecreate container yang berubah definisinya, container lain yang tidak berubah tetap jalan apa adanya).
 
 #### Catatan penting: naikkan alokasi RAM Docker Desktop lagi
 
@@ -578,15 +578,13 @@ Rangkaian Module 19-23 menambahkan **satu service baru**: **PostgreSQL** (data o
 
 Kalau sudah di 16GB+ sejak Module 5-18, tidak perlu diubah lagi kecuali ingin mencoba `qwen2.5:7b` (Module 22 Bagian 4.b).
 
-### Langkah 1: Salin dari Module 18, masuk ke folder starter code
+### Langkah 1: Masuk ke folder starter code
 
 ```bash
-cd resources/starter-code
-cp -r day-3/nala day-4/nala
-cd day-4/nala
+cd resources/starter-code/nala
 ```
 
-Seluruh isi `day-3/nala/` (termasuk `app/`, `docker-compose.yml`, `requirements.txt`, dan konfigurasi hybrid search/reranking/Langfuse dari Module 15-18) ikut tersalin — rangkaian Module 19-23 **menambah** lapisan data operasional/agent/tool di atasnya, bukan menulis ulang dari nol. Verifikasi dulu fondasinya masih utuh sebelum menambah apa pun:
+Folder ini sudah berisi seluruh kode dari Module 1-18 (`app/`, `docker-compose.yml`, `requirements.txt`, dan konfigurasi hybrid search/reranking/Langfuse dari Module 15-18) — rangkaian Module 19-23 **menambah** lapisan data operasional/agent/tool langsung di atas file-file yang sudah ada di sini, bukan menulis ulang dari nol dan bukan menyalin ke folder lain. Verifikasi dulu fondasinya masih utuh sebelum menambah apa pun:
 
 ```bash
 docker compose up --build --no-deps ollama api

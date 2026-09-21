@@ -30,7 +30,7 @@ flowchart LR
 
 ## 1. Kenapa Menyatukan, Bukan Membangun Baru
 
-Sepanjang Module 1-23, NALA tumbuh service demi service — dan `docker-compose.yml`-nya ikut tumbuh **di dalam masing-masing folder `day-N/nala/`** yang terpisah:
+Sepanjang Module 1-23, NALA tumbuh service demi service — dan `docker-compose.yml`-nya ikut tumbuh **di dalam folder kerja `resources/starter-code/nala/` yang sama**, diedit langsung tiap module menambahkan service baru:
 
 | Rentang Module | Service baru di `docker-compose.yml` |
 |---|---|
@@ -39,7 +39,7 @@ Sepanjang Module 1-23, NALA tumbuh service demi service — dan `docker-compose.
 | Module 15-18 | (OpenSearch dipakai sebagai hybrid search, Langfuse observability ditambahkan) |
 | Module 19-23 | + `postgres` (data operasional), LangGraph agent berjalan di dalam `api` yang sama |
 
-Konsekuensinya: sampai akhir Module 23, tidak pernah ada **satu** `docker-compose.yml` yang benar-benar menjalankan semuanya sekaligus — tiap hari punya folder kerja sendiri (`day-1/nala/`, `day-2/nala/`, dst), dan yang dijalankan cuma service yang relevan untuk hari itu. Module ini bukan menulis service baru — service-nya sudah semua pernah dibangun. Tugasnya murni **konsolidasi**: satu `docker-compose.yml` final, satu `.env`, urutan startup yang jelas, dan kesiapan menjalankan tujuh+ container sekaligus di laptop peserta.
+Konsekuensinya: sampai akhir Module 23, tidak pernah ada **satu** `docker-compose.yml` yang benar-benar menjalankan semuanya sekaligus — tiap module cuma menjalankan service yang relevan untuk module itu (`docker compose up <service tertentu>`), bukan seluruh stack. Module ini bukan menulis service baru — service-nya sudah semua pernah dibangun. Tugasnya murni **konsolidasi**: satu `docker-compose.yml` final, satu `.env`, urutan startup yang jelas, dan kesiapan menjalankan tujuh+ container sekaligus di laptop peserta.
 
 Ini juga titik training paling berat secara resource — persis peringatan di README utama ("Minimal 16GB RAM — untuk menjalankan LLM lokal bersamaan dengan services pendukung"). Sampai Module 23, kita tidak pernah menyalakan **seluruh** service bersamaan; Module 24 adalah pertama kalinya itu terjadi.
 
@@ -81,7 +81,7 @@ Perhatikan satu hal penting di diagram ini: **Langfuse tetap punya database send
 
 ## 2. Struktur Kode yang Ditambahkan
 
-Dibanding akhir Module 23, ada empat penambahan/perubahan di project kerja peserta (`resources/starter-code/day-5/nala/` — hasil menyalin `day-4/nala/`, lihat bagian Panduan Praktik di bawah, Langkah 1). Dibangun bertahap dalam 3 Tahap:
+Dibanding akhir Module 23, ada empat penambahan/perubahan di project kerja peserta (`resources/starter-code/nala/` — folder yang sama, diedit langsung di tempat sejak Module 1). Dibangun bertahap dalam 3 Tahap:
 
 1. **Tahap A — Externalize config ke `.env`.** Sejak Module 1, `OLLAMA_MODEL`, port, dan value konfigurasi lain ditulis langsung di `docker-compose.yml` (`environment: - OLLAMA_MODEL=llama3.2:3b`). Ini cukup untuk 2 service, tapi begitu sembilan service masuk — sebagian butuh password (Postgres, Langfuse) — hardcode jadi berbahaya (lihat Module 25 checklist keamanan: "secrets tidak boleh hardcoded"). Tahap ini memindahkan semua value yang berubah-ubah atau sensitif ke satu file `.env`.
 2. **Tahap B — Tambah healthcheck & `depends_on: condition: service_healthy`.** Sejak Module 5, `depends_on` di NALA cuma menjamin **urutan start**, bukan **urutan siap** — `api` bisa saja mulai sebelum `opensearch` benar-benar bisa menjawab query, karena `depends_on` tanpa `condition` cuma menunggu container *start*, bukan *ready*. Tahap ini menambah `healthcheck` di service inti supaya `depends_on` bisa menunggu sampai benar-benar siap.
@@ -94,7 +94,7 @@ Dibanding akhir Module 23, ada empat penambahan/perubahan di project kerja peser
 ⚠️ **Revisi dari rencana awal, berdasarkan pengujian nyata**: draft pertama modul ini menulis `.env` untuk Langfuse **v4** (butuh `LANGFUSE_CLICKHOUSE_PASSWORD`, `LANGFUSE_REDIS_PASSWORD`, `LANGFUSE_MINIO_ROOT_*`, `LANGFUSE_ENCRYPTION_KEY`). Setelah dipertimbangkan (lihat Bagian 2 Tahap C untuk analisis lengkap), kurikulum ini **tetap memakai Langfuse v2** yang sudah dibangun sejak Module 18 — jauh lebih ringan (2 service database sendiri, bukan 5), dan gap performanya nyaris tidak terasa pada skala trace training ini. Jadi `.env` yang benar-benar dipakai **lebih sederhana** dari draft awal:
 
 ```bash
-# resources/starter-code/day-5/nala/.env
+# resources/starter-code/nala/.env
 OLLAMA_MODEL=llama3.2:3b
 
 POSTGRES_ADMIN_PASSWORD=ganti-password-ini
@@ -120,7 +120,7 @@ echo "LANGFUSE_SALT=$(openssl rand -hex 32)" >> .env
 **Langkah 2 — Tambah `.env` ke `.gitignore`**
 
 ```bash
-# resources/starter-code/day-5/nala/.gitignore
+# resources/starter-code/nala/.gitignore
 .env
 ```
 
@@ -142,7 +142,7 @@ Keduanya dipakai bersamaan di Module ini: interpolasi `${VAR}` untuk mengisi val
 Belum ada `docker-compose.yml` yang berubah di langkah ini — cukup pastikan `.env` dan `.gitignore` sudah ada dan `.env` **tidak** muncul di `git status` sebagai file yang akan di-commit (kalau repo Git peserta sudah pernah `git add .env` sebelumnya, `.gitignore` saja tidak cukup — perlu `git rm --cached .env` juga).
 
 ```bash
-cd resources/starter-code/day-5/nala
+cd resources/starter-code/nala
 git status
 ```
 
@@ -156,7 +156,7 @@ Buat file .env dan pastikan tidak ter-commit ke Git (Module 24,
 Tahap A) — externalize config, belum mengubah docker-compose.yml.
 
 GOAL:
-1. Buat resources/starter-code/day-5/nala/.env berisi variable:
+1. Buat resources/starter-code/nala/.env berisi variable:
    OLLAMA_MODEL, POSTGRES_ADMIN_PASSWORD, LANGFUSE_DB_PASSWORD,
    LANGFUSE_NEXTAUTH_SECRET, LANGFUSE_SALT, LANGFUSE_PUBLIC_KEY,
    LANGFUSE_SECRET_KEY (dua yang terakhir disalin dari project Langfuse
@@ -165,13 +165,13 @@ GOAL:
    "changeme" atau kosong), pakai `openssl rand -hex 16` untuk
    password dan `openssl rand -hex 32` untuk secret/salt.
 2. Tambah/pastikan ada baris ".env" di
-   resources/starter-code/day-5/nala/.gitignore.
+   resources/starter-code/nala/.gitignore.
 3. Kalau .env pernah ter-track Git sebelumnya, jalankan
    `git rm --cached .env` di folder itu.
 
 CONTEXT:
-- Folder resources/starter-code/day-5/nala/ adalah hasil salinan
-  day-4/nala/ (lihat bagian Panduan Praktik di bawah, Langkah 1).
+- Folder resources/starter-code/nala/ adalah folder kerja yang sama
+  dipakai sejak Module 1 — diedit langsung di tempat, bukan disalin.
 - docker-compose.yml BELUM diubah di langkah ini — itu Tahap C.
 
 GUARDRAIL:
@@ -186,7 +186,7 @@ GUARDRAIL:
 **Langkah 4 — Tambah `healthcheck` di tiga service inti**
 
 ```yaml
-# resources/starter-code/day-5/nala/docker-compose.yml (potongan)
+# resources/starter-code/nala/docker-compose.yml (potongan)
 services:
   ollama:
     image: ollama/ollama:latest
@@ -231,7 +231,7 @@ services:
 **Langkah 5 — Ubah `depends_on` service `api` supaya menunggu "healthy", bukan cuma "started"**
 
 ```yaml
-# resources/starter-code/day-5/nala/docker-compose.yml (potongan)
+# resources/starter-code/nala/docker-compose.yml (potongan)
   api:
     build: .
     env_file: .env
@@ -272,7 +272,7 @@ depends_on api jadi condition: service_healthy (Module 24,
 Tahap B).
 
 GOAL:
-- Di resources/starter-code/day-5/nala/docker-compose.yml:
+- Di resources/starter-code/nala/docker-compose.yml:
   1. Tambah healthcheck di service `ollama`: test CMD-SHELL
      "ollama list || exit 1", interval 10s, timeout 5s, retries 10,
      start_period 30s.
@@ -288,7 +288,8 @@ GOAL:
   5. JANGAN tambah healthcheck untuk airflow di langkah ini.
 
 CONTEXT:
-- File ini hasil salinan day-4/nala/docker-compose.yml.
+- File ini docker-compose.yml yang sudah dibangun sejak Module 1-23,
+  diedit langsung di tempat (bukan salinan dari folder lain).
 - .env sudah dibuat di Tahap A, berisi POSTGRES_USER dkk.
 
 GUARDRAIL:
@@ -308,7 +309,7 @@ Tahap ini paling besar — menyatukan `ollama`, `opensearch`, `opensearch-dashbo
 ⚠️ **Revisi dari rencana awal, berdasarkan pengujian nyata**: draft pertama modul ini merancang Langfuse **v4** (`langfuse/langfuse` + `langfuse/langfuse-worker` + PostgreSQL + ClickHouse + Redis + MinIO — enam service pendukung) sebagai "self-hosted yang benar". Setelah dianalisis (lihat Bagian 4a) — untuk volume trace di skala training ini (ratusan-ribuan baris, bukan jutaan), ClickHouse/Redis/MinIO menambah **~1,5-3GB RAM** tanpa manfaat yang terasa, dan Redis khususnya **tidak bisa** ditambahkan sebagian ke v2 (v2 tidak punya titik integrasi Redis sama sekali di kodenya — mengonfirmasi lewat dokumentasi resmi Langfuse). Keputusan final: **tetap pakai `langfuse/langfuse:2`** (monolitik, cuma butuh 1 PostgreSQL sendiri) yang sudah terbukti jalan sejak Module 18. Kalau kelas Anda punya alasan kuat untuk trafik produksi sungguhan, v4 tetap valid sebagai referensi — cek dokumentasi self-hosting resmi Langfuse untuk versi dan environment variable yang berlaku saat itu.
 
 ```yaml
-# resources/starter-code/day-5/nala/docker-compose.yml — VERSI NYATA, sudah dijalankan dan diverifikasi
+# resources/starter-code/nala/docker-compose.yml — VERSI NYATA, sudah dijalankan dan diverifikasi
 services:
   ollama:
     image: ollama/ollama:latest
@@ -477,8 +478,8 @@ Satukan seluruh service Module 1-23 dengan Langfuse self-hosted jadi satu
 docker-compose.yml final (Module 24, Tahap C).
 
 GOAL:
-Update resources/starter-code/day-5/nala/docker-compose.yml (hasil
-salinan day-4/nala/) supaya:
+Update resources/starter-code/nala/docker-compose.yml (folder kerja
+yang sudah dipakai sejak Module 1-23) supaya:
 1. Tambah healthcheck di ollama dan opensearch (Tahap B), ubah
    depends_on api jadi condition: service_healthy untuk ollama,
    opensearch, DAN postgres (postgres sudah punya healthcheck dari
@@ -556,7 +557,7 @@ Root README mensyaratkan **minimal 16GB RAM** sejak awal training, dengan alasan
 
 **Keputusan: tetap `langfuse/langfuse:2`** (monolitik, 1 Postgres sendiri) — sudah jalan sejak Module 18, terverifikasi ulang di Module 24 tanpa masalah fungsional.
 
-**Gotcha nyata yang ditemukan saat migrasi ke `.env`**: karena `day-5/nala` berbagi project Docker Compose yang sama dengan `day-4/nala` (nama folder sama, desain sengaja — lihat Prasyarat), volume `postgres_data`/`langfuse_db_data` **sudah ada** dari Module 19-23 dengan password lama ter-bake di dalamnya. Mengganti `POSTGRES_ADMIN_PASSWORD`/`LANGFUSE_DB_PASSWORD` di `.env` lalu `docker compose up` ulang **tidak** membuat password baru itu benar-benar aktif — PostgreSQL cuma menjalankan `POSTGRES_PASSWORD` env var saat volume data **masih kosong** (inisialisasi pertama), bukan setiap restart. Dibuktikan langsung:
+**Gotcha nyata yang ditemukan saat migrasi ke `.env`**: karena `resources/starter-code/nala/` adalah folder kerja tunggal yang dipakai terus-menerus sejak Module 1 (nama project Docker Compose sama sepanjang training — lihat Prasyarat), volume `postgres_data`/`langfuse_db_data` **sudah ada** dari Module 19-23 dengan password lama ter-bake di dalamnya. Mengganti `POSTGRES_ADMIN_PASSWORD`/`LANGFUSE_DB_PASSWORD` di `.env` lalu `docker compose up` ulang **tidak** membuat password baru itu benar-benar aktif — PostgreSQL cuma menjalankan `POSTGRES_PASSWORD` env var saat volume data **masih kosong** (inisialisasi pertama), bukan setiap restart. Dibuktikan langsung:
 
 ```bash
 # Password BARU dari .env — GAGAL saat volume sudah ada isinya
@@ -602,33 +603,23 @@ Untuk kelas dengan variasi RAM laptop yang lebar, pertimbangkan opsi ini (dibaha
 
 > Catatan penomoran: bagian ini punya urutan **Langkah 1-6** sendiri (langkah eksekusi praktik), terpisah dari **Langkah 1-6** yang sudah muncul di Bagian 2 Tahap A-C di atas (langkah penjelasan konsep/kode). Keduanya kebetulan sama-sama berjumlah enam — nomor di sini merujuk ke urutan eksekusi di bawah ini, bukan ke Bagian 2.
 
-### Sebelum Mulai: Module 24 Tidak Punya Folder Referensi Baru
+### Sebelum Mulai: Edit Langsung di Folder yang Sama
 
-Berbeda dari Module 1-23, Module 24 **tidak** menyediakan `resources/starter-code/day-5-reference/nala/` — folder kerja Module 24 (`resources/starter-code/day-5/nala/`) dibangun langsung di atas hasil kerja Module 23 Anda sendiri (`resources/starter-code/day-4/nala/`), bukan disalin dari jawaban jadi. Panduan ini membangunnya bertahap, module demi module, sama seperti panduan praktik Module 5-14.
+Module 24 **tidak** membuat folder kerja baru — semua perubahan di bagian ini diedit langsung di `resources/starter-code/nala/`, folder yang sama dipakai sejak Module 1. Tidak ada langkah "salin folder" di sini; panduan ini membangunnya bertahap di tempat, module demi module, sama seperti panduan praktik Module 5-14.
 
 ### Prasyarat
 
-- Module 1-23 sudah selesai — RAG hybrid search (Module 15-18), agent LangGraph dengan RAG+SQL tool routing dan RBAC/audit logging (Module 19-23) sudah berjalan di `resources/starter-code/day-4/nala/`.
+- Module 1-23 sudah selesai — RAG hybrid search (Module 15-18), agent LangGraph dengan RAG+SQL tool routing dan RBAC/audit logging (Module 19-23) sudah berjalan di `resources/starter-code/nala/`.
 - Docker Desktop dialokasikan **16GB+ RAM** — lihat catatan resource lengkap di Module 24 Bagian 4. Module 24 adalah titik terberat seluruh training: sembilan container berjalan bersamaan di puncaknya.
-- `openssl` tersedia di terminal (dipakai untuk generate secret acak di Langkah 2) — sudah terpasang default di macOS/Linux; pengguna Windows tanpa WSL bisa memakai `python -c "import secrets; print(secrets.token_hex(32))"` sebagai gantinya.
+- `openssl` tersedia di terminal (dipakai untuk generate secret acak di Langkah 1) — sudah terpasang default di macOS/Linux; pengguna Windows tanpa WSL bisa memakai `python -c "import secrets; print(secrets.token_hex(32))"` sebagai gantinya.
 
-#### Container Module 19-23 tetap dipakai — bukan project terpisah
+#### Container Module 1-23 tetap dipakai — project yang sama sepanjang training
 
-Konsisten dengan transisi antar rentang module sebelumnya: folder `day-N/nala` semuanya bernama `nala`, jadi Docker Compose (yang memakai nama folder sebagai *project name* default) memperlakukan semuanya sebagai **satu project yang sama** — disengaja, supaya `ollama`/`opensearch`/`airflow`/dst tidak berjalan berkali-kali lipat (hemat RAM) dan data yang sudah ada (index OpenSearch, data PostgreSQL, model Ollama) otomatis ikut terbawa ke Module 24, tidak perlu diulang dari nol.
+Karena `resources/starter-code/nala/` adalah satu folder yang tidak pernah berganti nama sejak Module 1, Docker Compose (yang memakai nama folder sebagai *project name* default) memperlakukan seluruh training sebagai **satu project yang sama** — disengaja, supaya `ollama`/`opensearch`/`airflow`/dst tidak berjalan berkali-kali lipat (hemat RAM) dan data yang sudah ada (index OpenSearch, data PostgreSQL, model Ollama) otomatis ikut terbawa ke Module 24, tidak perlu diulang dari nol.
 
-Setelah `day-5/nala/docker-compose.yml` dibangun (Langkah 1 di bawah) dan dipakai, jalankan `docker compose` **dari folder `day-5/nala/`** untuk seterusnya — tidak ada langkah "matikan dulu" yang diperlukan, compose otomatis merecreate container yang definisinya berubah dan membiarkan yang lain tetap jalan. Module 24 memakai port yang sama seperti Module 15-23 (`8000` API, `11434` Ollama, `9200` OpenSearch, `8080` Airflow, `5432` Postgres, `3000` Langfuse, `5601` OpenSearch Dashboards, `8081` Adminer) — tidak ada port baru untuk Langfuse karena tetap v2 (lihat Module 24 Bagian 4a), bukan v4 yang butuh port tambahan MinIO console.
+Setelah `docker-compose.yml` final dibangun (Langkah 2 di bawah) dan dipakai, jalankan `docker compose` **dari folder `resources/starter-code/nala/`** seperti biasa — tidak ada langkah "matikan dulu" yang diperlukan, compose otomatis merecreate container yang definisinya berubah dan membiarkan yang lain tetap jalan. Module 24 memakai port yang sama seperti Module 15-23 (`8000` API, `11434` Ollama, `9200` OpenSearch, `8080` Airflow, `5432` Postgres, `3000` Langfuse, `5601` OpenSearch Dashboards, `8081` Adminer) — tidak ada port baru untuk Langfuse karena tetap v2 (lihat Module 24 Bagian 4a), bukan v4 yang butuh port tambahan MinIO console.
 
-### Langkah 1: Salin `day-4/nala/` jadi `day-5/nala/`
-
-```bash
-cd resources/starter-code
-cp -r day-4/nala day-5/nala
-cd day-5/nala
-```
-
-Seluruh kode aplikasi (RAG, agent, RBAC) **tidak berubah** dari Module 23 — Module 24 murni menambah lapisan deployment/monitoring/frontend di atasnya.
-
-### Langkah 2: Buat `.env` (Module 24 Tahap A)
+### Langkah 1: Buat `.env` (Module 24 Tahap A)
 
 ```bash
 cat > .env << 'EOF'
@@ -656,15 +647,15 @@ cat .env
 
 Semua baris harus punya value setelah `=` — kalau ada yang kosong (kemungkinan `openssl` gagal dijalankan), isi manual dengan string acak sebelum lanjut.
 
-### Langkah 3: Tulis `docker-compose.yml` final (Module 24 Tahap B-C)
+### Langkah 2: Tulis `docker-compose.yml` final (Module 24 Tahap B-C)
 
-Ikuti **Module 24 Bagian 2 Langkah 4-6** untuk menulis `docker-compose.yml` lengkap (healthcheck, `condition: service_healthy`, semua service termasuk Langfuse). Simpan sebagai `resources/starter-code/day-5/nala/docker-compose.yml`, menggantikan yang disalin dari Module 23.
+Ikuti **Module 24 Bagian 2 Langkah 4-6** untuk menulis `docker-compose.yml` lengkap (healthcheck, `condition: service_healthy`, semua service termasuk Langfuse). Edit langsung `resources/starter-code/nala/docker-compose.yml` yang sudah ada dari Module 23.
 
-### Langkah 4: Startup bertahap — jangan `docker compose up` semuanya sekaligus
+### Langkah 3: Startup bertahap — jangan `docker compose up` semuanya sekaligus
 
 Ikuti urutan ini (bukan satu perintah besar) — alasannya ada di Module 24 Bagian 3-4:
 
-**4a. Lapisan dasar**
+**3a. Lapisan dasar**
 
 ```bash
 docker compose up -d ollama postgres opensearch langfuse-db
@@ -678,14 +669,14 @@ watch docker compose ps
 
 (Kalau `watch` tidak tersedia, ulangi `docker compose ps` manual tiap 15-30 detik.) Ini bisa memakan beberapa menit — OpenSearch paling lama, konsisten dengan pengalaman Module 5-14.
 
-**4b. Model Ollama** (kalau `ollama_data` volume Module 24 baru/kosong — cek dulu dengan `docker compose exec ollama ollama list`, model dari Module 1-23 bisa saja sudah tersimpan di volume yang sama kalau nama volume tidak berubah)
+**3b. Model Ollama** (kalau `ollama_data` volume Module 24 baru/kosong — cek dulu dengan `docker compose exec ollama ollama list`, model dari Module 1-23 bisa saja sudah tersimpan di volume yang sama kalau nama volume tidak berubah)
 
 ```bash
 docker compose exec ollama ollama pull llama3.2:3b
 docker compose exec ollama ollama pull nomic-embed-text
 ```
 
-**4c. Lapisan menengah** (paralel, tidak saling bergantung satu sama lain)
+**3c. Lapisan menengah** (paralel, tidak saling bergantung satu sama lain)
 
 ```bash
 docker compose up -d opensearch-dashboards airflow adminer
@@ -699,13 +690,13 @@ docker compose logs -f airflow
 
 Tunggu sampai muncul password admin dan indikasi webserver listen, lalu `Ctrl+C`.
 
-**4d. Lapisan aplikasi**
+**3d. Lapisan aplikasi**
 
 ```bash
 docker compose up -d api langfuse
 ```
 
-### Langkah 5: Verifikasi semua service hidup
+### Langkah 4: Verifikasi semua service hidup
 
 ```bash
 docker compose ps
@@ -720,7 +711,7 @@ Semua baris `STATUS` harus `Up` (yang punya healthcheck: `(healthy)`). Buka satu
 - `http://localhost:8080` — Airflow
 - `http://localhost:5601` — OpenSearch Dashboards
 
-### Langkah 6: Coba end-to-end — RAG dan SQL tool sekaligus
+### Langkah 5: Coba end-to-end — RAG dan SQL tool sekaligus
 
 Kirim dua jenis pertanyaan ke `http://localhost:8000` untuk memverifikasi routing agent Module 19-23 masih bekerja di stack gabungan ini:
 

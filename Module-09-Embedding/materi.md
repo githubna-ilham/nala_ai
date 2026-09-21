@@ -123,7 +123,7 @@ Angka persisnya di komputer Anda mungkin sedikit berbeda, tapi untuk teks masuka
 Buat app/embeddings.py dengan fungsi embed_text() (Module 9, Tahap A).
 
 GOAL:
-- Buat resources/starter-code/day-2/nala/app/embeddings.py berisi
+- Buat resources/starter-code/nala/app/embeddings.py berisi
   fungsi embed_text(text: str, base_url: str, model: str =
   "nomic-embed-text") -> list[float] yang POST ke {base_url}/api/embed
   dengan json {"model": model, "input": text}, timeout 60.0, lalu

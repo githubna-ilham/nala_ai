@@ -406,7 +406,7 @@ Tambah service opensearch di docker-compose.yml dan buat
 app/vector_store.py dengan class VectorStore (Module 10).
 
 GOAL:
-- Di resources/starter-code/day-2/nala/docker-compose.yml: tambah
+- Di resources/starter-code/nala/docker-compose.yml: tambah
   service baru `opensearch` (image opensearchproject/opensearch:2.11.0,
   environment discovery.type=single-node,
   plugins.security.disabled=true,
@@ -416,7 +416,7 @@ GOAL:
   `- OPENSEARCH_BASE_URL=http://opensearch:9200` ke environment
   service `api`, tambah `opensearch` ke depends_on service `api`, dan
   tambah `opensearch_data:` ke top-level volumes.
-- Buat resources/starter-code/day-2/nala/app/vector_store.py berisi
+- Buat resources/starter-code/nala/app/vector_store.py berisi
   class VectorStore(base_url, index_name) dengan 3 method:
   ensure_index(dims=768) (HEAD cek index ada, kalau belum PUT index
   baru dengan mapping knn_vector dimension=dims), index_document

@@ -72,7 +72,7 @@ Jika aplikasi NALA adalah "restoran", maka Docker Compose adalah "blueprint" res
 
 ## 3. Anatomi docker-compose.yml
 
-File `docker-compose.yml` adalah file konfigurasi YAML yang mendefinisikan semua service (containers) yang aplikasi Anda butuhkan, beserta setting mereka. File ini akan disimpan di `resources/starter-code/day-1/nala/docker-compose.yml`.
+File `docker-compose.yml` adalah file konfigurasi YAML yang mendefinisikan semua service (containers) yang aplikasi Anda butuhkan, beserta setting mereka. File ini akan disimpan di `resources/starter-code/nala/docker-compose.yml`.
 
 ### 3.1 Struktur Dasar
 
@@ -152,7 +152,7 @@ services:       # Mulai definisi service
 
 Docker itu sendiri konsep baru, Ollama-di-dalam-container juga baru, dan FastAPI-di-dalam-container juga baru — kalau ketiganya dinyalakan bersamaan lewat satu `docker compose up` dan ada yang error, sulit menebak biang keladinya yang mana. Karena itu `docker-compose.yml` NALA dibangun **bertahap**: dulu cuma service `ollama` sendirian, dipastikan jalan, baru service `api` ditambahkan (section 5).
 
-Berikut isi `docker-compose.yml` di tahap pertama ini (`resources/starter-code/day-1/nala/docker-compose.yml`) — baru berisi satu service:
+Berikut isi `docker-compose.yml` di tahap pertama ini (`resources/starter-code/nala/docker-compose.yml`) — baru berisi satu service:
 
 ```yaml
 services:
@@ -178,7 +178,7 @@ Sebelum menulis satu baris kode FastAPI, pastikan dulu fondasinya — Ollama di 
 **Langkah A — Nyalakan service `ollama` saja:**
 
 ```bash
-cd resources/starter-code/day-1/nala
+cd resources/starter-code/nala
 docker compose up -d ollama
 ```
 
@@ -220,7 +220,7 @@ Buat docker-compose.yml NALA tahap pertama — cuma service ollama,
 belum ada api.
 
 GOAL:
-- Buat/timpa resources/starter-code/day-1/nala/docker-compose.yml
+- Buat/timpa resources/starter-code/nala/docker-compose.yml
   persis isinya:
 
   services:
@@ -395,13 +395,13 @@ Daripada langsung ditunjukkan kode lengkap, mari bangun aplikasi FastAPI **secar
 2. **Tahap B — Hubungkan ke Ollama**, pakai system prompt generik dulu (misal "Kamu adalah asisten AI"). Fokus: memahami cara FastAPI memanggil layanan lain (Ollama) dan meneruskan hasilnya sebagai response.
 3. **Tahap C — Integrasikan system prompt NALA**, mengganti prompt generik dengan `NALA_SYSTEM_PROMPT` hasil latihan Module 3. Fokus: bagaimana satu baris konfigurasi (system prompt) mengubah kepribadian & batasan asisten, tanpa mengubah struktur endpoint sama sekali.
 
-**Target akhirnya tetap satu file yang sama: `resources/starter-code/day-1/nala/app/main.py`.** File ini sudah tersedia lengkap di starter code (sebagai referensi/jawaban) — ikuti Langkah 1-7 berikut untuk menulis ulang isinya sendiri bertahap sesuai 3 tahap di atas, lalu cocokkan hasil akhirnya di Langkah 7.
+**Target akhirnya tetap satu file yang sama: `resources/starter-code/nala/app/main.py`.** File ini sudah tersedia lengkap di starter code (sebagai referensi/jawaban) — ikuti Langkah 1-7 berikut untuk menulis ulang isinya sendiri bertahap sesuai 3 tahap di atas, lalu cocokkan hasil akhirnya di Langkah 7.
 
 ### Tahap A — FastAPI saja (belum ada Ollama)
 
 **Langkah 1 — Buat aplikasi paling minimal**
 
-1. Buka folder `resources/starter-code/day-1/nala/app/`.
+1. Buka folder `resources/starter-code/nala/app/`.
 2. Buat (atau buka) file `main.py`.
 3. Tulis dua baris ini sebagai isi paling awal:
 
@@ -425,7 +425,7 @@ Baru dua baris, belum ada endpoint apa pun — tapi ini sudah aplikasi FastAPI y
 Sampai sini `main.py` belum butuh Ollama sama sekali, jadi belum perlu Docker — cukup `uvicorn` lokal:
 
 ```bash
-cd resources/starter-code/day-1/nala
+cd resources/starter-code/nala
 pip install fastapi uvicorn
 uvicorn app.main:app --reload
 ```
@@ -506,7 +506,7 @@ Tulis app/main.py NALA Tahap A — murni FastAPI, BELUM ada koneksi
 ke Ollama sama sekali.
 
 GOAL:
-- Buat/timpa resources/starter-code/day-1/nala/app/main.py persis
+- Buat/timpa resources/starter-code/nala/app/main.py persis
   isinya:
 
   from fastapi import FastAPI
@@ -686,7 +686,7 @@ ls app/
 Simpan file. Mulai dari sini pakai Docker (bukan `uvicorn` lagi):
 
 ```bash
-cd resources/starter-code/day-1/nala
+cd resources/starter-code/nala
 docker compose up --build
 ```
 
@@ -721,7 +721,7 @@ buat ollama_client.py, dan tambah endpoint /chat dengan system prompt
 GENERIK dulu (bukan NALA_SYSTEM_PROMPT).
 
 GOAL:
-1. Di resources/starter-code/day-1/nala/docker-compose.yml, tambahkan
+1. Di resources/starter-code/nala/docker-compose.yml, tambahkan
    blok `api` di samping `ollama` yang sudah ada:
 
    api:
@@ -734,7 +734,7 @@ GOAL:
      depends_on:
        - ollama
 
-2. Buat resources/starter-code/day-1/nala/app/ollama_client.py:
+2. Buat resources/starter-code/nala/app/ollama_client.py:
 
    import httpx
 
@@ -759,10 +759,10 @@ GOAL:
                response.raise_for_status()
                return response.json()["response"]
 
-3. Buat file kosong (0 baris) resources/starter-code/day-1/nala/app/__init__.py
+3. Buat file kosong (0 baris) resources/starter-code/nala/app/__init__.py
    kalau belum ada.
 
-4. Di resources/starter-code/day-1/nala/app/main.py, tambahkan di
+4. Di resources/starter-code/nala/app/main.py, tambahkan di
    baris atas: `import os` dan
    `from app.ollama_client import OllamaClient`. Di bawah
    `app = FastAPI()`, tambahkan:
@@ -921,7 +921,7 @@ Ganti system prompt generik di /chat dengan NALA_SYSTEM_PROMPT hasil
 Module 3.
 
 GOAL:
-1. Buat resources/starter-code/day-1/nala/app/system_prompt.py kalau
+1. Buat resources/starter-code/nala/app/system_prompt.py kalau
    belum ada, isinya satu konstanta NALA_SYSTEM_PROMPT — isi teksnya
    ambil dari draft hasil latihan Module 3 (System Prompt NALA v1)
    yang sudah divalidasi di sana. Kalau belum punya draft sendiri,
@@ -935,7 +935,7 @@ GOAL:
    - Jangan menjawab pertanyaan di luar konteks pekerjaan PT Nusantara Finance.
    """
 
-2. Di resources/starter-code/day-1/nala/app/main.py, tambahkan
+2. Di resources/starter-code/nala/app/main.py, tambahkan
    import: `from app.system_prompt import NALA_SYSTEM_PROMPT`.
 3. Di endpoint `/chat`, ganti argumen `system_prompt="Kamu adalah
    asisten AI yang menjawab singkat dan jelas."` menjadi
@@ -1000,7 +1000,7 @@ def chat(request: ChatRequest) -> ChatResponse:
     return ChatResponse(reply=reply)
 ```
 
-Buka file asli `resources/starter-code/day-1/nala/app/main.py` dan bandingkan — ini persis isinya. Kalau tiap langkah/tahap di atas sudah masuk akal, file ini seharusnya juga langsung masuk akal, meski susunan baris atau nama variabel Anda sedikit berbeda.
+Buka file asli `resources/starter-code/nala/app/main.py` dan bandingkan — ini persis isinya. Kalau tiap langkah/tahap di atas sudah masuk akal, file ini seharusnya juga langsung masuk akal, meski susunan baris atau nama variabel Anda sedikit berbeda.
 
 Detail lengkap menjalankan stack ini termasuk troubleshooting (error Docker, port bentrok, dll) ada di bagian Panduan Praktik di bawah.
 
@@ -1228,7 +1228,7 @@ docker stats
 ### Langkah 1: Clone & masuk ke folder starter code
 
 ```bash
-cd resources/starter-code/day-1/nala
+cd resources/starter-code/nala
 ```
 
 ### Bagian A — Ollama Sendirian Dulu (belum ada FastAPI)
@@ -1320,7 +1320,7 @@ Ulangi Langkah 6 dan bandingkan hasilnya.
 ### Troubleshooting
 
 - **Container `ollama` berstatus `Exited`/`Restarting` di Langkah 2 (Bagian A, belum ada `api` sama sekali)**: cek log-nya duluan — `docker compose logs ollama`. Penyebab paling umum: RAM Docker Desktop tidak cukup (lihat Langkah 0) atau port `11434` sudah dipakai proses lain di laptop Anda (misal Ollama versi native dari Module 2 masih berjalan langsung di laptop — matikan dulu, lihat Module 2 section 2.1, sebelum menjalankan versi container-nya).
-- **`no configuration file provided: not found`**: `docker compose` dijalankan bukan dari folder yang berisi `docker-compose.yml`. Pastikan Anda berada persis di `resources/starter-code/day-1/nala/` (cek dengan `ls` — harus ada `docker-compose.yml`).
+- **`no configuration file provided: not found`**: `docker compose` dijalankan bukan dari folder yang berisi `docker-compose.yml`. Pastikan Anda berada persis di `resources/starter-code/nala/` (cek dengan `ls` — harus ada `docker-compose.yml`).
 - **`failed to read dockerfile: open Dockerfile: no such file or directory`**: nama file salah — harus persis `Dockerfile` (huruf besar hanya di "D"). Kalau Anda beri nama lain seperti `DockerFile` atau `dockerfile`, Docker tidak akan menemukannya walau terlihat mirip di Finder/Explorer. Cek dengan `ls` dan rename kalau perlu: `mv DockerFile Dockerfile`.
 - **`failed to compute cache key: ... "/app": not found`**: normal terjadi **sebelum** folder `app/` (kode Python NALA) dibuat. Kalau Anda mengikuti urutan Task 9 → Task 10, error ini akan muncul dulu saat baru selesai Task 9 — itu tandanya semua langkah sebelumnya sudah benar, tinggal lanjut membuat folder `app/`.
 - **`curl: (7) Failed to connect`**: pastikan `docker compose up` masih berjalan dan tidak ada error di log.
@@ -1342,5 +1342,5 @@ Anda telah memahami:
 
 **Next Steps:**
 - **Praktik langsung**: lihat bagian Panduan Praktik di atas — setup docker-compose.yml, jalankan containers
-- **Starter code**: `resources/starter-code/day-1/nala/` — struktur project FastAPI app dan docker-compose NALA
+- **Starter code**: `resources/starter-code/nala/` — struktur project FastAPI app dan docker-compose NALA
 - **Module 5+**: Extend docker-compose.yml dengan service tambahan (OpenSearch, Airflow, PostgreSQL, dsb)
