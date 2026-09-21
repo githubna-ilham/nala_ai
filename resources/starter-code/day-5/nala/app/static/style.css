@@ -1,0 +1,172 @@
+/* app/static/style.css */
+body {
+  font-family: system-ui, sans-serif;
+  max-width: 640px;
+  margin: 40px auto;
+  padding: 0 20px;
+  color: #1a1a1a;
+}
+
+nav {
+  margin-bottom: 20px;
+}
+
+nav a {
+  margin-right: 12px;
+}
+
+#history {
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 16px;
+  height: 320px;
+  overflow-y: auto;
+  margin-bottom: 12px;
+}
+
+.user {
+  color: #1a1a1a;
+}
+
+.nala {
+  color: #1e3a5f;
+}
+
+#chat-form {
+  display: flex;
+  gap: 8px;
+}
+
+#message {
+  flex: 1;
+  padding: 8px;
+}
+
+/* app/static/style.css, tambahan di akhir file */
+.success {
+  background: #e7f5e9;
+  padding: 10px;
+  border-radius: 6px;
+}
+
+.hint {
+  color: #666;
+  font-size: 0.9em;
+}
+
+/* app/static/style.css, tambahan Module 2 Day 4 — form & tabel data operasional */
+form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+form input,
+form select {
+  padding: 6px;
+  flex: 1;
+  min-width: 140px;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 20px;
+}
+
+.data-table th,
+.data-table td {
+  border: 1px solid #ddd;
+  padding: 6px 8px;
+  text-align: left;
+  font-size: 0.9em;
+}
+
+.data-table th {
+  background: #f5f5f5;
+}
+
+/* app/static/style.css, tambahan Module 2 Day 5 — status page */
+.status-ok, .status-green, .status-yellow {
+  color: #1a7f37;
+}
+
+.status-degraded, .status-error, .status-unreachable {
+  color: #c0392b;
+}
+
+.status-list {
+  list-style: none;
+  padding: 0;
+}
+
+.status-list li {
+  padding: 6px 0;
+  border-bottom: 1px solid #eee;
+}
+
+/* app/static/style.css, tambahan Module 3 Day 5 — typing indicator */
+.typing-indicator {
+    display: inline-flex;
+    gap: 4px;
+    vertical-align: middle;
+}
+
+.typing-indicator span {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #1e3a5f;
+    opacity: 0.4;
+    animation: typing-bounce 1.2s infinite ease-in-out;
+}
+
+.typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
+.typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes typing-bounce {
+    0%, 60%, 100% { opacity: 0.4; transform: translateY(0); }
+    30% { opacity: 1; transform: translateY(-3px); }
+}
+
+/* tambahan Module 3 Day 5 — badge tool yang dipakai agent (RAG vs SQL) */
+.tool-badge {
+    display: inline-block;
+    font-size: 0.75em;
+    padding: 2px 8px;
+    border-radius: 10px;
+    margin-right: 6px;
+    font-weight: 600;
+}
+
+.tool-badge.tool-rag {
+    background: #e0ecf7;
+    color: #1e3a5f;
+}
+
+.tool-badge.tool-sql {
+    background: #fde8d7;
+    color: #8a4a00;
+}
+
+/* tambahan Module 3 Day 5 — cek layout responsif (375px/768px) */
+@media (max-width: 480px) {
+    body {
+        margin: 16px auto;
+        padding: 0 12px;
+    }
+
+    #chat-form {
+        flex-direction: column;
+    }
+
+    .chat-meta {
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    #history {
+        height: 260px;
+    }
+}

@@ -1,0 +1,86 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 480" font-family="system-ui, sans-serif">
+  <defs>
+    <marker id="arrowAxis" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#334155"/>
+    </marker>
+    <marker id="arrowQ" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#2563eb"/>
+    </marker>
+    <marker id="arrowA" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#16a34a"/>
+    </marker>
+    <marker id="arrowB" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#dc2626"/>
+    </marker>
+  </defs>
+
+  <!-- Judul -->
+  <text x="280" y="24" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f172a">Diagram Kartesian: Q, A (mirip makna), B (tidak mirip)</text>
+
+  <!-- Grid -->
+  <g stroke="#e2e8f0" stroke-width="1">
+    <line x1="98"  y1="92" x2="98"  y2="440"/>
+    <line x1="156" y1="92" x2="156" y2="440"/>
+    <line x1="214" y1="92" x2="214" y2="440"/>
+    <line x1="272" y1="92" x2="272" y2="440"/>
+    <line x1="330" y1="92" x2="330" y2="440"/>
+    <line x1="388" y1="92" x2="388" y2="440"/>
+    <line x1="40" y1="382" x2="388" y2="382"/>
+    <line x1="40" y1="324" x2="388" y2="324"/>
+    <line x1="40" y1="266" x2="388" y2="266"/>
+    <line x1="40" y1="208" x2="388" y2="208"/>
+    <line x1="40" y1="150" x2="388" y2="150"/>
+    <line x1="40" y1="92"  x2="388" y2="92"/>
+  </g>
+
+  <!-- Grid tick labels -->
+  <g font-size="11" fill="#94a3b8" text-anchor="middle">
+    <text x="98"  y="454">1</text>
+    <text x="156" y="454">2</text>
+    <text x="214" y="454">3</text>
+    <text x="272" y="454">4</text>
+    <text x="330" y="454">5</text>
+    <text x="388" y="454">6</text>
+  </g>
+  <g font-size="11" fill="#94a3b8" text-anchor="end">
+    <text x="34" y="386">1</text>
+    <text x="34" y="328">2</text>
+    <text x="34" y="270">3</text>
+    <text x="34" y="212">4</text>
+    <text x="34" y="154">5</text>
+    <text x="34" y="96">6</text>
+  </g>
+
+  <!-- Sumbu X dan Y -->
+  <line x1="40" y1="440" x2="410" y2="440" stroke="#334155" stroke-width="2" marker-end="url(#arrowAxis)"/>
+  <line x1="40" y1="440" x2="40" y2="70" stroke="#334155" stroke-width="2" marker-end="url(#arrowAxis)"/>
+  <text x="420" y="444" font-size="13" fill="#334155">dimensi 1</text>
+  <text x="18" y="64" font-size="13" fill="#334155">dimensi 2</text>
+  <text x="30" y="454" font-size="12" fill="#334155" text-anchor="end">0</text>
+
+  <!-- Busur sudut Q-B (45 derajat) -->
+  <path d="M 75,440 A 35,35 0 0,0 64.75,415.25" fill="none" stroke="#7c3aed" stroke-width="1.5" stroke-dasharray="3,3"/>
+  <text x="86" y="424" font-size="12" fill="#7c3aed" font-weight="bold">45°</text>
+
+  <!-- Vektor Q = (1,0) -->
+  <line x1="40" y1="440" x2="94" y2="440" stroke="#2563eb" stroke-width="3" marker-end="url(#arrowQ)"/>
+  <text x="98" y="458" font-size="13" fill="#2563eb" font-weight="bold">Q (1, 0)</text>
+  <text x="98" y="472" font-size="11" fill="#2563eb">query: "kapan cabang buka"</text>
+
+  <!-- Vektor A = (0.9, 0.1) -->
+  <line x1="40" y1="440" x2="88.2" y2="434.2" stroke="#16a34a" stroke-width="3" marker-end="url(#arrowA)"/>
+  <text x="98" y="412" font-size="13" fill="#16a34a" font-weight="bold">A (0.9, 0.1)</text>
+  <text x="98" y="426" font-size="11" fill="#16a34a">"jam operasional cabang" — arah ≈ Q, magnitude kecil</text>
+
+  <!-- Vektor B = (5,5) -->
+  <line x1="40" y1="440" x2="324" y2="156" stroke="#dc2626" stroke-width="3" marker-end="url(#arrowB)"/>
+  <text x="330" y="146" font-size="13" fill="#dc2626" font-weight="bold">B (5, 5)</text>
+  <text x="330" y="162" font-size="11" fill="#dc2626">"syarat pengajuan kredit" — arah 45°, magnitude besar</text>
+
+  <!-- Titik asal -->
+  <circle cx="40" cy="440" r="3" fill="#0f172a"/>
+  <text x="30" y="440" font-size="11" fill="#0f172a" text-anchor="end" dy="14">O</text>
+
+  <!-- Catatan bawah -->
+  <text x="280" y="472" text-anchor="middle" font-size="12" fill="#475569">Q dan A nyaris satu arah (sudut ≈ 6,3°) meski panjangnya beda jauh — B jauh dari arah Q (45°) walau vektornya paling panjang.</text>
+</svg>

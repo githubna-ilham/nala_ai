@@ -1,0 +1,23 @@
+<!-- app/templates/status.html -->
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <title>NALA — Status Sistem</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <meta http-equiv="refresh" content="15">
+</head>
+<body>
+    <div class="container">
+        <h1>Status Sistem NALA</h1>
+        <nav><a href="/">Chat</a> | <a href="/upload">Knowledge Base</a> | <a href="/data-operasional">Data Operasional</a> | <a href="/status/view">Status</a></nav>
+        <p>Status keseluruhan: <strong class="status-{{ status.status }}">{{ status.status }}</strong></p>
+        <ul class="status-list">
+            {% for name, value in status.services.items() %}
+            <li><strong>{{ name }}</strong>: <span class="status-{{ value }}">{{ value }}</span></li>
+            {% endfor %}
+        </ul>
+        <p class="hint">Halaman ini auto-refresh tiap 15 detik. Untuk Airflow dan Langfuse, lihat UI masing-masing (port 8080 dan 3000) — keduanya sengaja tidak dicek di sini, lihat materi Module 2 §2.b.</p>
+    </div>
+</body>
+</html>

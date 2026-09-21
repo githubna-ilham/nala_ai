@@ -1,0 +1,68 @@
+services:
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - '11434:11434'
+    volumes:
+      - ollama_data:/root/.ollama
+
+  api:
+    build: .
+    ports:
+      - '8000:8000'
+    environment:
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - OLLAMA_MODEL=llama3.2:3b
+      - KNOWLEDGE_BASE_PATH=/app/knowledge-base
+      - OPENSEARCH_BASE_URL=http://opensearch:9200
+    volumes:
+      - ../../../sample-knowledge-base:/app/knowledge-base
+    depends_on:
+      - ollama
+      - opensearch
+
+  opensearch:
+    image: opensearchproject/opensearch:2.11.0
+    environment:
+      - discovery.type=single-node
+      - plugins.security.disabled=true
+      - OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m
+      - DISABLE_INSTALL_DEMO_CONFIG=true
+    ports:
+      - '9200:9200'
+    volumes:
+      - opensearch_data:/usr/share/opensearch/data
+
+  opensearch-dashboards:
+    image: opensearchproject/opensearch-dashboards:2.11.0
+    environment:
+      - 'OPENSEARCH_HOSTS=["http://opensearch:9200"]'
+      - DISABLE_SECURITY_DASHBOARDS_PLUGIN=true
+    ports:
+      - '5601:5601'
+    depends_on:
+      - opensearch
+
+    # docker-compose.yml
+  airflow:
+    image: apache/airflow:2.10.2
+    command: standalone
+    environment:
+      - AIRFLOW__CORE__LOAD_EXAMPLES=false
+      - AIRFLOW__CORE__DAGS_FOLDER=/opt/airflow/dags
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - OPENSEARCH_BASE_URL=http://opensearch:9200
+      - _PIP_ADDITIONAL_REQUIREMENTS=pypdf==5.1.0 httpx==0.27.2
+    ports:
+      - '8080:8080'
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - ./app:/opt/airflow/dags/app
+      - ../../../sample-knowledge-base:/opt/airflow/knowledge-base
+    depends_on:
+      - opensearch
+      - ollama
+
+volumes:
+  ollama_data:
+  opensearch_data:

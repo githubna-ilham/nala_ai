@@ -1,0 +1,147 @@
+services:
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - '11434:11434'
+    volumes:
+      - ollama_data:/root/.ollama
+    healthcheck:
+      test: ["CMD-SHELL", "ollama list || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  api:
+    build: .
+    ports:
+      - '8000:8000'
+    environment:
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - OLLAMA_MODEL=${OLLAMA_MODEL}
+      - KNOWLEDGE_BASE_PATH=/app/knowledge-base
+      - OPENSEARCH_BASE_URL=http://opensearch:9200
+      - HF_HOME=/app/.cache/huggingface
+      - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY}
+      - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY}
+      - LANGFUSE_HOST=http://langfuse:3000
+      - POSTGRES_READONLY_DSN=postgresql://nala_readonly:readonly_dev_only@postgres:5432/nala_operasional
+      - POSTGRES_WRITER_DSN=postgresql://nala_writer:writer_dev_only@postgres:5432/nala_operasional
+      - POSTGRES_APP_DSN=postgresql://nala_app:app_dev_only@postgres:5432/nala_operasional
+    volumes:
+      - ../../../sample-knowledge-base:/app/knowledge-base
+      - hf_cache:/app/.cache/huggingface
+    depends_on:
+      ollama:
+        condition: service_healthy
+      opensearch:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+
+  opensearch:
+    image: opensearchproject/opensearch:2.11.0
+    environment:
+      - discovery.type=single-node
+      - plugins.security.disabled=true
+      - OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m
+      - DISABLE_INSTALL_DEMO_CONFIG=true
+    ports:
+      - '9200:9200'
+    volumes:
+      - opensearch_data:/usr/share/opensearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s http://localhost:9200/_cluster/health | grep -q '\"status\":\"green\"\\|\"status\":\"yellow\"'"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 30s
+
+  opensearch-dashboards:
+    image: opensearchproject/opensearch-dashboards:2.11.0
+    environment:
+      - 'OPENSEARCH_HOSTS=["http://opensearch:9200"]'
+      - DISABLE_SECURITY_DASHBOARDS_PLUGIN=true
+    ports:
+      - '5601:5601'
+    depends_on:
+      - opensearch
+
+    # docker-compose.yml
+  airflow:
+    image: apache/airflow:2.10.2
+    command: standalone
+    environment:
+      - AIRFLOW__CORE__LOAD_EXAMPLES=false
+      - AIRFLOW__CORE__DAGS_FOLDER=/opt/airflow/dags
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - OPENSEARCH_BASE_URL=http://opensearch:9200
+      - _PIP_ADDITIONAL_REQUIREMENTS=pypdf==5.1.0 httpx==0.27.2
+    ports:
+      - '8080:8080'
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - ./app:/opt/airflow/dags/app
+      - ../../../sample-knowledge-base:/opt/airflow/knowledge-base
+    depends_on:
+      - opensearch
+      - ollama
+
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: nala_operasional
+      POSTGRES_USER: nala_admin
+      POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD:-changeme_dev_only}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./db/seed.sql:/docker-entrypoint-initdb.d/01-seed.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nala_admin -d nala_operasional"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  adminer:
+    image: adminer:latest
+    ports:
+      - "8081:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  langfuse-db:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_USER=langfuse
+      - POSTGRES_PASSWORD=${LANGFUSE_DB_PASSWORD}
+      - POSTGRES_DB=langfuse
+    volumes:
+      - langfuse_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U langfuse -d langfuse"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  langfuse:
+    image: langfuse/langfuse:2
+    environment:
+      - DATABASE_URL=postgresql://langfuse:${LANGFUSE_DB_PASSWORD}@langfuse-db:5432/langfuse
+      - NEXTAUTH_URL=http://localhost:3000
+      - NEXTAUTH_SECRET=${LANGFUSE_NEXTAUTH_SECRET}
+      - SALT=${LANGFUSE_SALT}
+    ports:
+      - "3000:3000"
+    depends_on:
+      langfuse-db:
+        condition: service_healthy
+
+volumes:
+  ollama_data:
+  opensearch_data:
+  hf_cache:
+  langfuse_db_data:
+  postgres_data:

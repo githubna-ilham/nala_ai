@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <title>NALA — Knowledge Base</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Knowledge Base</h1>
+        <nav><a href="/">Chat</a> | <a href="/upload">Knowledge Base</a></nav>
+        {% if message %}
+        <p class="success">{{ message }}</p>
+        {% endif %}
+        <form action="/upload" method="post" enctype="multipart/form-data">
+            <input type="file" name="file" accept=".md,.txt,.pdf" required>
+            <button type="submit">Upload &amp; Index</button>
+        </form>
+        <p class="hint">Format yang didukung: .md, .txt, .pdf</p>
+        <h2>Dokumen di Knowledge Base</h2>
+        {% if documents %}
+        <ul class="doc-list">
+            {% for doc in documents %}
+            <li>{{ doc }}</li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p class="hint">Belum ada dokumen di knowledge base.</p>
+        {% endif %}
+    </div>
+</body>
+</html>
