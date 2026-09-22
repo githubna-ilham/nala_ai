@@ -30,6 +30,11 @@ flowchart LR
 
 ## 1. Buat `Dockerfile`
 
+**Prasyarat sebelum mulai:**
+- [ ] Module 5 (FastAPI, Tahap A) sudah selesai — `app/main.py` murni FastAPI tanpa Ollama, `ChatRequest`/`ChatResponse` sudah didefinisikan
+- [ ] Module 4 (Setup Infra Docker Compose) sudah selesai — service `ollama` sudah berjalan & terverifikasi di Docker
+- [ ] Module 3 (Prompt Engineering Dasar) sudah selesai — hasilnya dipakai nanti di Bagian 6
+
 FastAPI-nya sudah siap dari Module 5 (Tahap A) — murni `uvicorn` lokal, belum tersambung ke apa pun. Ollama sendiri sudah dinyalakan & diverifikasi jalan di Docker sejak Module 4. Sekarang keduanya disambungkan lewat Docker, dimulai dari `Dockerfile`.
 
 Sebelum `docker-compose.yml` bisa mem-*build* service `api`, `Dockerfile`-nya harus **sudah ada duluan** — `docker-compose.yml` di Bagian 2 nanti cuma **merujuk** ke `Dockerfile` ini lewat `build: .`, bukan mendefinisikan isinya. Urutannya penting: menulis `build: .` di `docker-compose.yml` sebelum `Dockerfile`-nya ada akan menghasilkan error `failed to read dockerfile` begitu `docker compose up` dijalankan.
@@ -67,6 +72,9 @@ Belum ada `docker-compose.yml` yang merujuk ke `Dockerfile` ini (itu Bagian 2), 
 cd Nala
 cat Dockerfile
 ```
+
+> ⚠️ **`failed to read dockerfile: open Dockerfile: no such file or directory`** (muncul nanti saat `docker compose up --build` di Bagian 5): nama file salah — harus persis `Dockerfile` (huruf besar hanya di "D"). Kalau Anda beri nama lain seperti `DockerFile` atau `dockerfile`, Docker tidak akan menemukannya walau terlihat mirip di Finder/Explorer. Cek dengan `ls` dan rename kalau perlu: `mv DockerFile Dockerfile`.
+> ⚠️ **`failed to compute cache key: ... "/app": not found`**: normal terjadi **sebelum** folder `app/` (kode Python NALA) dibuat — tinggal lanjut membuat folder `app/` sesuai Module 5.
 
 <details>
 <summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Bagian 1</strong></summary>
@@ -269,10 +277,15 @@ docker compose up --build
 
 Docker Compose cukup pintar untuk tidak membuat ulang container yang sudah berjalan dan tidak berubah konfigurasinya — `ollama` (sudah menyala sejak Module 4) langsung dipakai apa adanya, yang benar-benar di-*build* dan dinyalakan di sini cuma `api`. Kalau log menunjukkan `ollama` langsung "Up" tanpa proses pull image, itu perilaku normal, bukan error.
 
+> ⚠️ **`no configuration file provided: not found`**: `docker compose` dijalankan bukan dari folder yang berisi `docker-compose.yml`. Pastikan Anda berada persis di `Nala/` (cek dengan `ls` — harus ada `docker-compose.yml`).
+> ⚠️ **Port 8000 sudah dipakai**: ubah mapping port di `docker-compose.yml` (misal `8001:8000`).
+
 **Output yang Diharapkan**
 ```
 ... Uvicorn running on http://0.0.0.0:8000
 ```
+
+Tunggu sampai log menunjukkan baris ini sebelum lanjut ke `curl` di bawah.
 
 Tes kedua endpoint:
 ```bash
@@ -283,6 +296,9 @@ curl -X POST http://localhost:8000/chat \
 ```
 
 ✅ **Indikator sukses**: `/health` → `{"status":"ok"}`. `/chat` → jawaban **generik** ("saya asisten AI..."), belum berkarakter NALA — wajar, system prompt-nya masih placeholder. Biarkan `docker compose up` tetap berjalan, lanjut ke Bagian 6.
+
+> ⚠️ **`curl: (7) Failed to connect`**: pastikan `docker compose up` masih berjalan dan tidak ada error di log.
+> ⚠️ **`Internal Server Error` saat POST `/chat`**: hampir selalu berarti Ollama di dalam container **belum punya model** `llama3.2:3b` (lihat Bagian 4 & Module 4) — bukan error di kode FastAPI-nya. Cek dengan `docker compose exec ollama ollama list`. Detail error Python-nya (traceback) selalu bisa dilihat di terminal yang menjalankan `docker compose up` (log container `api`).
 
 <details>
 <summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Bagian 3-5</strong></summary>
@@ -448,7 +464,7 @@ Aturan:
 """
 ```
 
-Ganti isi teksnya sesuai hasil latihan Module 3 Anda sendiri — contoh di atas cuma template kalau filenya hilang/belum dibuat. Kalau nanti mau bereksperimen ulang dengan isi prompt-nya, edit file ini (lihat bagian Panduan Praktik di bawah) — bukan tulis ulang `main.py`.
+Ganti isi teksnya sesuai hasil latihan Module 3 Anda sendiri — contoh di atas cuma template kalau filenya hilang/belum dibuat. Kalau nanti mau bereksperimen ulang dengan isi prompt-nya, cukup edit file ini dan ulangi langkah "Jalankan & lihat hasilnya" di bawah — bukan tulis ulang `main.py`.
 
 1. Tambahkan import: `from app.system_prompt import NALA_SYSTEM_PROMPT`
 2. Di endpoint `/chat`, ganti string generik dari Bagian 5 dengan `NALA_SYSTEM_PROMPT`:
@@ -480,6 +496,8 @@ curl -X POST http://localhost:8000/chat \
   -H "Content-Type: application/json" \
   -d '{"message": "Halo, kamu siapa?"}'
 ```
+
+Model `llama3.2:3b` **tidak perlu** di-pull ulang di sini — sudah dilakukan di Module 4, dan tersimpan permanen di volume `ollama_data`.
 
 Bandingkan jawabannya dengan Bagian 5: sekarang harus terasa lebih spesifik sesuai aturan di `NALA_SYSTEM_PROMPT` (jawab dalam Bahasa Indonesia, tidak mengarang jawaban, dsb) — bukan lagi jawaban generik "saya asisten AI...".
 
@@ -572,61 +590,7 @@ def chat(request: ChatRequest) -> ChatResponse:
 
 Buka file asli `Nala/app/main.py` dan bandingkan — ini persis isinya. Kalau tiap bagian di atas sudah masuk akal, file ini seharusnya juga langsung masuk akal, meski susunan baris atau nama variabel Anda sedikit berbeda.
 
-Detail lengkap menjalankan stack ini termasuk troubleshooting (error Docker, port bentrok, dll) ada di bagian Panduan Praktik di bawah.
-
----
-
-## Panduan Praktik
-
-### Prasyarat
-- Sudah menyelesaikan Module 5 (FastAPI, Tahap A) — `app/main.py` murni FastAPI tanpa Ollama, `ChatRequest`/`ChatResponse` sudah didefinisikan
-- Sudah menyelesaikan Module 4 (Setup Infra Docker Compose) — service `ollama` sudah berjalan & terverifikasi di Docker
-- Sudah menyelesaikan Module 3 (Prompt Engineering Dasar) — Langkah 4 di bawah menggunakan system prompt yang disusun di sana
-
-### Langkah 1: Jalankan seluruh service
-
-```bash
-docker compose up --build
-```
-
-Tunggu sampai log menunjukkan `Uvicorn running on http://0.0.0.0:8000`. Container `ollama` yang sudah berjalan sejak Module 4 langsung dipakai apa adanya (tidak dibuat ulang dari nol) — yang di-*build* dan dinyalakan di sini cuma `api`. Kalau log menunjukkan `ollama` langsung "Up" tanpa proses pull image, itu perilaku normal, bukan error.
-
-### Langkah 2: Cek health check
-
-```bash
-curl http://localhost:8000/health
-```
-
-Harus mengembalikan: `{"status":"ok"}`
-
-### Langkah 3: Coba chat dengan NALA
-
-```bash
-curl -X POST http://localhost:8000/chat \
-  -H "Content-Type: application/json" \
-  -d '{"message": "Halo, kamu siapa?"}'
-```
-
-Model `llama3.2:3b` **tidak perlu** di-pull ulang di sini — sudah dilakukan di Module 4, dan tersimpan permanen di volume `ollama_data`. NALA harus merespons sesuai system prompt yang sudah dipelajari di Module 3.
-
-### Langkah 4: Eksperimen system prompt
-
-Buka `app/system_prompt.py`, ubah `NALA_SYSTEM_PROMPT` sesuai hasil latihan Module 3, lalu build ulang (⚠️ `restart` saja **tidak cukup** — kode di-`COPY` ke image cuma sekali saat `build`, `docker-compose.yml` tidak mem-*mount* folder `app/`, jadi container tidak otomatis membaca perubahan file):
-
-```bash
-docker compose up --build api
-```
-
-Ulangi Langkah 3 dan bandingkan hasilnya.
-
-### Troubleshooting
-
-- **`no configuration file provided: not found`**: `docker compose` dijalankan bukan dari folder yang berisi `docker-compose.yml`. Pastikan Anda berada persis di `Nala/` (cek dengan `ls` — harus ada `docker-compose.yml`).
-- **`failed to read dockerfile: open Dockerfile: no such file or directory`**: nama file salah — harus persis `Dockerfile` (huruf besar hanya di "D"). Kalau Anda beri nama lain seperti `DockerFile` atau `dockerfile`, Docker tidak akan menemukannya walau terlihat mirip di Finder/Explorer. Cek dengan `ls` dan rename kalau perlu: `mv DockerFile Dockerfile`.
-- **`failed to compute cache key: ... "/app": not found`**: normal terjadi **sebelum** folder `app/` (kode Python NALA) dibuat — tinggal lanjut membuat folder `app/` sesuai Module 5.
-- **`curl: (7) Failed to connect`**: pastikan `docker compose up` masih berjalan dan tidak ada error di log.
-- **`Internal Server Error` saat POST `/chat`**: hampir selalu berarti Ollama di dalam container **belum punya model** `llama3.2:3b` (lihat Module 4) — bukan error di kode FastAPI-nya. Cek dengan `docker compose exec ollama ollama list`. Detail error Python-nya (traceback) selalu bisa dilihat di terminal yang menjalankan Langkah 1 (log container `api`).
-- **Port 8000 sudah dipakai**: ubah mapping port di `docker-compose.yml` (misal `8001:8000`).
+Detail lengkap menjalankan stack ini termasuk troubleshooting (error Docker, port bentrok, dll) ada di Bagian 1 dan Bagian 5 di atas.
 
 ---
 
@@ -641,6 +605,6 @@ Anda telah memahami:
 ✅ **System prompt NALA** — `NALA_SYSTEM_PROMPT` hasil Module 3 terintegrasi, tanpa mengubah struktur endpoint
 
 **Next Steps:**
-- **Praktik langsung**: lihat bagian Panduan Praktik di atas
+- **Praktik langsung**: ikuti Bagian 1-6 di atas berurutan — tiap bagian sudah lengkap dengan penjelasan, command, dan checkpoint-nya sendiri
 - **Starter code**: `Nala/` — struktur project FastAPI app dan docker-compose NALA (sekarang lengkap `ollama` + `api`)
 - **Module 7+**: Extend docker-compose.yml dengan service tambahan (OpenSearch, Airflow, PostgreSQL, dsb)
