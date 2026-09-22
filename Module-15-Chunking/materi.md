@@ -1,8 +1,8 @@
-# Module 14: Chunking — Dari Level-Dokumen ke Level-Chunk
+# Module 15: Chunking — Dari Level-Dokumen ke Level-Chunk
 
 ## Tujuan
 
-Menambahkan **chunking** — memecah dokumen jadi potongan-potongan kecil sebelum di-embed — dan meng-upgrade `ingest_documents()` (Module 13) dari "satu dokumen = satu vektor" jadi "satu chunk = satu vektor". Module ini murni tentang mesin RAG-nya sendiri (`app/ingest.py`, `app/main.py`) — belum menyentuh cara staff menambah dokumen baru, itu baru Module 15 (Upload).
+Menambahkan **chunking** — memecah dokumen jadi potongan-potongan kecil sebelum di-embed — dan meng-upgrade `ingest_documents()` (Module 14) dari "satu dokumen = satu vektor" jadi "satu chunk = satu vektor". Module ini murni tentang mesin RAG-nya sendiri (`app/ingest.py`, `app/main.py`) — belum menyentuh cara staff menambah dokumen baru, itu baru Module 16 (Upload).
 
 ## Definisi
 
@@ -23,27 +23,27 @@ flowchart LR
 - `chunk_text()` pada teks 1200 karakter menghasilkan 3 chunk berukuran `[500, 500, 300]` sesuai parameter `chunk_size=500`/`overlap=50`
 - Teks lebih pendek dari `chunk_size` menghasilkan tepat 1 chunk, dan chunk berurutan terbukti overlap 50 karakter
 - `chunk_markdown()` pada `sop-pengajuan-kredit.md` menghasilkan chunk yang tiap potongannya mulai dari baris heading, bukan potongan sembarang
-- `ingest_documents()` ter-upgrade: sekarang mengembalikan jumlah **chunk** (bukan dokumen), lebih besar dari hasil Module 13
+- `ingest_documents()` ter-upgrade: sekarang mengembalikan jumlah **chunk** (bukan dokumen), lebih besar dari hasil Module 14
 - `/chat/stream` tetap menjawab dengan benar setelah `top_k` dinaikkan dan index diisi ulang dengan chunk
-- Kita memahami keterbatasan nyata retrieval semantic murni **level-chunk** (Bagian 9) sebagai motivasi jujur untuk hybrid search + reranking di Module 17
+- Kita memahami keterbatasan nyata retrieval semantic murni **level-chunk** (Bagian 9) sebagai motivasi jujur untuk hybrid search + reranking di Module 18
 - `/chat/stream` (Module 7) tetap berfungsi seperti sebelumnya
 
 ## 1. Kenapa Sekarang, Bukan dari Awal
 
-Module 13 sengaja membangun RAG **tanpa** chunking dulu — satu dokumen SOP di-embed utuh jadi satu vektor, supaya mesin RAG-nya cepat terbukti bekerja dengan langkah paling sedikit. Bagian 7 di Module 13 sudah menunjukkan **kenapa** pendekatan itu terbatas: satu vektor tidak bisa mewakili banyak sub-topik dokumen dengan baik, dan seluruh isi dokumen (bukan cuma bagian relevan) selalu ikut terkirim sebagai konteks.
+Module 14 sengaja membangun RAG **tanpa** chunking dulu — satu dokumen SOP di-embed utuh jadi satu vektor, supaya mesin RAG-nya cepat terbukti bekerja dengan langkah paling sedikit. Bagian 7 di Module 14 sudah menunjukkan **kenapa** pendekatan itu terbatas: satu vektor tidak bisa mewakili banyak sub-topik dokumen dengan baik, dan seluruh isi dokumen (bukan cuma bagian relevan) selalu ikut terkirim sebagai konteks.
 
-Sekarang saatnya mengatasi itu. Alasan yang sama juga berlaku ke depan untuk Module 15 (Upload): staff bisa saja mengupload dokumen yang jauh lebih panjang dari dua SOP contoh (Module 10 Bagian 2), atau PDF berhalaman banyak yang mendekati/melewati batas context window model embedding (Module 11 Bagian 2). Membangun chunking di module tersendiri, **sebelum** Upload dibangun, berarti begitu Module 15 datang, ia tinggal memanggil `ingest_documents()` yang sudah level-chunk — tidak perlu mikirkan chunking sebagai bagian dari alur upload itu sendiri.
+Sekarang saatnya mengatasi itu. Alasan yang sama juga berlaku ke depan untuk Module 16 (Upload): staff bisa saja mengupload dokumen yang jauh lebih panjang dari dua SOP contoh (Module 10 Bagian 2), atau PDF berhalaman banyak yang mendekati/melewati batas context window model embedding (Module 11 Bagian 2). Membangun chunking di module tersendiri, **sebelum** Upload dibangun, berarti begitu Module 16 datang, ia tinggal memanggil `ingest_documents()` yang sudah level-chunk — tidak perlu mikirkan chunking sebagai bagian dari alur upload itu sendiri.
 
 ```mermaid
 flowchart LR
     A["extract_text()<br/>(Module 10)<br/>baca dokumen utuh"] --> B["chunk_text() /<br/>chunk_markdown()<br/>pecah jadi potongan"]
     B --> C["embed_text()<br/>(Module 11)<br/>per chunk"]
-    C --> D["VectorStore<br/>(Module 12)<br/>satu entri per chunk"]
+    C --> D["VectorStore<br/>(Module 13)<br/>satu entri per chunk"]
 ```
 
 ## 2. Kenapa Dokumen Perlu Di-Chunk
 
-Model bahasa (LLM) dan model embedding punya batasan konteks (*context window*) yang terbatas. Dokumen SOP di NALA sering kali cukup panjang — SOP Pengajuan Kredit saja mencakup beberapa tahapan, kondisi khusus, dan referensi. Tanpa dipecah — persis seperti yang dibuktikan Module 13 Bagian 7 — seluruh dokumen tidak bisa diproses secara efektif atau menjadi konteks yang kurang relevan saat di-retrieve.
+Model bahasa (LLM) dan model embedding punya batasan konteks (*context window*) yang terbatas. Dokumen SOP di NALA sering kali cukup panjang — SOP Pengajuan Kredit saja mencakup beberapa tahapan, kondisi khusus, dan referensi. Tanpa dipecah — persis seperti yang dibuktikan Module 14 Bagian 7 — seluruh dokumen tidak bisa diproses secara efektif atau menjadi konteks yang kurang relevan saat di-retrieve.
 
 Dengan **chunking** (pemecahan dokumen), dokumen besar dibagi jadi potongan-potongan kecil yang tetap mempertahankan kohesi semantik — cukup kecil untuk diproses LLM, cukup besar untuk mempertahankan konteks dan makna. Ini memungkinkan sistem RAG menemukan dan mengambil **hanya chunk yang relevan** dengan pertanyaan, bukan seluruh dokumen sekaligus.
 
@@ -96,9 +96,9 @@ Diberikan paragraf berikut dari SOP Pengajuan Kredit:
 
 ## 7. Struktur Kode: `chunk_text()` dan `chunk_markdown()`
 
-**Prasyarat**: sudah menyelesaikan Module 13 (RAG Chain) — RAG sudah "hidup", index `nala-docs` sudah terisi minimal sekali.
+**Prasyarat**: sudah menyelesaikan Module 14 (RAG Chain) — RAG sudah "hidup", index `nala-docs` sudah terisi minimal sekali.
 
-`app/ingest.py` sekarang berisi `extract_text()` (Module 10) dan `ingest_documents()` (Module 13). Dua Tahap: **Tahap A** — `chunk_text()`, pure function tanpa I/O; **Tahap B** — `chunk_markdown()`, versi structure-aware khusus `.md`. Keduanya belum butuh Ollama atau OpenSearch, jadi tidak ada perubahan `docker-compose.yml` di tahap ini — upgrade `ingest_documents()` untuk memakainya baru terjadi di Bagian 8.
+`app/ingest.py` sekarang berisi `extract_text()` (Module 10) dan `ingest_documents()` (Module 14). Dua Tahap: **Tahap A** — `chunk_text()`, pure function tanpa I/O; **Tahap B** — `chunk_markdown()`, versi structure-aware khusus `.md`. Keduanya belum butuh Ollama atau OpenSearch, jadi tidak ada perubahan `docker-compose.yml` di tahap ini — upgrade `ingest_documents()` untuk memakainya baru terjadi di Bagian 8.
 
 ### Tahap A — Buat `chunk_text()` di `app/ingest.py`
 
@@ -155,7 +155,7 @@ print(f'Panjang tiap chunk: {[len(c) for c in chunks]}')
 <summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 1</strong></summary>
 
 ```
-Buat fungsi chunk_text() di app/ingest.py yang sudah ada (Module 14,
+Buat fungsi chunk_text() di app/ingest.py yang sudah ada (Module 15,
 Tahap A) — fixed-size chunking dengan overlap, pure function tanpa
 I/O.
 
@@ -170,7 +170,7 @@ GOAL:
 
 CONTEXT:
 - extract_text() dan ingest_documents() (versi tanpa chunking, dari
-  Module 13) sudah ada di file yang sama — jangan diubah di langkah
+  Module 14) sudah ada di file yang sama — jangan diubah di langkah
   ini.
 - Fungsi ini akan dipakai untuk meng-upgrade ingest_documents() di
   Bagian 8 — belum sekarang.
@@ -233,13 +233,13 @@ print('Chunk pertama (markdown):', chunk_markdown(text)[0])
 "
 ```
 
-✅ **Indikator sukses**: `chunk_markdown()` menghasilkan **13 chunk** untuk `sop-pengajuan-kredit.md`, dibandingkan `chunk_text()` yang cuma **8 chunk** pada file yang sama — dan tiap chunk `chunk_markdown()` dimulai dengan baris heading (`#`/`##`), bukan potongan sembarang di tengah kalimat. Chunk pertama harus berupa satu heading utuh (`# SOP Pengajuan Kredit...`), bukan potongan 500 karakter sembarang. Bandingkan juga dengan Module 13 Bagian 1: dokumen ini sebelumnya jadi **1 vektor tunggal** — sekarang jadi 13 vektor yang masing-masing fokus ke satu bagian.
+✅ **Indikator sukses**: `chunk_markdown()` menghasilkan **13 chunk** untuk `sop-pengajuan-kredit.md`, dibandingkan `chunk_text()` yang cuma **8 chunk** pada file yang sama — dan tiap chunk `chunk_markdown()` dimulai dengan baris heading (`#`/`##`), bukan potongan sembarang di tengah kalimat. Chunk pertama harus berupa satu heading utuh (`# SOP Pengajuan Kredit...`), bukan potongan 500 karakter sembarang. Bandingkan juga dengan Module 14 Bagian 1: dokumen ini sebelumnya jadi **1 vektor tunggal** — sekarang jadi 13 vektor yang masing-masing fokus ke satu bagian.
 
 <details>
 <summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 2</strong></summary>
 
 ```
-Tambah chunk_markdown() ke app/ingest.py yang sudah ada (Module 14,
+Tambah chunk_markdown() ke app/ingest.py yang sudah ada (Module 15,
 Tahap B) — structure-aware chunking berdasarkan heading Markdown,
 dengan fallback ke chunk_text() untuk bagian yang masih terlalu
 panjang.
@@ -263,7 +263,7 @@ CONTEXT:
   .md, chunk_text() untuk selain itu) baru ditulis di Bagian 8.
 
 GUARDRAIL:
-- JANGAN ubah ingest_documents() yang sudah ada dari Module 13 —
+- JANGAN ubah ingest_documents() yang sudah ada dari Module 14 —
   itu diubah di Bagian 8, bukan di sini.
 - JANGAN ubah chunk_text() atau extract_text() yang sudah ada.
 - JANGAN sentuh app/main.py atau docker-compose.yml.
@@ -273,7 +273,7 @@ GUARDRAIL:
 
 ## 8. Upgrade `ingest_documents()`: dari Level-Dokumen ke Level-Chunk
 
-Sekarang `chunk_text()` dan `chunk_markdown()` sudah ada (Bagian 7) — saatnya mengubah `ingest_documents()` (Module 13 Bagian 1) supaya memecah tiap dokumen jadi beberapa chunk **sebelum** di-embed, bukan meng-embed dokumen utuh.
+Sekarang `chunk_text()` dan `chunk_markdown()` sudah ada (Bagian 7) — saatnya mengubah `ingest_documents()` (Module 14 Bagian 1) supaya memecah tiap dokumen jadi beberapa chunk **sebelum** di-embed, bukan meng-embed dokumen utuh.
 
 **Langkah 3 — Ubah `ingest_documents()` di `app/ingest.py`**
 
@@ -303,11 +303,11 @@ def ingest_documents(folder_path: str) -> int:
     return total_chunks
 ```
 
-Yang berubah dibanding Module 13 Bagian 1: (1) setelah `extract_text()`, konten dipecah dulu — `chunk_markdown()` untuk `.md`, `chunk_text()` untuk `.txt`/PDF; (2) loop tambahan `for i, chunk in enumerate(chunks)` — tiap **chunk** (bukan tiap dokumen) di-embed dan di-index terpisah; (3) `doc_id` berubah dari `filename` jadi `f"{filename}-{i}"` — supaya tiap chunk dari dokumen yang sama tetap dapat ID unik, deterministik (idempotent, sama seperti dijelaskan Module 13 Bagian 1).
+Yang berubah dibanding Module 14 Bagian 1: (1) setelah `extract_text()`, konten dipecah dulu — `chunk_markdown()` untuk `.md`, `chunk_text()` untuk `.txt`/PDF; (2) loop tambahan `for i, chunk in enumerate(chunks)` — tiap **chunk** (bukan tiap dokumen) di-embed dan di-index terpisah; (3) `doc_id` berubah dari `filename` jadi `f"{filename}-{i}"` — supaya tiap chunk dari dokumen yang sama tetap dapat ID unik, deterministik (idempotent, sama seperti dijelaskan Module 14 Bagian 1).
 
 **Langkah 4 — Naikkan `top_k` di `/chat/stream`**
 
-Module 13 memakai `top_k=2` — masuk akal saat index cuma berisi segelintir dokumen utuh. Sekarang index berisi puluhan chunk (13 dari `sop-pengajuan-kredit.md` saja), jadi `top_k=2` terlalu kecil — retrieval harus bisa memilih dari lebih banyak kandidat chunk yang jauh lebih fokus.
+Module 14 memakai `top_k=2` — masuk akal saat index cuma berisi segelintir dokumen utuh. Sekarang index berisi puluhan chunk (13 dari `sop-pengajuan-kredit.md` saja), jadi `top_k=2` terlalu kecil — retrieval harus bisa memilih dari lebih banyak kandidat chunk yang jauh lebih fokus.
 
 Di `app/main.py`, ubah `top_k=2` jadi `top_k=6` di `chat_stream()` — **satu-satunya** endpoint chat sejak Module 8, jadi cuma satu tempat yang perlu diubah:
 
@@ -324,25 +324,25 @@ results = vector_store.search(query_embedding, top_k=6)
 docker compose up --build api
 ```
 
-Re-ingest data seed supaya index terisi chunk (bukan lagi dokumen utuh dari Module 13):
+Re-ingest data seed supaya index terisi chunk (bukan lagi dokumen utuh dari Module 14):
 
 ```bash
 docker compose exec api python -c "from app.ingest import ingest_documents; print(ingest_documents('/app/knowledge-base'))"
 ```
 
-✅ **Indikator sukses**: angka yang dikembalikan **jauh lebih besar** dari hasil Module 13 Bagian 1 (dulu = jumlah dokumen, misal 5; sekarang = jumlah chunk, puluhan). `curl "http://localhost:9200/nala-docs/_count"` juga harus menunjukkan angka yang sama. Coba lagi lewat `/chat/stream` pertanyaan spesifik yang terasa kurang fokus di Module 13 — retrieval sekarang seharusnya lebih presisi karena tiap chunk mewakili satu sub-topik, bukan seluruh dokumen. Lihat Bagian 9 di bawah untuk kasus di mana bahkan chunking pun belum cukup (motivasi Module 17).
+✅ **Indikator sukses**: angka yang dikembalikan **jauh lebih besar** dari hasil Module 14 Bagian 1 (dulu = jumlah dokumen, misal 5; sekarang = jumlah chunk, puluhan). `curl "http://localhost:9200/nala-docs/_count"` juga harus menunjukkan angka yang sama. Coba lagi lewat `/chat/stream` pertanyaan spesifik yang terasa kurang fokus di Module 14 — retrieval sekarang seharusnya lebih presisi karena tiap chunk mewakili satu sub-topik, bukan seluruh dokumen. Lihat Bagian 9 di bawah untuk kasus di mana bahkan chunking pun belum cukup (motivasi Module 18).
 
 <details>
 <summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 3</strong></summary>
 
 ```
 Upgrade ingest_documents() supaya memakai chunking, bukan meng-embed
-dokumen utuh (Module 14, Langkah 3).
+dokumen utuh (Module 15, Langkah 3).
 
 GOAL:
 - Di Nala/app/ingest.py: ganti ISI fungsi
   ingest_documents(folder_path: str) -> int yang sudah ada (dari
-  Module 13) supaya: setelah content = extract_text(...), tambah
+  Module 14) supaya: setelah content = extract_text(...), tambah
   chunks = chunk_markdown(content) if filename.endswith(".md") else
   chunk_text(content); lalu loop for i, chunk in enumerate(chunks):
   embed_text(chunk, ...), store.index_document(doc_id=f"{filename}-{i}",
@@ -352,7 +352,7 @@ GOAL:
 
 CONTEXT:
 - chunk_text() dan chunk_markdown() sudah ada dari Bagian 7 (Tahap A, B).
-- ingest_documents() versi lama (Module 13, tanpa chunking) sudah ada
+- ingest_documents() versi lama (Module 14, tanpa chunking) sudah ada
   dan sedang di-upgrade di sini — bukan dibuat dari nol.
 
 GUARDRAIL:
@@ -367,7 +367,7 @@ GUARDRAIL:
 <summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 4</strong></summary>
 
 ```
-Naikkan top_k di /chat/stream dari 2 jadi 6 (Module 14, Langkah 4).
+Naikkan top_k di /chat/stream dari 2 jadi 6 (Module 15, Langkah 4).
 
 GOAL:
 - Di Nala/app/main.py: cari pemanggilan
@@ -388,7 +388,7 @@ GUARDRAIL:
 
 </details>
 
-## 9. Catatan: Keterbatasan Retrieval Semantic Murni (Preview Module 17)
+## 9. Catatan: Keterbatasan Retrieval Semantic Murni (Preview Module 18)
 
 Kalau Anda coba pertanyaan spesifik seperti *"Apa saja syarat pengajuan kredit untuk nasabah perorangan?"* dan jawabannya terasa kurang lengkap atau bilang "tidak ditemukan" padahal Anda tahu isinya ada di dokumen — itu **bukan bug**, tapi keterbatasan nyata dari vector search murni, bahkan setelah chunking (Bagian 1-Bagian 8) diterapkan.
 
@@ -396,7 +396,7 @@ Kalau Anda coba pertanyaan spesifik seperti *"Apa saja syarat pengajuan kredit u
 
 **Sudah dibuktikan langsung** (diuji ulang ke index OpenSearch yang berjalan): chunk jawaban `### 2.1 Untuk Nasabah Perorangan` berperingkat **#11 dari 14** chunk berdasarkan k-NN similarity — jauh di luar jangkauan `top_k=6` (Bagian 8 Langkah 4). Menaikkan `top_k` bukan solusi murah — mengirim lebih banyak chunk (mayoritas tidak relevan) ke `llama3.2:3b` (model kecil, context window terbatas) berisiko lebih banyak "mengencerkan" fokus model daripada membantu.
 
-Ini **persis** motivasi Module 17: **hybrid search** (kombinasi BM25 keyword-matching + vector semantic search) dan **reranking** (cross-encoder menyortir ulang top-N besar jadi top-K yang benar-benar relevan). Grounding yang sudah dibangun di Module 13 Bagian 4 sudah bekerja **benar** — yang belum optimal adalah retrieval-nya, bukan generation-nya. Chunking (module ini) sudah jadi perbaikan nyata dibanding Module 13 (level-dokumen) — tapi belum jadi solusi lengkap.
+Ini **persis** motivasi Module 18: **hybrid search** (kombinasi BM25 keyword-matching + vector semantic search) dan **reranking** (cross-encoder menyortir ulang top-N besar jadi top-K yang benar-benar relevan). Grounding yang sudah dibangun di Module 14 Bagian 4 sudah bekerja **benar** — yang belum optimal adalah retrieval-nya, bukan generation-nya. Chunking (module ini) sudah jadi perbaikan nyata dibanding Module 14 (level-dokumen) — tapi belum jadi solusi lengkap.
 
 ## 10. Bentuk Uji Coba per Checklist
 
@@ -404,13 +404,13 @@ Skenario konkret dipakai untuk menentukan `top_k=6` (Bagian 8 Langkah 4): 5 pert
 
 ## 11. Checkpoint Praktik
 
-Yang perlu dipastikan sebelum lanjut ke Module 15:
+Yang perlu dipastikan sebelum lanjut ke Module 16:
 
 - [ ] `chunk_text()` dengan teks 1200 karakter menghasilkan 3 chunk berukuran `[500, 500, 300]`
 - [ ] `chunk_markdown()` pada `sop-pengajuan-kredit.md` menghasilkan 13 chunk, tiap potongannya dimulai dari baris heading
-- [ ] `ingest_documents()` sekarang mengembalikan jumlah chunk (jauh lebih besar dari jumlah dokumen di Module 13)
+- [ ] `ingest_documents()` sekarang mengembalikan jumlah chunk (jauh lebih besar dari jumlah dokumen di Module 14)
 - [ ] `top_k=6` sudah dipakai di `/chat/stream` (bukan lagi `top_k=2`)
-- [ ] Kita paham keterbatasan retrieval semantic murni level-chunk (Bagian 9) sebagai motivasi Module 17
+- [ ] Kita paham keterbatasan retrieval semantic murni level-chunk (Bagian 9) sebagai motivasi Module 18
 - [ ] `/chat/stream` (Module 7) masih berfungsi seperti sebelumnya, dengan jawaban yang sekarang berbasis chunk yang lebih fokus
 
-Begitu semua hal di atas terverifikasi, lanjut ke Module 15 — form upload web, cara staff menambahkan dokumen baru ke sistem yang **sudah hidup dan sudah level-chunk** ini.
+Begitu semua hal di atas terverifikasi, lanjut ke Module 16 — form upload web, cara staff menambahkan dokumen baru ke sistem yang **sudah hidup dan sudah level-chunk** ini.

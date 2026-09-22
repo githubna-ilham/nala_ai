@@ -1,14 +1,14 @@
-# Module 15: Upload Dokumen — Menambah Data ke Sistem yang Sudah Hidup
+# Module 16: Upload Dokumen — Menambah Data ke Sistem yang Sudah Hidup
 
 ## Tujuan
 
-Membangun halaman "Knowledge Base" (`GET /upload` dan `POST /upload`) supaya staff bisa menambahkan dokumen SOP ke NALA lewat web, tanpa akses server dan tanpa perlu memanggil `ingest_documents()` manual dari terminal seperti di Module 13-14. Karena pipeline ingest (chunking → embedding → vector store) **sudah ada dan sudah terbukti bekerja level-chunk** sejak Module 14, upload di sini langsung tersambung ke `ingest_documents()` — tidak ada lagi jeda "simpan dulu, proses belakangan".
+Membangun halaman "Knowledge Base" (`GET /upload` dan `POST /upload`) supaya staff bisa menambahkan dokumen SOP ke NALA lewat web, tanpa akses server dan tanpa perlu memanggil `ingest_documents()` manual dari terminal seperti di Module 14-15. Karena pipeline ingest (chunking → embedding → vector store) **sudah ada dan sudah terbukti bekerja level-chunk** sejak Module 15, upload di sini langsung tersambung ke `ingest_documents()` — tidak ada lagi jeda "simpan dulu, proses belakangan".
 
 ## Definisi
 
 **Upload pipeline** adalah alur end-to-end dari file yang dipilih user di browser sampai file itu tersimpan **dan** ter-index, seluruhnya dalam satu request HTTP — bukan dua langkah terpisah (simpan dulu, proses belakangan). File dikirim dari form HTML memakai format **`multipart/form-data`** — format pengiriman data HTTP yang berbeda dari JSON biasa yang dipakai `/chat/stream`, dan memang dirancang khusus untuk mengirim file (dibahas Bagian 2 Langkah 7).
 
-Setiap kali upload terjadi, seluruh folder knowledge base di-scan dan di-ingest ulang, bukan cuma file yang baru — ini aman karena `ingest_documents()` bersifat **idempotent**: hasil akhirnya tetap sama walau dijalankan berkali-kali dengan input yang sama, karena `doc_id`-nya deterministik (dijelaskan Module 13 Bagian 1). Penting dipahami di sini karena upload sebenarnya memicu ulang seluruh proses ingest, bukan cuma memproses dokumen yang baru diunggah.
+Setiap kali upload terjadi, seluruh folder knowledge base di-scan dan di-ingest ulang, bukan cuma file yang baru — ini aman karena `ingest_documents()` bersifat **idempotent**: hasil akhirnya tetap sama walau dijalankan berkali-kali dengan input yang sama, karena `doc_id`-nya deterministik (dijelaskan Module 14 Bagian 1). Penting dipahami di sini karena upload sebenarnya memicu ulang seluruh proses ingest, bukan cuma memproses dokumen yang baru diunggah.
 
 ```mermaid
 flowchart LR
@@ -28,11 +28,11 @@ flowchart LR
 
 ## 1. Kenapa Sekarang, Bukan Modul Pertama
 
-Draft awal Module 7-16 membangun halaman upload ini sebagai Module 10 — pintu masuk dokumen paling awal, sengaja dibuat "cuma menyimpan file" karena pipeline pemrosesannya belum ada sama sekali. Urutan itu diubah (lihat Module 10 Bagian 1): kita bangun dulu mesin RAG-nya sampai benar-benar bekerja (Module 10-13 tanpa chunking, lalu Module 14 menambahkan chunking) memakai data seed, **baru** sekarang menambahkan cara staff menambah dokumen sendiri.
+Draft awal Module 7-17 membangun halaman upload ini sebagai Module 10 — pintu masuk dokumen paling awal, sengaja dibuat "cuma menyimpan file" karena pipeline pemrosesannya belum ada sama sekali. Urutan itu diubah (lihat Module 10 Bagian 1): kita bangun dulu mesin RAG-nya sampai benar-benar bekerja (Module 10-14 tanpa chunking, lalu Module 15 menambahkan chunking) memakai data seed, **baru** sekarang menambahkan cara staff menambah dokumen sendiri.
 
-Konsekuensinya: **tidak ada lagi alasan menunda pemrosesan**. `ingest_documents()` sudah ada sejak Module 13 Bagian 1 dan sudah di-upgrade ke level-chunk di Module 14 Bagian 8 — jadi endpoint upload di module ini bisa langsung memanggilnya, tanpa dua-tahap seperti rencana awal.
+Konsekuensinya: **tidak ada lagi alasan menunda pemrosesan**. `ingest_documents()` sudah ada sejak Module 14 Bagian 1 dan sudah di-upgrade ke level-chunk di Module 15 Bagian 8 — jadi endpoint upload di module ini bisa langsung memanggilnya, tanpa dua-tahap seperti rencana awal.
 
-Dalam operasional NALA, staff sering perlu menambahkan dokumen baru ke knowledge base tanpa menunggu jadwal pipeline Airflow (Module 16). Contoh kasus:
+Dalam operasional NALA, staff sering perlu menambahkan dokumen baru ke knowledge base tanpa menunggu jadwal pipeline Airflow (Module 17). Contoh kasus:
 - Head of Legal ingin update SOP Pengajuan Kredit karena ada perubahan regulasi baru, dan ingin perubahan itu langsung tersedia untuk NALA menjawab pertanyaan staff lain.
 - Product Manager ingin menambahkan dokumentasi promo baru yang tiba-tiba harus diluncurkan besok pagi.
 
@@ -40,13 +40,13 @@ Dalam operasional NALA, staff sering perlu menambahkan dokumen baru ke knowledge
 flowchart LR
     A["Browser<br/>upload.html"] -->|"POST /upload<br/>multipart/form-data"| B["FastAPI<br/>app/main.py"]
     B -->|"simpan file"| C["knowledge-base/<br/>(filesystem)"]
-    B -->|"ingest_documents()<br/>(Module 13, upgrade Module 14)"| D["OpenSearch<br/>nala-docs"]
+    B -->|"ingest_documents()<br/>(Module 14, upgrade Module 15)"| D["OpenSearch<br/>nala-docs"]
     D -->|"langsung bisa<br/>ditanya"| E["/chat/stream"]
 ```
 
 ## 2. Struktur Kode yang Ditambahkan
 
-Dua Tahap: **Tahap A** — halaman upload (`upload.html`), belum terhubung ke FastAPI. **Tahap B** — hubungkan ke FastAPI, langsung panggil `ingest_documents()` versi chunking (Module 14).
+Dua Tahap: **Tahap A** — halaman upload (`upload.html`), belum terhubung ke FastAPI. **Tahap B** — hubungkan ke FastAPI, langsung panggil `ingest_documents()` versi chunking (Module 15).
 
 ### Tahap A — Buat halaman upload dulu (belum terhubung ke FastAPI)
 
@@ -130,7 +130,7 @@ file:///path/ke/Nala/app/templates/upload.html
 <summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 1</strong></summary>
 
 ```
-Buat halaman upload dokumen NALA (Module 15, Tahap A) — upload.html,
+Buat halaman upload dokumen NALA (Module 16, Tahap A) — upload.html,
 belum terhubung ke FastAPI.
 
 GOAL:
@@ -162,7 +162,7 @@ GUARDRAIL:
 
 ### Tahap B — Hubungkan: dependency, docker-compose, dan endpoint (langsung ter-index sebagai chunk)
 
-**Prasyarat**: sudah menyelesaikan **Module 14** (Chunking) — `ingest_documents()` sudah level-chunk. Tanpa ini, endpoint `/upload` di bawah tetap bisa menyimpan file, tapi pesan konfirmasinya tidak akan menyebut jumlah chunk seperti yang dijelaskan di Langkah 5.
+**Prasyarat**: sudah menyelesaikan **Module 15** (Chunking) — `ingest_documents()` sudah level-chunk. Tanpa ini, endpoint `/upload` di bawah tetap bisa menyimpan file, tapi pesan konfirmasinya tidak akan menyebut jumlah chunk seperti yang dijelaskan di Langkah 5.
 
 **Langkah 2 — Tambah volume `knowledge-base` di `docker-compose.yml`**
 
@@ -182,7 +182,7 @@ Tambahkan sebagai baris baru di akhir `requirements.txt`.
 <summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 3</strong></summary>
 
 ```
-Tambah dependency python-multipart di requirements.txt NALA (Module 15,
+Tambah dependency python-multipart di requirements.txt NALA (Module 16,
 Langkah 3) — BELUM mengubah kode apa pun.
 
 GOAL:
@@ -229,7 +229,7 @@ def list_knowledge_base_documents() -> list[str]:
 
 ```
 Tambah import File/UploadFile dan fungsi list_knowledge_base_documents()
-di app/main.py NALA (Module 15, Langkah 4) — BELUM menambah endpoint
+di app/main.py NALA (Module 16, Langkah 4) — BELUM menambah endpoint
 /upload apa pun.
 
 GOAL:
@@ -291,7 +291,7 @@ def upload_document(request: Request, file: UploadFile = File(...)):
     )
 ```
 
-Butuh tambahan import di baris atas `app/main.py` (kalau belum ada dari Module 13):
+Butuh tambahan import di baris atas `app/main.py` (kalau belum ada dari Module 14):
 
 ```python
 # app/main.py
@@ -300,8 +300,8 @@ from app.ingest import ingest_documents
 ```
 
 - **`GET /upload`**: merender form kosong (`message: None`) plus daftar dokumen yang sudah ada — dipanggil saat user pertama kali membuka `/upload`.
-- **`POST /upload`**: `os.makedirs`/`open(...).write()` menyimpan file **apa adanya**. Disusul `ingest_documents(KNOWLEDGE_BASE_PATH)` di dalam `try/except` — fungsi ini **sekarang** memecah dokumen jadi chunk dulu (Module 14), jadi pesan konfirmasi menyebut jumlah **chunk**, bukan jumlah dokumen. Kalau berhasil, pesan menyebut jumlah chunk yang ter-index; kalau `httpx.HTTPError` (OpenSearch tidak terjangkau), pesan tetap ramah — file tetap tersimpan, bukan error 500.
-- **`ingest_documents()` yang dipanggil di sini** fungsi yang **sama persis** yang dipanggil manual dari terminal di Module 13 Bagian 1 (lalu di-upgrade Module 14 Bagian 8) — tidak ada logika baru di `main.py`, cuma dipicu dari endpoint web alih-alih CLI. Karena scan ulang seluruh folder (bukan cuma file baru), dokumen lama yang sudah ada juga ikut ter-chunk-dan-embed ulang — konsisten dengan catatan idempotency di Module 13 Bagian 1 (lihat juga Definisi di atas).
+- **`POST /upload`**: `os.makedirs`/`open(...).write()` menyimpan file **apa adanya**. Disusul `ingest_documents(KNOWLEDGE_BASE_PATH)` di dalam `try/except` — fungsi ini **sekarang** memecah dokumen jadi chunk dulu (Module 15), jadi pesan konfirmasi menyebut jumlah **chunk**, bukan jumlah dokumen. Kalau berhasil, pesan menyebut jumlah chunk yang ter-index; kalau `httpx.HTTPError` (OpenSearch tidak terjangkau), pesan tetap ramah — file tetap tersimpan, bukan error 500.
+- **`ingest_documents()` yang dipanggil di sini** fungsi yang **sama persis** yang dipanggil manual dari terminal di Module 14 Bagian 1 (lalu di-upgrade Module 15 Bagian 8) — tidak ada logika baru di `main.py`, cuma dipicu dari endpoint web alih-alih CLI. Karena scan ulang seluruh folder (bukan cuma file baru), dokumen lama yang sudah ada juga ikut ter-chunk-dan-embed ulang — konsisten dengan catatan idempotency di Module 14 Bagian 1 (lihat juga Definisi di atas).
 
 Coba juga link "Knowledge Base" di halaman chat (`http://localhost:8000`) — harus berpindah ke `/upload`. Ganti `<nav><a href="/">Chat</a></nav>` di `chat.html` jadi `<nav><a href="/">Chat</a> | <a href="/upload">Knowledge Base</a></nav>` kalau belum ada.
 
@@ -311,12 +311,12 @@ Coba juga link "Knowledge Base" di halaman chat (`http://localhost:8000`) — ha
 ```
 Tambah endpoint GET/POST /upload di app/main.py NALA, langsung
 memanggil ingest_documents() versi chunking, dan sambungkan link
-"Knowledge Base" dari halaman chat (Module 15, Langkah 5).
+"Knowledge Base" dari halaman chat (Module 16, Langkah 5).
 
 GOAL:
 - Di Nala/app/main.py:
   - Tambah `import httpx` dan `from app.ingest import
-    ingest_documents` kalau belum ada dari Module 13.
+    ingest_documents` kalau belum ada dari Module 14.
   - Tambah endpoint @app.get("/upload") yang render upload.html dengan
     message=None dan documents=list_knowledge_base_documents(), dan
     @app.post("/upload") yang terima file: UploadFile = File(...),
@@ -334,8 +334,8 @@ CONTEXT:
 - upload.html sudah ada dari Tahap A.
 - list_knowledge_base_documents(), import File/UploadFile, dan
   dependency python-multipart sudah ada dari Langkah 3-4.
-- ingest_documents() sudah ada dari Module 13, sudah di-upgrade untuk
-  chunking di Module 14 — panggil langsung, jangan tulis ulang
+- ingest_documents() sudah ada dari Module 14, sudah di-upgrade untuk
+  chunking di Module 15 — panggil langsung, jangan tulis ulang
   logikanya.
 
 GUARDRAIL:
@@ -382,7 +382,7 @@ curl -N -X POST http://localhost:8000/chat/stream \
 
 ## 3. Checkpoint Praktik
 
-Yang perlu dipastikan sebelum lanjut ke Module 16:
+Yang perlu dipastikan sebelum lanjut ke Module 17:
 
 - [ ] `http://localhost:8000/upload` menampilkan form upload dan daftar dokumen yang sudah ada
 - [ ] Link "Knowledge Base" di halaman chat berfungsi
@@ -391,4 +391,4 @@ Yang perlu dipastikan sebelum lanjut ke Module 16:
 - [ ] Dokumen yang baru diupload **langsung bisa ditanyakan** ke `/chat/stream` tanpa restart apa pun
 - [ ] `/chat/stream` (Module 7) masih berfungsi seperti sebelumnya
 
-Begitu keenam hal ini terverifikasi, lanjut ke Module 16 — Airflow, cara **lain** memicu `ingest_documents()` yang sama, cocok untuk skenario batch/terjadwal yang tidak dicakup form upload satu-file ini.
+Begitu keenam hal ini terverifikasi, lanjut ke Module 17 — Airflow, cara **lain** memicu `ingest_documents()` yang sama, cocok untuk skenario batch/terjadwal yang tidak dicakup form upload satu-file ini.

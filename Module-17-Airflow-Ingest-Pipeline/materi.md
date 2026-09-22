@@ -1,14 +1,14 @@
-# Module 16: Airflow Ingest Pipeline
+# Module 17: Airflow Ingest Pipeline
 
 ## Tujuan
 
-Menambahkan **cara lain** memicu `ingest_documents()` (dibuat di Module 13, di-upgrade untuk chunking di Module 14, juga dipakai Module 15 lewat form upload) — lewat DAG Airflow yang bisa di-trigger manual dari UI/CLI. Beda dari upload (satu dokumen, reaktif, lewat web), Airflow cocok untuk skenario batch/operasional yang lebih besar: banyak dokumen sekaligus, audit trail, dan siap upgrade ke terjadwal.
+Menambahkan **cara lain** memicu `ingest_documents()` (dibuat di Module 14, di-upgrade untuk chunking di Module 15, juga dipakai Module 16 lewat form upload) — lewat DAG Airflow yang bisa di-trigger manual dari UI/CLI. Beda dari upload (satu dokumen, reaktif, lewat web), Airflow cocok untuk skenario batch/operasional yang lebih besar: banyak dokumen sekaligus, audit trail, dan siap upgrade ke terjadwal.
 
 ## Definisi
 
 **Orchestration** (orkestrasi) berarti mengatur *kapan* dan *bagaimana* beberapa langkah kerja dijalankan secara terpusat dan terpantau, bukan menjalankannya satu-satu secara manual dari terminal. Satu rangkaian langkah kerja yang diatur seperti ini disebut **workflow** — di NALA, diwakili satu **DAG (Directed Acyclic Graph)**: definisi workflow di Airflow berupa graph berarah, di mana tiap **task** (satu langkah kerja di dalamnya) tahu urutan sebelum dan sesudahnya, tanpa ada loop (Bagian 4.1). DAG NALA di training ini sengaja disederhanakan jadi cuma satu task (`ingest_documents`), walau DAG di lingkungan production biasanya berisi beberapa task berurutan.
 
-Workflow seperti ini bisa dijalankan dengan dua cara: **trigger manual**, saat seseorang menekan tombol atau menjalankan perintah (dipakai sepanjang Module 7-16, Bagian 6), atau **terjadwal (scheduled)**, saat workflow jalan otomatis mengikuti jadwal cron tanpa campur tangan manusia sama sekali (Bagian 6.3, opsional untuk training ini).
+Workflow seperti ini bisa dijalankan dengan dua cara: **trigger manual**, saat seseorang menekan tombol atau menjalankan perintah (dipakai sepanjang Module 7-17, Bagian 6), atau **terjadwal (scheduled)**, saat workflow jalan otomatis mengikuti jadwal cron tanpa campur tangan manusia sama sekali (Bagian 6.3, opsional untuk training ini).
 
 ```mermaid
 flowchart LR
@@ -21,14 +21,14 @@ flowchart LR
 
 - DAG `ingest_documents` bisa di-trigger dari Airflow UI dan berstatus `success`
 - `curl http://localhost:9200/nala-docs/_count` menunjukkan jumlah dokumen yang sesuai dengan hasil ingest lewat Airflow
-- Kita paham kapan pakai upload (Module 15) vs Airflow — bukan dua sistem yang bersaing, cuma beda pemicu dan jaminan yang didapat
-- `/chat/stream` (Module 13) tetap menjawab dari dokumen seperti sebelumnya, tanpa perubahan kode apa pun
+- Kita paham kapan pakai upload (Module 16) vs Airflow — bukan dua sistem yang bersaing, cuma beda pemicu dan jaminan yang didapat
+- `/chat/stream` (Module 14) tetap menjawab dari dokumen seperti sebelumnya, tanpa perubahan kode apa pun
 
 ## 1. Apa itu Apache Airflow
 
 **Definisi Sederhana (Non-Teknis):**
 
-Apache Airflow adalah sebuah **platform orchestration** yang memungkinkan Anda untuk menjadwalkan dan menjalankan **workflow** (alur kerja otomatis) secara terpusat, terukur, dan dapat dipantau. Dalam konteks NALA Enterprise, Airflow menstandardisasi tugas yang biasanya dilakukan secara manual di terminal (seperti yang Anda lakukan di Module 13 Bagian 1 dan Module 14 Bagian 8 — memanggil `ingest_documents()` lewat `docker compose exec`) — di training ini prosesnya masih **di-trigger manual** (lewat tombol di UI atau CLI), tapi lewat Airflow, bukan lagi lewat login server dan mengetik command satu-satu.
+Apache Airflow adalah sebuah **platform orchestration** yang memungkinkan Anda untuk menjadwalkan dan menjalankan **workflow** (alur kerja otomatis) secara terpusat, terukur, dan dapat dipantau. Dalam konteks NALA Enterprise, Airflow menstandardisasi tugas yang biasanya dilakukan secara manual di terminal (seperti yang Anda lakukan di Module 14 Bagian 1 dan Module 15 Bagian 8 — memanggil `ingest_documents()` lewat `docker compose exec`) — di training ini prosesnya masih **di-trigger manual** (lewat tombol di UI atau CLI), tapi lewat Airflow, bukan lagi lewat login server dan mengetik command satu-satu.
 
 **Analogi Sederhana:**
 
@@ -38,17 +38,17 @@ Bayangkan Anda memiliki rutin pagi: bangun → mandi → sarapan → berangkat k
 
 ---
 
-## 2. Kenapa NALA Butuh Airflow — Padahal Upload (Module 15) Sudah Otomatis Meng-index
+## 2. Kenapa NALA Butuh Airflow — Padahal Upload (Module 16) Sudah Otomatis Meng-index
 
-Wajar muncul pertanyaan ini: `/upload` (Module 15) dan Airflow sama-sama memanggil `ingest_documents()` yang sama persis (dibuat Module 13, di-upgrade chunking Module 14). Untuk skenario **satu file diupload lewat form web**, Airflow memang tidak wajib — `/upload` saja sudah cukup. Nilai Airflow muncul di skenario **lain** yang tidak dicakup `/upload`:
+Wajar muncul pertanyaan ini: `/upload` (Module 16) dan Airflow sama-sama memanggil `ingest_documents()` yang sama persis (dibuat Module 14, di-upgrade chunking Module 15). Untuk skenario **satu file diupload lewat form web**, Airflow memang tidak wajib — `/upload` saja sudah cukup. Nilai Airflow muncul di skenario **lain** yang tidak dicakup `/upload`:
 
-- **Reprocessing massal**: kalau banyak dokumen ditaruh langsung ke folder `knowledge-base/` (bukan lewat form upload, misal staff IT copy file langsung ke server), tidak ada yang otomatis men-trigger indexing — Airflow jadi cara menjalankan ulang seluruh proses kapan pun dibutuhkan, tanpa login server dan jalankan script manual (persis seperti yang Anda lakukan manual di Module 13 Bagian 1 dan Module 14 Bagian 8).
+- **Reprocessing massal**: kalau banyak dokumen ditaruh langsung ke folder `knowledge-base/` (bukan lewat form upload, misal staff IT copy file langsung ke server), tidak ada yang otomatis men-trigger indexing — Airflow jadi cara menjalankan ulang seluruh proses kapan pun dibutuhkan, tanpa login server dan jalankan script manual (persis seperti yang Anda lakukan manual di Module 14 Bagian 1 dan Module 15 Bagian 8).
 - **Decouple dari request HTTP**: di `/upload`, proses embedding (panggil Ollama berkali-kali) terjadi **di dalam** request — kalau dokumennya besar, user yang upload harus menunggu lama, bisa timeout. Lewat Airflow, proses berat itu bisa dipisah jadi task di background, tidak memblokir user.
 - **Retry otomatis kalau gagal**: kalau OpenSearch/Ollama sempat down di tengah proses, `/upload` langsung gagal (ditangkap `except`, selesai, tidak ada percobaan ulang). Airflow punya fitur retry bawaan dan riwayat kegagalan tercatat rapi di UI.
 - **Audit trail & observability**: Airflow mencatat setiap kali proses ingest dijalankan — kapan, berhasil/gagal, berapa lama. Penting untuk lingkungan enterprise yang butuh bukti "kapan data ini terakhir di-index" untuk keperluan compliance/audit.
 - **Siap upgrade ke terjadwal**: tinggal ubah `schedule=None` jadi cron expression (Bagian 6.3) untuk reindexing otomatis berkala — `/upload` tidak punya konsep ini sama sekali karena sifatnya reaktif (hanya jalan kalau ada yang upload).
 
-**Kesimpulan praktis**: `/upload` (Module 15) = jalur cepat untuk kasus umum (1 dokumen, upload manual lewat UI). Airflow = jalur untuk kasus operasional yang lebih besar (batch, terjadwal, butuh retry/audit) — keduanya cuma beda pemicu dan jaminan yang didapat, memanggil fungsi inti yang **sama persis** (`ingest_documents()`, dibuat Module 13, di-upgrade Module 14).
+**Kesimpulan praktis**: `/upload` (Module 16) = jalur cepat untuk kasus umum (1 dokumen, upload manual lewat UI). Airflow = jalur untuk kasus operasional yang lebih besar (batch, terjadwal, butuh retry/audit) — keduanya cuma beda pemicu dan jaminan yang didapat, memanggil fungsi inti yang **sama persis** (`ingest_documents()`, dibuat Module 14, di-upgrade Module 15).
 
 **Kelemahan skenario benar-benar manual** (tanpa Airflow maupun upload web): staff IT harus login server dan menjalankan `python app/ingest.py` setiap kali — tidak scalable, rentan lupa/error, tidak ada monitoring atau audit trail.
 
@@ -91,7 +91,7 @@ flowchart TD
 
 ### 3.3 Trade-Off: Kenapa Mode `standalone` untuk Training Ini
 
-**Constraint:** Prasyarat training adalah minimum 16GB RAM **untuk semua services Module 7-29** (Ollama, FastAPI, OpenSearch, PostgreSQL operational data, Langfuse, LangGraph, **plus Airflow**). Dengan prasyarat ini, tidak cukup ruang untuk Airflow production setup.
+**Constraint:** Prasyarat training adalah minimum 16GB RAM **untuk semua services Module 7-30** (Ollama, FastAPI, OpenSearch, PostgreSQL operational data, Langfuse, LangGraph, **plus Airflow**). Dengan prasyarat ini, tidak cukup ruang untuk Airflow production setup.
 
 **Keputusan:** Gunakan Airflow `standalone` mode untuk training — database metadata SQLite built-in, scheduler+webserver dalam satu process, executor LocalExecutor, monitoring basic logs via Airflow UI.
 
@@ -111,11 +111,11 @@ Setiap workflow di Airflow didefinisikan sebagai **DAG (Directed Acyclic Graph)*
 
 DAG didefinisikan sebagai **file Python** (`airflow/dags/ingest_documents_dag.py`), bukan konfigurasi klik-klik di UI — workflow-nya adalah kode yang bisa di-*version control*.
 
-**Untuk Module 16 training ini, DAG disederhanakan jadi satu task saja** (fokus belajar konsep DAG dan scheduling, bukan kompleksitas multi-task dependency):
+**Untuk Module 17 training ini, DAG disederhanakan jadi satu task saja** (fokus belajar konsep DAG dan scheduling, bukan kompleksitas multi-task dependency):
 
 ```mermaid
 flowchart TD
-    subgraph dag["ingest_documents_dag (Simplified untuk Module 16 Training)"]
+    subgraph dag["ingest_documents_dag (Simplified untuk Module 17 Training)"]
         A["ingest_documents (PythonOperator)<br/>- Memanggil run_ingest() → ingest_documents() dari app/ingest<br/>- Scan folder knowledge base<br/>- Chunk dokumen<br/>- Generate embeddings<br/>- Store ke OpenSearch"]
     end
 ```
@@ -155,17 +155,17 @@ with DAG(
 | Bagian | Penjelasan |
 |--------|-----------|
 | `from airflow import DAG` | Mengimport class DAG dari Airflow |
-| `run_ingest()` | Fungsi wrapper lokal yang memanggil `ingest_documents()` dari `app/ingest.py` (dibuat Module 13, di-upgrade chunking Module 14) dengan argumen `folder_path="/opt/airflow/knowledge-base"` — wrapper diperlukan karena Airflow `python_callable` tidak bisa langsung menyuplai argumen |
+| `run_ingest()` | Fungsi wrapper lokal yang memanggil `ingest_documents()` dari `app/ingest.py` (dibuat Module 14, di-upgrade chunking Module 15) dengan argumen `folder_path="/opt/airflow/knowledge-base"` — wrapper diperlukan karena Airflow `python_callable` tidak bisa langsung menyuplai argumen |
 | `with DAG(...) as dag:` | Membuat instance DAG, `dag_id="ingest_documents"` |
-| `schedule=None` | DAG tidak dijadwalkan otomatis — **trigger manual saja** untuk Module 16 |
+| `schedule=None` | DAG tidak dijadwalkan otomatis — **trigger manual saja** untuk Module 17 |
 | `catchup=False` | Jangan jalankan historical runs yang terlewat |
 | `PythonOperator(...)` | Operator Airflow yang menjalankan fungsi Python arbitrary |
 
-Fungsi `ingest_documents()` yang dipanggil DAG ini **fungsi yang sama persis** yang sudah Anda bangun di Module 13 Bagian 1 dan upgrade untuk chunking di Module 14 Bagian 8 — tidak ada logika baru ditulis di module ini, murni menambahkan **pemicu** baru untuk fungsi yang sudah ada.
+Fungsi `ingest_documents()` yang dipanggil DAG ini **fungsi yang sama persis** yang sudah Anda bangun di Module 14 Bagian 1 dan upgrade untuk chunking di Module 15 Bagian 8 — tidak ada logika baru ditulis di module ini, murni menambahkan **pemicu** baru untuk fungsi yang sudah ada.
 
 ### 4.3 Mengapa PythonOperator?
 
-Airflow punya banyak operator (BashOperator, PythonOperator, EmailOperator, HttpOperator, dsb). Untuk NALA, pakai **PythonOperator** karena fleksibel (bisa jalankan fungsi Python apa pun), cocok untuk data processing, dan tidak ada overhead (langsung panggil fungsi dari `app/ingest.py` tanpa intermediate script). Alternatif untuk production/extension: **DockerOperator** (isolation), **KubernetesPodOperator** (scaling horizontal) — di luar cakupan Module 16.
+Airflow punya banyak operator (BashOperator, PythonOperator, EmailOperator, HttpOperator, dsb). Untuk NALA, pakai **PythonOperator** karena fleksibel (bisa jalankan fungsi Python apa pun), cocok untuk data processing, dan tidak ada overhead (langsung panggil fungsi dari `app/ingest.py` tanpa intermediate script). Alternatif untuk production/extension: **DockerOperator** (isolation), **KubernetesPodOperator** (scaling horizontal) — di luar cakupan Module 17.
 
 ---
 
@@ -203,7 +203,7 @@ Setelah login: **DAG List View** (daftar semua DAG, termasuk `ingest_documents`)
 
 ## 6. Cara Trigger DAG Manual
 
-Untuk Module 16 training, DAG `ingest_documents` dijadwalkan **manual trigger only** (`schedule=None`).
+Untuk Module 17 training, DAG `ingest_documents` dijadwalkan **manual trigger only** (`schedule=None`).
 
 ### 6.1 Trigger via Airflow UI
 
@@ -231,9 +231,9 @@ docker compose exec airflow airflow tasks logs ingest_documents <RUN_ID> ingest_
 | Aspek | Manual Trigger | Scheduled (Automatic) |
 |-------|----------------|------------------------|
 | Kapan berjalan | Klik tombol atau jalankan CLI | Sesuai `schedule` (misal: setiap hari pukul 2 pagi) |
-| Untuk Module 16 | ✅ Ini yang dipakai | ❌ Extension opsional |
+| Untuk Module 17 | ✅ Ini yang dipakai | ❌ Extension opsional |
 
-**Extension (opsional, di luar cakupan wajib Module 16)** — upgrade ke scheduled:
+**Extension (opsional, di luar cakupan wajib Module 17)** — upgrade ke scheduled:
 
 ```python
 # airflow/dags/ingest_documents_dag.py (opsional)
@@ -252,10 +252,10 @@ Format cron `schedule` — lima field `menit jam tanggal bulan hari-minggu`: `"0
 
 ## 7. Struktur Kode yang Ditambahkan
 
-Cuma **satu Tahap** — `ingest_documents()` (Module 13, di-upgrade Module 14) dan upload (Module 15) sudah selesai duluan, module ini murni menambahkan **service Airflow + DAG**, tidak ada perubahan `app/ingest.py` atau `app/main.py` sama sekali.
+Cuma **satu Tahap** — `ingest_documents()` (Module 14, di-upgrade Module 15) dan upload (Module 16) sudah selesai duluan, module ini murni menambahkan **service Airflow + DAG**, tidak ada perubahan `app/ingest.py` atau `app/main.py` sama sekali.
 
 **Prasyarat sebelum mulai:**
-- Sudah menyelesaikan **Module 15** (Upload Dokumen).
+- Sudah menyelesaikan **Module 16** (Upload Dokumen).
 - RAM Docker Desktop di 16GB+ (lihat Module 7, Tahap A Langkah 0 — catatan ⚠️ RAM Docker Desktop) — di langkah ini keempat service (`ollama`, `opensearch`, `airflow`, `api`) akan jalan bersamaan untuk pertama kalinya.
 
 **Langkah 1 — Tambah service `airflow` di `docker-compose.yml`**
@@ -286,14 +286,14 @@ Tambahkan sebagai service baru (sejajar dengan `ollama`, `opensearch`, `api`). E
 
 - **`./airflow/dags:/opt/airflow/dags`**: menghubungkan folder DAG di laptop Anda ke tempat Airflow membaca DAG-nya.
 - **`./app:/opt/airflow/dags/app`**: DAG (Langkah 2) memanggil `from app.ingest import ingest_documents` — supaya `import` itu berhasil **di dalam** container Airflow (terpisah dari container `api`), folder `app/` yang sama dipasang lagi di situ.
-- **`./knowledge-base:/opt/airflow/knowledge-base`**: volume terpisah dari yang dipakai `api` (`/app/knowledge-base`) — path di dalam container beda, tapi **menunjuk ke folder host yang sama persis** (`Nala/knowledge-base/`), jadi Airflow meng-index knowledge base yang sama dengan yang dipakai app, termasuk file hasil upload di Module 15.
+- **`./knowledge-base:/opt/airflow/knowledge-base`**: volume terpisah dari yang dipakai `api` (`/app/knowledge-base`) — path di dalam container beda, tapi **menunjuk ke folder host yang sama persis** (`Nala/knowledge-base/`), jadi Airflow meng-index knowledge base yang sama dengan yang dipakai app, termasuk file hasil upload di Module 16.
 - **`_PIP_ADDITIONAL_REQUIREMENTS=pypdf==5.1.0 httpx==0.27.2`**: **wajib**, tanpa ini task DAG gagal dengan `ModuleNotFoundError: No module named 'pypdf'`. Penyebabnya: container `api` di-build dari `Dockerfile` yang menginstall seluruh `requirements.txt`, tapi container `airflow` pakai image `apache/airflow:2.10.2` mentah — tidak pernah menginstall dependency aplikasi kita.
 
 <details>
 <summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 1</strong></summary>
 
 ```
-Tambah service airflow di docker-compose.yml (Module 16, Langkah 1).
+Tambah service airflow di docker-compose.yml (Module 17, Langkah 1).
 
 GOAL:
 - Di Nala/docker-compose.yml: tambah
@@ -310,8 +310,8 @@ GOAL:
   depends_on opensearch dan ollama).
 
 CONTEXT:
-- app/ingest.py sudah punya ingest_documents() dari Module 13 (versi
-  chunking dari Module 14) — service ini disiapkan supaya DAG
+- app/ingest.py sudah punya ingest_documents() dari Module 14 (versi
+  chunking dari Module 15) — service ini disiapkan supaya DAG
   (Langkah 2, belum dibuat di langkah ini) bisa memanggilnya nanti.
 
 GUARDRAIL:
@@ -361,7 +361,7 @@ with DAG(
 <summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 2</strong></summary>
 
 ```
-Buat DAG ingest_documents (Module 16, Langkah 2).
+Buat DAG ingest_documents (Module 17, Langkah 2).
 
 GOAL:
 - Buat Nala/airflow/dags/ingest_documents_dag.py
@@ -372,8 +372,8 @@ GOAL:
 - Buat dulu folder airflow/dags/ kalau belum ada.
 
 CONTEXT:
-- app/ingest.py sudah punya ingest_documents() dari Module 13 (versi
-  chunking dari Module 14) — DAG ini cuma memanggilnya, tidak menulis
+- app/ingest.py sudah punya ingest_documents() dari Module 14 (versi
+  chunking dari Module 15) — DAG ini cuma memanggilnya, tidak menulis
   ulang logikanya.
 - Service airflow di docker-compose.yml (Langkah 1) sudah dipasang
   duluan dan sudah me-mount ./airflow/dags ke /opt/airflow/dags.
@@ -400,11 +400,11 @@ docker compose logs -f airflow
 
 Tunggu sampai muncul baris log berisi `password` (ini password admin, simpan) serta indikasi webserver sudah listen di port 8080, lalu `Ctrl+C` untuk keluar dari `logs -f`.
 
-Sekarang trigger DAG `ingest_documents` — fungsi yang sama persis dengan yang dipanggil manual di Module 13-14 dan lewat form upload di Module 15, dipicu lewat Airflow sebagai cara **lain**. Buka `http://localhost:8080`, login dengan `admin` dan password yang tercetak di log container `airflow` saat startup (atau cari lagi dengan cara di Troubleshooting), cari DAG `ingest_documents`, aktifkan toggle-nya (kalau masih off), lalu klik tombol **Trigger DAG** (dua opsi trigger — UI atau CLI — dibahas lengkap di Bagian 6).
+Sekarang trigger DAG `ingest_documents` — fungsi yang sama persis dengan yang dipanggil manual di Module 14-15 dan lewat form upload di Module 16, dipicu lewat Airflow sebagai cara **lain**. Buka `http://localhost:8080`, login dengan `admin` dan password yang tercetak di log container `airflow` saat startup (atau cari lagi dengan cara di Troubleshooting), cari DAG `ingest_documents`, aktifkan toggle-nya (kalau masih off), lalu klik tombol **Trigger DAG** (dua opsi trigger — UI atau CLI — dibahas lengkap di Bagian 6).
 
 ✅ **Indikator sukses**: DAG run berstatus `success` (hijau), log task menunjukkan jumlah chunk yang ter-index. Verifikasi: `curl "http://localhost:9200/nala-docs/_count"`.
 
-**Verifikasi akhir — dokumen dari Airflow langsung bisa ditanya**: coba tanyakan sesuatu ke `/chat/stream` yang jawabannya ada di dokumen yang baru saja di-trigger-ulang lewat Airflow — **tanpa mengubah satu baris pun kode `/chat/stream`** (Module 13). Ini bukti nyata bahwa retrieval generik terhadap sumber data: tidak peduli dokumen masuk lewat CLI manual (Module 13), form upload (Module 15), atau Airflow (module ini), `/chat/stream` selalu membaca index `nala-docs` yang sama.
+**Verifikasi akhir — dokumen dari Airflow langsung bisa ditanya**: coba tanyakan sesuatu ke `/chat/stream` yang jawabannya ada di dokumen yang baru saja di-trigger-ulang lewat Airflow — **tanpa mengubah satu baris pun kode `/chat/stream`** (Module 14). Ini bukti nyata bahwa retrieval generik terhadap sumber data: tidak peduli dokumen masuk lewat CLI manual (Module 14), form upload (Module 16), atau Airflow (module ini), `/chat/stream` selalu membaca index `nala-docs` yang sama.
 
 ### Troubleshooting
 
@@ -424,14 +424,14 @@ Sekarang trigger DAG `ingest_documents` — fungsi yang sama persis dengan yang 
 
 ## 8. Checkpoint Praktik
 
-Yang perlu dipastikan sebelum Module 16 dianggap selesai:
+Yang perlu dipastikan sebelum Module 17 dianggap selesai:
 
 - [ ] `docker compose up -d --build airflow` berhasil, webserver Airflow bisa diakses di `http://localhost:8080`
 - [ ] DAG `ingest_documents` bisa di-trigger dari Airflow UI dan berstatus `success`
 - [ ] `curl http://localhost:9200/nala-docs/_count` menunjukkan jumlah dokumen yang sesuai
-- [ ] Kita paham kapan pakai upload (Module 15) vs Airflow (module ini) — bukan dua sistem yang bersaing
-- [ ] Dokumen yang di-ingest lewat Airflow langsung bisa ditanyakan ke `/chat/stream` tanpa perubahan kode apa pun di Module 13
-- [ ] `/chat/stream` (Module 13) masih menjawab dari dokumen seperti sebelumnya
+- [ ] Kita paham kapan pakai upload (Module 16) vs Airflow (module ini) — bukan dua sistem yang bersaing
+- [ ] Dokumen yang di-ingest lewat Airflow langsung bisa ditanyakan ke `/chat/stream` tanpa perubahan kode apa pun di Module 14
+- [ ] `/chat/stream` (Module 14) masih menjawab dari dokumen seperti sebelumnya
 - [ ] Keempat service (`ollama`, `opensearch`, `airflow`, `api`) berjalan bersamaan tanpa container ter-*kill*
 
-Begitu semua hal ini terverifikasi, Module 16 selesai — NALA sudah punya RAG chain lengkap dari dokumen mentah sampai jawaban ber-konteks, dengan **tiga** cara data bisa masuk (seed manual, upload web, Airflow), semuanya bermuara ke fungsi `ingest_documents()` yang sama.
+Begitu semua hal ini terverifikasi, Module 17 selesai — NALA sudah punya RAG chain lengkap dari dokumen mentah sampai jawaban ber-konteks, dengan **tiga** cara data bisa masuk (seed manual, upload web, Airflow), semuanya bermuara ke fungsi `ingest_documents()` yang sama.
