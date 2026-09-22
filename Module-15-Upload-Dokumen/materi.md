@@ -355,7 +355,7 @@ docker compose up --build api
 
 Ada dua cara mencoba upload — pilih salah satu atau keduanya:
 
-- **Lewat browser**: buka `http://localhost:8000/upload`, pilih file `.md`/`.txt`/`.pdf` (bisa file teks singkat baru, atau salah satu dari 10 dokumen PDF latihan di `resources/sample-knowledge-base/`), lalu klik "Upload".
+- **Lewat browser**: buka `http://localhost:8000/upload`, pilih file `.md`/`.txt`/`.pdf` (bisa file teks singkat baru, atau salah satu dokumen contoh yang sudah ada di `resources/sample-knowledge-base/`, misalnya `sop-pengajuan-kredit.md`), lalu klik "Upload".
 - **Lewat curl** (lebih mudah dipakai ulang untuk demo/testing):
 
 ```bash
@@ -368,7 +368,7 @@ Setelah upload (lewat cara mana pun), cek file **benar-benar tersimpan** — dua
 - Di dalam container: `docker compose exec api ls -la /app/knowledge-base`
 - Langsung di laptop Anda (tanpa masuk container): `ls resources/sample-knowledge-base/` — folder ini adalah bind mount yang sama persis dengan `/app/knowledge-base` di container, jadi isinya selalu identik.
 
-Nama file yang diupload harus muncul di kedua tempat itu, dan juga langsung terlihat di daftar dokumen pada halaman `/upload` (termasuk 10 PDF latihan yang sudah ada sejak awal) — tanpa perlu refresh manual kedua kalinya.
+Nama file yang diupload harus muncul di kedua tempat itu, dan juga langsung terlihat di daftar dokumen pada halaman `/upload` (termasuk dokumen contoh yang sudah ada sejak awal) — tanpa perlu refresh manual kedua kalinya.
 
 Terakhir, buktikan dokumen baru **langsung bisa ditanyakan** ke `/chat/stream` tanpa restart apa pun:
 
