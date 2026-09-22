@@ -10,9 +10,9 @@ Menyiapkan **fondasi data** untuk RAG: folder `knowledge-base/` berisi dokumen S
 
 ## Definisi
 
-**Knowledge base** adalah kumpulan dokumen sumber — bisa berupa SOP, kebijakan, atau panduan internal — yang jadi satu-satunya bahan yang boleh dipakai NALA untuk menjawab pertanyaan staff. Di NALA, knowledge base ini diwakili folder `Nala/knowledge-base/` (di-bind mount ke dalam container) — sekumpulan file `.md`/`.txt`/`.pdf` biasa di disk, bukan database terstruktur dengan tabel dan kolom. Folder ini adalah **working copy** milik aplikasi: isinya di-*seed* dari arsip referensi `resources/sample-knowledge-base/`, lalu nanti bisa bertambah lewat fitur upload (Module 15). `resources/sample-knowledge-base/` sendiri tetap jadi **arsip referensi** read-only milik kursus — sumber contoh, bukan folder yang dipakai container saat runtime.
+**Knowledge base** adalah kumpulan dokumen sumber — bisa berupa SOP, kebijakan, atau panduan internal — yang jadi satu-satunya bahan yang boleh dipakai NALA untuk menjawab pertanyaan staff. Di NALA, knowledge base ini diwakili folder `Nala/knowledge-base/` (di-bind mount ke dalam container) — sekumpulan file `.md`/`.txt`/`.pdf` biasa di disk, bukan database terstruktur dengan tabel dan kolom. Folder ini dibangun **dari nol** di Langkah 1, lalu nanti bisa bertambah lewat fitur upload (Module 15).
 
-Isi awal folder itu disebut **data seed** — dokumen yang sudah disiapkan tim sejak sebelum ada jalur input dari user seperti form upload, supaya mesin RAG bisa langsung dites dari awal tanpa menunggu fitur upload selesai dibangun (Bagian 1-2). Untuk membaca isi tiap dokumen apa pun formatnya (Markdown, teks polos, atau PDF) jadi satu string teks polos yang siap diproses lebih lanjut, module ini membangun `extract_text()` — langkah pertama sebelum teks itu bisa diubah jadi vektor di Module 11.
+Isi awal folder itu disebut **data seed** — dokumen yang kita tulis sendiri sejak sebelum ada jalur input dari user seperti form upload, supaya mesin RAG bisa langsung dites dari awal tanpa menunggu fitur upload selesai dibangun (Bagian 1-2). Untuk membaca isi tiap dokumen apa pun formatnya (Markdown, teks polos, atau PDF) jadi satu string teks polos yang siap diproses lebih lanjut, module ini membangun `extract_text()` — langkah pertama sebelum teks itu bisa diubah jadi vektor di Module 11.
 
 ```mermaid
 flowchart LR
@@ -30,7 +30,7 @@ flowchart LR
 
 Module 9 sudah menjelaskan **kenapa** RAG dibutuhkan (halusinasi, analogi *open-book*) dan **alur garis besarnya** (retrieval → augmented → generation). Sekarang saatnya mulai membangun — dan langkah pertama yang paling masuk akal secara teknis adalah **menyiapkan datanya**, sebelum satu baris kode pemrosesan pun ditulis. Tanpa dokumen yang ada di suatu tempat, tidak ada yang bisa di-embed, tidak ada yang bisa disimpan di vector store, tidak ada yang bisa di-retrieve.
 
-Alih-alih menunggu staff mengupload dokumen lewat form web (yang belum dibangun sampai Module 14), kita siapkan **data dasar awal** langsung: folder `Nala/knowledge-base/` di-*seed* dengan 1-2 dokumen SOP contoh yang sudah disiapkan tim (disalin dari arsip referensi `resources/sample-knowledge-base/` yang sudah ada sejak awal training). Ini bukan cara "curang" — ini pola umum di proyek RAG sungguhan: ada **data seed** untuk development/testing sebelum jalur input dari user (upload, sinkronisasi otomatis, dst) dibangun.
+Alih-alih menunggu staff mengupload dokumen lewat form web (yang belum dibangun sampai Module 14), kita siapkan **data dasar awal** langsung: folder `Nala/knowledge-base/` di-*seed* dengan 1-2 dokumen SOP contoh yang kita tulis sendiri dari nol. Ini bukan cara "curang" — ini pola umum di proyek RAG sungguhan: ada **data seed** untuk development/testing sebelum jalur input dari user (upload, sinkronisasi otomatis, dst) dibangun.
 
 ```mermaid
 flowchart LR
@@ -42,7 +42,7 @@ flowchart LR
 
 **Prasyarat**: sudah menyelesaikan Module 9 (Konsep RAG), dan container `ollama`+`api` dari `Nala/` masih berjalan (kalau tidak, ulangi Module 7 Langkah 1) — module ini belum butuh `opensearch`/`airflow`.
 
-Sepanjang Module 7-16, kita memakai **dua dokumen SOP contoh** sebagai knowledge base untuk mendemonstrasikan sistem RAG. Contoh isi dokumennya juga tersedia langsung di folder module ini (`Module-10-Setup-Knowledge-Base/`) untuk dibaca — file yang sama persis dengan yang ada di arsip referensi `resources/sample-knowledge-base/`, yang disalin ke `Nala/knowledge-base/` (folder yang dipakai container saat runtime):
+Sepanjang Module 7-16, kita memakai **dua dokumen SOP contoh** sebagai knowledge base untuk mendemonstrasikan sistem RAG. Isinya ditulis langsung di Langkah 1 di bawah — contoh hasil jadinya juga tersedia untuk dibaca di folder module ini (`Module-10-Setup-Knowledge-Base/`):
 
 ### a. SOP Pengajuan Kredit (`sop-pengajuan-kredit.md`)
 - **Syarat Umum**: usia minimal 21 tahun, menjadi customer 6 bulan, memiliki rekening aktif
@@ -62,16 +62,164 @@ Dengan dua dokumen pendek ini, versi pertama RAG (Module 13) bisa meng-embed **m
 
 **Format dokumen yang didukung NALA**: Markdown, plain text, dan PDF. Markdown dan plain text mudah diparsing tanpa library eksternal; PDF ditambahkan karena di dunia nyata, SOP dan kebijakan perusahaan sering sudah dalam bentuk PDF (hasil ekspor Word, atau dokumen resmi) — mengabaikannya berarti NALA tidak bisa dipakai untuk sebagian besar dokumen yang sudah ada. Contoh filenya juga ada di folder module ini: `sop-pembukaan-rekening-tabungan.pdf`. ⚠️ **Tetap di luar scope training ini**: DOCX dan PDF hasil scan gambar (butuh OCR) — keduanya butuh library terpisah yang tidak dibahas di training ini.
 
-**Langkah 1 — Bind mount folder data seed ke dalam container**
+**Langkah 1 — Tulis dokumen seed dari nol, lalu bind mount ke dalam container**
 
-Pertama, siapkan folder working copy milik Nala dengan menyalin dokumen seed dari arsip referensi ke dalamnya:
+Pertama, buat folder `knowledge-base/` di dalam `Nala/`, lalu tulis kedua dokumen SOP di atas langsung sebagai file baru — bukan disalin dari mana pun:
 
 ```bash
 mkdir -p Nala/knowledge-base
-cp resources/sample-knowledge-base/* Nala/knowledge-base/
+
+cat > Nala/knowledge-base/sop-pengajuan-kredit.md << 'EOF'
+# SOP Pengajuan Kredit - PT Nusantara Finance
+
+## 1. Tujuan dan Ruang Lingkup
+
+Prosedur ini mengatur ketentuan pengajuan kredit dari nasabah perorangan maupun badan usaha kepada PT Nusantara Finance. Proses ini berlaku untuk semua jenis kredit termasuk Kredit Konsumsi, Kredit Modal Kerja, dan Kredit Pemilikan Rumah.
+
+## 2. Syarat dan Ketentuan Pengajuan Kredit
+
+### 2.1 Untuk Nasabah Perorangan:
+- Fotokopi KTP yang masih berlaku (masa berlaku minimal 6 bulan)
+- Fotokopi Kartu Keluarga
+- Fotokopi Surat Nikah atau Akta Cerai (jika sudah menikah/cerai)
+- Slip gaji 3 bulan terakhir atau surat keterangan penghasilan dari pemberi kerja
+- Rekening tabungan/buku rekening 3 bulan terakhir
+- Surat Pernyataan Penghasilan yang ditandatangani di atas materai Rp 10.000
+- NPWP (bagi pengajuan di atas Rp 500 juta)
+- Usia minimal 21 tahun, maksimal 60 tahun pada saat permohonan
+
+### 2.2 Untuk Badan Usaha:
+- Fotokopi Akte Pendirian dan SK Pengesahan
+- Fotokopi NPWP Perusahaan dan Perorangan (Pemilik/Direktur)
+- Laporan Keuangan auditan 2 tahun terakhir (atau unaudited jika belum ada audit)
+- Permohonan kredit diisi lengkap dan ditandatangani oleh pejabat yang berwenang
+- Daftar susunan pengurus dan pemegang saham
+
+## 3. Tahapan Proses Pengajuan Kredit
+
+### Tahap 1: Pengajuan dan Verifikasi Dokumen
+**Estimasi Waktu: 2-3 hari kerja**
+- Nasabah menyerahkan semua dokumen ke bagian Customer Service atau melalui online platform
+- Tim administrasi melakukan verifikasi kelengkapan dokumen
+- Jika kurang, bagian administrasi mengembalikan dokumen ke nasabah untuk dilengkapi
+
+### Tahap 2: Analisis dan Penilaian Kredit
+**Estimasi Waktu: 3-5 hari kerja**
+- Tim Credit Analysis menilai kelayakan kredit berdasarkan dokumen yang diserahkan
+- Verifikasi data melalui BI Checking (Bank Indonesia Checking)
+- Pengecekan saldo rekening giro/tabungan untuk validasi penghasilan
+- Analisis kemampuan pembayaran (debt-to-income ratio maksimal 50%)
+- Penentuan plafon kredit dan tingkat bunga
+
+### Tahap 3: Persetujuan (Approval)
+**Estimasi Waktu: 1-2 hari kerja**
+- Dokumen hasil analisis diteruskan ke Komite Kredit untuk persetujuan
+- Persetujuan diberikan untuk pengajuan di bawah Rp 500 juta (processing time 1 hari kerja)
+- Untuk pengajuan di atas Rp 500 juta, persetujuan Board memerlukan waktu tambahan hingga 2 minggu
+- Notifikasi approval atau rejection disampaikan ke nasabah
+
+### Tahap 4: Pencairan Kredit
+**Estimasi Waktu: 2-3 hari kerja setelah approval**
+- Nasabah menandatangani Perjanjian Kredit dan Surat Kuasa
+- Pemeriksaan agunan (jika diperlukan)
+- Proses registrasi dan pengamanan agunan di Notaris (jika ada)
+- Pencairan dana ke rekening nasabah
+
+## 4. Kontak dan Departemen Terkait
+
+- **Bagian Customer Service**: Ext. 1001, email: cs@nusantarafinance.co.id
+- **Bagian Kredit (Credit Administration)**: Ext. 2100, email: kredit@nusantarafinance.co.id
+- **Tim Credit Analysis**: Ext. 2200, email: analysis@nusantarafinance.co.id
+- **Komite Kredit**: Secretariat, Ext. 3000, email: komite@nusantarafinance.co.id
+
+## 5. Catatan Penting
+
+- Semua dokumen harus asli atau fotokopi yang sudah dilegalisir
+- Apabila dokumen tidak jelas atau menimbulkan pertanyaan, pihak bank dapat meminta dokumen tambahan
+- Proses dapat dipercepat sesuai kebijakan dan kondisi nasabah
+- Biaya administrasi kredit diterapkan sesuai dengan plafon kredit yang disetujui
+EOF
+
+cat > Nala/knowledge-base/sop-klaim-asuransi.md << 'EOF'
+# SOP Klaim Asuransi - PT Nusantara Finance
+
+## 1. Tujuan dan Ruang Lingkup
+
+Prosedur ini mengatur ketentuan pengajuan klaim asuransi oleh nasabah PT Nusantara Finance untuk produk asuransi kesehatan, asuransi kendaraan, dan asuransi jiwa yang dikelola bersama mitra asuransi.
+
+## 2. Jenis Klaim yang Dilayani
+
+### 2.1 Asuransi Kesehatan
+- Rawat inap dan rawat jalan sesuai plafon polis
+- Membutuhkan medical report dari rumah sakit/dokter yang menangani
+
+### 2.2 Asuransi Kendaraan
+- Kerusakan akibat kecelakaan, kehilangan (total loss), atau bencana alam
+- Membutuhkan police report untuk klaim kehilangan atau kecelakaan lalu lintas
+
+### 2.3 Asuransi Jiwa
+- Klaim meninggal dunia (diajukan oleh ahli waris) atau cacat tetap
+- Membutuhkan surat keterangan kematian/cacat dari pihak berwenang
+
+## 3. Dokumen yang Diperlukan
+
+- Bukti polis asuransi aktif (fotokopi atau cetak dari aplikasi)
+- Formulir pengajuan klaim yang telah diisi lengkap dan ditandatangani
+- Medical report dari rumah sakit/dokter (khusus klaim kesehatan)
+- Police report dari kepolisian (khusus klaim kendaraan akibat kecelakaan/kehilangan)
+- Fotokopi KTP pemegang polis (atau ahli waris untuk klaim jiwa)
+- Bukti kepemilikan aset terkait (STNK/BPKB untuk klaim kendaraan)
+
+## 4. Tahapan Proses Klaim
+
+### Tahap 1: Pelaporan Klaim
+**Estimasi Waktu: maksimal 30 hari sejak kejadian**
+- Nasabah wajib melaporkan kejadian dan mengajukan klaim dalam 30 hari kalender sejak kejadian terjadi
+- Pelaporan bisa dilakukan lewat Customer Service cabang atau online platform
+- Klaim yang dilaporkan lewat dari 30 hari berpotensi ditolak, kecuali ada alasan force majeure yang bisa dibuktikan
+
+### Tahap 2: Pengumpulan Dokumen Pendukung
+**Estimasi Waktu: 1-3 hari kerja**
+- Nasabah melengkapi seluruh dokumen sesuai jenis klaim (lihat Bagian 3)
+- Tim administrasi klaim melakukan verifikasi kelengkapan dokumen
+- Dokumen yang kurang dikembalikan ke nasabah untuk dilengkapi sebelum proses berlanjut
+
+### Tahap 3: Verifikasi Klaim
+**Estimasi Waktu: 2-4 hari kerja**
+- Tim Klaim memverifikasi keabsahan dokumen dan kesesuaian kejadian dengan cakupan polis
+- Untuk klaim kendaraan/kesehatan dengan nilai besar, dilakukan survei/investigasi lapangan tambahan
+- Verifikasi silang ke mitra asuransi untuk memastikan polis masih aktif dan premi lunas
+
+### Tahap 4: Penilaian Klaim
+**Estimasi Waktu: 2-3 hari kerja**
+- Tim Klaim menghitung nilai klaim yang disetujui berdasarkan plafon polis dan bukti kerugian
+- Keputusan disetujui/ditolak sebagian/ditolak penuh disampaikan tertulis ke nasabah beserta alasannya
+
+### Tahap 5: Pembayaran Klaim
+**Estimasi Waktu: 1-2 hari kerja setelah persetujuan**
+- Dana klaim yang disetujui ditransfer langsung ke rekening nasabah yang terdaftar
+- Nasabah menerima bukti pembayaran dan rincian perhitungan klaim
+
+**Estimasi Waktu Total: 5-10 hari kerja** dari klaim lengkap diterima sampai proses verifikasi dan pembayaran selesai (di luar masa pelaporan 30 hari).
+
+## 5. Kontak dan Departemen Terkait
+
+- **Bagian Customer Service**: Ext. 1001, email: cs@nusantarafinance.co.id
+- **Bagian Klaim Asuransi (Claims Department)**: Ext. 2300, email: klaim@nusantarafinance.co.id
+- **Tim Verifikasi & Investigasi Klaim**: Ext. 2350, email: verifikasi-klaim@nusantarafinance.co.id
+
+## 6. Catatan Penting
+
+- Klaim yang dilaporkan setelah 30 hari sejak kejadian berpotensi ditolak tanpa alasan yang bisa dipertanggungjawabkan
+- Polis yang menunggak premi pada saat kejadian tidak berhak atas klaim sampai tunggakan dilunasi
+- Nasabah berhak meminta rincian tertulis alasan penolakan klaim
+- Sengketa hasil klaim dapat diajukan banding ke Komite Klaim dalam 14 hari sejak keputusan diterima
+EOF
 ```
 
-Sekarang `Nala/knowledge-base/` berisi kedua dokumen SOP plus satu file PDF contoh — tapi masih hanya tersedia **di laptop Anda**; container `api` belum bisa mengaksesnya sama sekali, karena belum ada volume yang menghubungkan keduanya. Tambahkan `volumes:` baru dan environment variable `KNOWLEDGE_BASE_PATH` ke service `api` di `docker-compose.yml`:
+⚠️ **Opsional — file PDF untuk menguji cabang `.pdf`**: `extract_text()` (Langkah 2) nanti juga perlu menangani file PDF, bukan cuma Markdown. Bikin PDF dari command line di luar scope training ini, jadi satu file contoh sudah disiapkan di `resources/sample-knowledge-base/sop-pembukaan-rekening-tabungan.pdf` — kalau ingin menguji cabang `.pdf`, salin sendiri file itu ke `Nala/knowledge-base/` kapan saja (tidak wajib untuk lanjut ke Langkah 2, lihat catatan di situ).
+
+Sekarang `Nala/knowledge-base/` berisi kedua dokumen SOP — tapi masih hanya tersedia **di laptop Anda**; container `api` belum bisa mengaksesnya sama sekali, karena belum ada volume yang menghubungkan keduanya. Tambahkan `volumes:` baru dan environment variable `KNOWLEDGE_BASE_PATH` ke service `api` di `docker-compose.yml`:
 
 ```yaml
 services:
@@ -100,7 +248,7 @@ volumes:
 ```
 
 - **`./knowledge-base:/app/knowledge-base`** — path host-nya relatif terhadap lokasi `docker-compose.yml` (`Nala/`), jadi `./knowledge-base` menunjuk ke folder `Nala/knowledge-base/` yang barusan Anda siapkan. Path container-nya (`/app/knowledge-base`) inilah yang dipakai kode Python sepanjang module ini dan seterusnya.
-- Ini **bind mount**, bukan named volume seperti `ollama_data` — perubahan file di `Nala/knowledge-base/` (tambah/hapus/edit, termasuk file yang nanti diupload staff di Module 15) langsung terlihat di dalam container tanpa perlu rebuild, karena keduanya menunjuk fisik ke folder yang sama. Arsip `resources/sample-knowledge-base/` tidak ikut tersentuh — ia cuma sumber seed di awal.
+- Ini **bind mount**, bukan named volume seperti `ollama_data` — perubahan file di `Nala/knowledge-base/` (tambah/hapus/edit, termasuk file yang nanti diupload staff di Module 15) langsung terlihat di dalam container tanpa perlu rebuild, karena keduanya menunjuk fisik ke folder yang sama.
 - **`KNOWLEDGE_BASE_PATH=/app/knowledge-base`** — nilainya **sama persis** dengan sisi kanan bind mount di atas, sengaja disebut dua kali (bukan tumpang tindih): baris `volumes:` yang membuat Docker benar-benar menghubungkan foldernya, baris `environment:` ini yang nanti dibaca kode Python (langkah berikutnya) supaya path-nya tidak di-hardcode di banyak tempat.
 
 Sekarang baca environment variable itu di `app/main.py`, mengikuti pola `os.environ.get(...)` yang sama dengan `OLLAMA_BASE_URL`/`OLLAMA_MODEL` sejak Module 6:
@@ -119,18 +267,21 @@ docker compose up --build -d api
 docker compose exec api ls -la /app/knowledge-base
 ```
 
-✅ **Indikator sukses**: `sop-pengajuan-kredit.md`, `sop-klaim-asuransi.md`, dan `sop-pembukaan-rekening-tabungan.pdf` muncul di listing — dari **dalam** container, bukan cuma di laptop Anda (`ls Nala/knowledge-base/` di host akan menunjukkan isi yang sama persis, karena bind mount menyamakan keduanya).
+✅ **Indikator sukses**: `sop-pengajuan-kredit.md` dan `sop-klaim-asuransi.md` muncul di listing — dari **dalam** container, bukan cuma di laptop Anda (`ls Nala/knowledge-base/` di host akan menunjukkan isi yang sama persis, karena bind mount menyamakan keduanya).
 
 <details>
 <summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 1</strong></summary>
 
 ```
-Siapkan folder knowledge-base + bind mount + KNOWLEDGE_BASE_PATH
+Tulis dokumen seed dari nol + bind mount + KNOWLEDGE_BASE_PATH
 ke service api (Module 10) — belum ada sebelumnya.
 
 GOAL:
-- Buat folder Nala/knowledge-base/ dan salin semua file dari
-  resources/sample-knowledge-base/ ke dalamnya (seed awal).
+- Buat folder Nala/knowledge-base/, lalu buat dua file baru di
+  dalamnya dengan isi PERSIS seperti yang sudah ditulis lengkap di
+  Bagian 2.a dan 2.b materi.md Module 10 (jangan diringkas/diubah):
+  - Nala/knowledge-base/sop-pengajuan-kredit.md
+  - Nala/knowledge-base/sop-klaim-asuransi.md
 - Di Nala/docker-compose.yml, service `api`: tambah baris
   `- KNOWLEDGE_BASE_PATH=/app/knowledge-base` ke `environment:`
   yang sudah ada, lalu tambah key `volumes:` baru (sejajar dengan
@@ -141,15 +292,20 @@ GOAL:
   KNOWLEDGE_BASE_PATH = os.environ.get("KNOWLEDGE_BASE_PATH", "/app/knowledge-base")
 
 CONTEXT:
+- Kedua file .md ini ditulis dari nol, bukan disalin dari folder
+  resources/ mana pun — isinya harus sama persis dengan Bagian 2.a/2.b
+  materi Module 10 (mengarang isi lain akan bikin checkpoint/test set
+  di Module 19 tidak cocok lagi).
 - Service `api` sekarang cuma punya OLLAMA_BASE_URL/OLLAMA_MODEL di
   environment, belum ada volumes sama sekali.
 - docker-compose.yml ada di Nala/, jadi ./knowledge-base menunjuk ke
-  folder Nala/knowledge-base/ (working copy milik aplikasi). Arsip
-  resources/sample-knowledge-base/ cuma sumber seed, read-only.
+  folder Nala/knowledge-base/ yang barusan dibuat.
 - KNOWLEDGE_BASE_PATH belum dipakai fungsi apa pun di langkah ini —
   baru dipakai mulai Module 13/15.
 
 GUARDRAIL:
+- JANGAN buat file PDF apa pun — itu opsional dan disiapkan manual
+  oleh peserta sendiri kalau mau, bukan bagian dari langkah ini.
 - JANGAN ubah service `ollama` atau environment variable lain yang
   sudah ada (OLLAMA_BASE_URL, OLLAMA_MODEL).
 - JANGAN tambah fungsi atau endpoint baru di app/main.py — cukup
@@ -207,7 +363,7 @@ print(f'Panjang total: {len(text)} karakter')
 
 ✅ **Indikator sukses**: mengembalikan potongan teks awal `sop-pengajuan-kredit.md`, contohnya `'# SOP Pengajuan Kredit - PT Nusantara Finance\n\n## 1. Tujuan '`, dengan panjang total dokumen (bukan potongan) tercetak.
 
-Cabang `.pdf` juga bisa langsung dites karena satu file PDF contoh (`sop-pembukaan-rekening-tabungan.pdf`) sudah ada di `knowledge-base/`:
+**Opsional** — kalau Anda sudah menyalin sendiri file PDF contoh ke `Nala/knowledge-base/` (lihat catatan opsional di Langkah 1), cabang `.pdf` juga bisa dites begini (kalau belum, lewati bagian ini dan lanjut ke Checkpoint):
 
 ```bash
 docker compose exec api python -c "
@@ -256,7 +412,7 @@ Yang perlu dipastikan sebelum lanjut ke Module 11:
 
 - [ ] Folder `knowledge-base/` berisi minimal dua dokumen SOP contoh
 - [ ] `extract_text()` pada file `.md` mengembalikan isi file apa adanya, utuh (bukan dipotong)
-- [ ] `extract_text()` pada file `.pdf` berhasil mengekstrak teks lewat `pypdf`
+- [ ] *(opsional, kalau sudah menyalin file PDF contoh sendiri)* `extract_text()` pada file `.pdf` berhasil mengekstrak teks lewat `pypdf`
 - [ ] `/chat/stream` (Module 7) masih berfungsi seperti sebelumnya
 
-Begitu keempat hal ini terverifikasi, lanjut ke Module 11 — mengubah isi dokumen ini jadi vektor numerik (embedding).
+Begitu ketiga hal wajib di atas terverifikasi, lanjut ke Module 11 — mengubah isi dokumen ini jadi vektor numerik (embedding).
