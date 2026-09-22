@@ -1,12 +1,12 @@
-# Module 21: Setup Data Operasional — PostgreSQL & UI Form
+# Module 22: Setup Data Operasional — PostgreSQL & UI Form
 
 ## Tujuan
 
-Menyiapkan sumber data operasional PT Nusantara Finance (pengajuan kredit, klaim asuransi) di PostgreSQL — dengan skema tabel, pemisahan role database sejak awal, dan **halaman web untuk staff menambah data sendiri** — sebagai fondasi yang dipakai Module 23 (SQL Tool) dan seterusnya. Module ini sengaja **tidak** memakai data dummy yang di-generate otomatis lewat skrip seeder besar — datanya sedikit di awal, staff (Anda) yang menambah sisanya lewat form, supaya data yang dipakai untuk latihan terasa seperti hasil kerja nyata, bukan angka yang sudah "disiapkan" begitu saja.
+Menyiapkan sumber data operasional PT Nusantara Finance (pengajuan kredit, klaim asuransi) di PostgreSQL — dengan skema tabel, pemisahan role database sejak awal, dan **halaman web untuk staff menambah data sendiri** — sebagai fondasi yang dipakai Module 24 (SQL Tool) dan seterusnya. Module ini sengaja **tidak** memakai data dummy yang di-generate otomatis lewat skrip seeder besar — datanya sedikit di awal, staff (Anda) yang menambah sisanya lewat form, supaya data yang dipakai untuk latihan terasa seperti hasil kerja nyata, bukan angka yang sudah "disiapkan" begitu saja.
 
 ## Definisi
 
-**Data operasional** adalah data transaksional yang berubah setiap hari — pengajuan kredit, klaim asuransi — berbeda secara mendasar dari **knowledge base** (dokumen SOP/kebijakan) yang dipakai RAG sejak Module 9: dokumen SOP jarang berubah dan menjawab pertanyaan "bagaimana prosedurnya", sedangkan data operasional berubah terus dan menjawab pertanyaan "apa status transaksi ini sekarang". Bedanya bukan cuma soal seberapa sering berubah, tapi juga *tempat penyimpanan*: dokumen SOP hidup sebagai vektor di OpenSearch (Module 12), data operasional hidup sebagai baris terstruktur di PostgreSQL — dua sumber jawaban yang akan disatukan lewat agent mulai Module 22.
+**Data operasional** adalah data transaksional yang berubah setiap hari — pengajuan kredit, klaim asuransi — berbeda secara mendasar dari **knowledge base** (dokumen SOP/kebijakan) yang dipakai RAG sejak Module 9: dokumen SOP jarang berubah dan menjawab pertanyaan "bagaimana prosedurnya", sedangkan data operasional berubah terus dan menjawab pertanyaan "apa status transaksi ini sekarang". Bedanya bukan cuma soal seberapa sering berubah, tapi juga *tempat penyimpanan*: dokumen SOP hidup sebagai vektor di OpenSearch (Module 12), data operasional hidup sebagai baris terstruktur di PostgreSQL — dua sumber jawaban yang akan disatukan lewat agent mulai Module 23.
 
 Module ini juga memperkenalkan pola **pemisahan role baca/tulis** sejak level database: `nala_readonly` (cuma `SELECT`) dan `nala_writer` (cuma `INSERT`) adalah dua identitas login PostgreSQL yang terpisah, masing-masing hanya bisa melakukan satu jenis operasi — bukan sekadar konvensi penamaan, tapi dipaksakan lewat `GRANT` di level database itu sendiri. Prinsip ini disebut **least privilege**: setiap komponen (baik kode Python maupun manusia lewat form) memakai identitas dengan hak akses paling minim yang masih cukup untuk tugasnya, supaya kesalahan di satu lapisan kode tidak otomatis berarti data bisa diubah/dihapus sembarangan.
 
@@ -16,16 +16,16 @@ flowchart LR
     S --> R1["Role nala_readonly<br/>(hanya SELECT)"]
     S --> R2["Role nala_writer<br/>(hanya INSERT)"]
     F["Staff isi form<br/>/data-operasional"] -->|"pakai nala_writer"| T
-    Q["Tool SQL (Module 23)"] -->|"pakai nala_readonly"| T
+    Q["Tool SQL (Module 24)"] -->|"pakai nala_readonly"| T
 ```
 
 ## Hasil Akhir yang Diharapkan
 
 - Service `postgres` berjalan sehat (`docker compose ps` menunjukkan `healthy`), dengan 2 tabel: `pengajuan_kredit`, `klaim_asuransi`
 - Seed awal **minimal** (2-3 baris per tabel) — cukup untuk memverifikasi skema jalan, bukan dataset lengkap
-- Dua role database terpisah sejak module ini: `nala_readonly` (cuma `SELECT`, dipakai agent/SQL tool di Module 23) dan `nala_writer` (cuma `INSERT`, dipakai form UI) — keduanya **tidak** bisa saling melakukan operasi milik peran yang lain, diverifikasi langsung lewat `psql`
-- Halaman baru `/data-operasional` (mengikuti pola `upload.html` Module 15) — form tambah pengajuan kredit & klaim asuransi, plus tabel daftar data yang sudah ada
-- Staff sudah menambah beberapa data operasional sungguhan lewat form (bukan lewat SQL manual atau seeder) sebagai bahan uji Module 23 dan seterusnya
+- Dua role database terpisah sejak module ini: `nala_readonly` (cuma `SELECT`, dipakai agent/SQL tool di Module 24) dan `nala_writer` (cuma `INSERT`, dipakai form UI) — keduanya **tidak** bisa saling melakukan operasi milik peran yang lain, diverifikasi langsung lewat `psql`
+- Halaman baru `/data-operasional` (mengikuti pola `upload.html` Module 16) — form tambah pengajuan kredit & klaim asuransi, plus tabel daftar data yang sudah ada
+- Staff sudah menambah beberapa data operasional sungguhan lewat form (bukan lewat SQL manual atau seeder) sebagai bahan uji Module 24 dan seterusnya
 
 ## 1. Kenapa Bukan Seeder Biasa
 
@@ -38,17 +38,17 @@ flowchart LR
     A["docker compose up<br/>(container pertama kali dibuat)"] --> B["db/seed.sql dijalankan otomatis<br/>oleh image Postgres"]
     B --> C["CREATE TABLE<br/>+ 2-3 baris starting point<br/>+ CREATE ROLE readonly/writer"]
     C --> D["Staff buka /data-operasional<br/>isi form, tambah data sendiri"]
-    D --> E["Data operasional siap dipakai<br/>Module 23 (SQL Tool)"]
+    D --> E["Data operasional siap dipakai<br/>Module 24 (SQL Tool)"]
 ```
 
 ## 2. Dua Role Sejak Awal: Baca vs Tulis
 
-Sebelum menulis kode tool query (baru Module 23), pemisahan role database sudah disiapkan di module ini — supaya begitu Module 23 dibangun, `nala_readonly` sudah ada dan siap dipakai, tidak perlu bolak-balik migrasi:
+Sebelum menulis kode tool query (baru Module 24), pemisahan role database sudah disiapkan di module ini — supaya begitu Module 24 dibangun, `nala_readonly` sudah ada dan siap dipakai, tidak perlu bolak-balik migrasi:
 
 - **`nala_writer`** — cuma `GRANT INSERT`, dipakai **jalur manusia** (form `/data-operasional`, endpoint `POST` di `app/main.py`). Manusia (staff) yang menambah data lewat form, bukan LLM.
-- **`nala_readonly`** — cuma `GRANT SELECT`, disiapkan di sini tapi **belum dipakai** sampai Module 23 (SQL Tool) membangun kode yang membacanya.
+- **`nala_readonly`** — cuma `GRANT SELECT`, disiapkan di sini tapi **belum dipakai** sampai Module 24 (SQL Tool) membangun kode yang membacanya.
 
-Keduanya **saling tidak bisa** melakukan operasi milik peran lain — `nala_writer` tidak bisa `SELECT`, `nala_readonly` tidak bisa `INSERT`/`UPDATE`/`DELETE`. Ini bukan detail kecil: artinya kalaupun nanti ada bug di kode Python yang secara tidak sengaja mencampur kedua koneksi, PostgreSQL sendiri yang menolak operasi yang salah — pertahanan berlapis yang sama seperti yang sudah dijelaskan lebih detail nanti di Module 23 Bagian 2.
+Keduanya **saling tidak bisa** melakukan operasi milik peran lain — `nala_writer` tidak bisa `SELECT`, `nala_readonly` tidak bisa `INSERT`/`UPDATE`/`DELETE`. Ini bukan detail kecil: artinya kalaupun nanti ada bug di kode Python yang secara tidak sengaja mencampur kedua koneksi, PostgreSQL sendiri yang menolak operasi yang salah — pertahanan berlapis yang sama seperti yang sudah dijelaskan lebih detail nanti di Module 24 Bagian 2.
 
 ## 3. Struktur Kode yang Ditambahkan
 
@@ -56,18 +56,18 @@ Dua Tahap, total **6 Langkah**: **Tahap A** (Langkah 1-2) menyiapkan service Pos
 
 ### Prasyarat
 
-- Sudah menyelesaikan **Module 1-20** (`llama3.2:3b` sudah biasa dipakai, `Nala/` berjalan dengan hybrid search + reranking + evaluasi + Langfuse). Rangkaian Module 21-25 **menambah** lapisan data operasional/agent/tool/RBAC langsung di atas file-file yang sudah ada di folder `Nala/` yang sama sejak Module 1 — tidak ada folder baru dan tidak ada project Docker baru yang perlu disiapkan.
+- Sudah menyelesaikan **Module 1-21** (`llama3.2:3b` sudah biasa dipakai, `Nala/` berjalan dengan hybrid search + reranking + evaluasi + Langfuse). Rangkaian Module 22-26 **menambah** lapisan data operasional/agent/tool/RBAC langsung di atas file-file yang sudah ada di folder `Nala/` yang sama sejak Module 1 — tidak ada folder baru dan tidak ada project Docker baru yang perlu disiapkan.
 - Docker Desktop sudah dialokasikan resource yang cukup:
 
-| Setting | Minimal rangkaian Module 21-25 | Direkomendasikan | Alasan |
+| Setting | Minimal rangkaian Module 22-26 | Direkomendasikan | Alasan |
 |---|---|---|---|
-| **Memory (RAM)** | 16 GB | 16 GB+ (32 GB+ kalau ingin coba `qwen2.5:7b`, lihat Module 24 Bagian 4.b) | PostgreSQL menambah beban kecil-menengah di atas stack Module 7-20 yang sudah berat; agent tool-calling (mulai Module 22) memanggil Ollama beberapa kali per pertanyaan, menambah beban CPU sesaat, bukan RAM tambahan besar. |
+| **Memory (RAM)** | 16 GB | 16 GB+ (32 GB+ kalau ingin coba `qwen2.5:7b`, lihat Module 25 Bagian 4.b) | PostgreSQL menambah beban kecil-menengah di atas stack Module 7-21 yang sudah berat; agent tool-calling (mulai Module 23) memanggil Ollama beberapa kali per pertanyaan, menambah beban CPU sesaat, bukan RAM tambahan besar. |
 | **CPUs** | 4 | 4+ | 5 service aktif sekaligus (ollama, opensearch, airflow, postgres, api), ditambah beberapa panggilan Ollama berurutan per request agent. |
 | **Disk image size** | 100 GB | 120 GB+ | Image `postgres:16` relatif kecil (~400MB), tapi menumpuk di atas seluruh image module-module sebelumnya yang sudah ada. |
 
-Kalau sudah di 16GB+ sejak Module 7-20, tidak perlu diubah lagi kecuali ingin mencoba `qwen2.5:7b` (Module 24 Bagian 4.b).
+Kalau sudah di 16GB+ sejak Module 7-21, tidak perlu diubah lagi kecuali ingin mencoba `qwen2.5:7b` (Module 25 Bagian 4.b).
 
-**Verifikasi fondasi sebelum mulai** — pastikan salinan Module 1-20 masih berjalan identik sebelum Module 21 menambah apa pun:
+**Verifikasi fondasi sebelum mulai** — pastikan salinan Module 1-21 masih berjalan identik sebelum Module 22 menambah apa pun:
 
 ```bash
 cd Nala
@@ -86,7 +86,7 @@ curl -N -X POST http://localhost:8000/chat/stream \
   -d '{"messages": [{"role": "user", "content": "Apa saja syarat pengajuan kredit untuk nasabah perorangan?"}]}'
 ```
 
-✅ **Indikator sukses**: jawaban streaming berbasis dokumen SOP seperti akhir Module 20 (kualitas hybrid search + reranking) — bukti fondasi berjalan identik sebelum Module 21 mulai menambah apa pun.
+✅ **Indikator sukses**: jawaban streaming berbasis dokumen SOP seperti akhir Module 21 (kualitas hybrid search + reranking) — bukti fondasi berjalan identik sebelum Module 22 mulai menambah apa pun.
 
 ### Tahap A — Service PostgreSQL, skema, seed minimal, dua role
 
@@ -114,13 +114,13 @@ curl -N -X POST http://localhost:8000/chat/stream \
 
 Tambah `postgres_data:` ke `volumes:` top-level, dan `postgres: {condition: service_healthy}` ke `depends_on` service `api` (bersama `ollama`/`opensearch` yang sudah ada dari module-module sebelumnya — kalau `depends_on` versi Anda masih bentuk list sederhana, ubah jadi bentuk mapping supaya bisa memakai `condition`).
 
-`POSTGRES_PASSWORD` sengaja pakai env var dengan default eksplisit `changeme_dev_only` — cukup untuk laptop training, **bukan** pola aman untuk deployment sungguhan (dibahas lagi soal secret management di Module 25). Image resmi `postgres` otomatis menjalankan file apa pun di `/docker-entrypoint-initdb.d/` **satu kali saat volume database masih kosong** — itu cara `db/seed.sql` (Langkah 2) ter-load otomatis tanpa langkah manual tambahan.
+`POSTGRES_PASSWORD` sengaja pakai env var dengan default eksplisit `changeme_dev_only` — cukup untuk laptop training, **bukan** pola aman untuk deployment sungguhan (dibahas lagi soal secret management di Module 26). Image resmi `postgres` otomatis menjalankan file apa pun di `/docker-entrypoint-initdb.d/` **satu kali saat volume database masih kosong** — itu cara `db/seed.sql` (Langkah 2) ter-load otomatis tanpa langkah manual tambahan.
 
 <details>
 <summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 1</strong></summary>
 
 ```
-Tambah service PostgreSQL di docker-compose.yml — Module 21, Langkah 1.
+Tambah service PostgreSQL di docker-compose.yml — Module 22, Langkah 1.
 
 GOAL:
 Di Nala/docker-compose.yml: tambah
@@ -134,7 +134,7 @@ depends_on postgres (condition service_healthy) ke service api
 (ubah depends_on api ke bentuk mapping kalau masih list).
 
 CONTEXT:
-- Ini tabel BARU, terpisah dari OpenSearch/vector store Module 9-20.
+- Ini tabel BARU, terpisah dari OpenSearch/vector store Module 9-21.
 - db/seed.sql yang dirujuk di volumes belum ada — file itu dibuat di
   Langkah 2 terpisah, jadi container postgres belum bisa dijalankan
   sampai Langkah 2 selesai.
@@ -184,7 +184,7 @@ INSERT INTO pengajuan_kredit (nasabah_id, nama_nasabah, jumlah_pengajuan, status
 INSERT INTO klaim_asuransi (nasabah_id, nama_nasabah, jenis_klaim, jumlah_klaim, status, tanggal_klaim) VALUES
 ('N-00305', 'Andi Wijaya', 'kendaraan', 15000000, 'disetujui', CURRENT_DATE - 20);
 
--- Role read-only: dipakai agent (tool query_data_operasional, dibangun Module 23) — hanya bisa SELECT
+-- Role read-only: dipakai agent (tool query_data_operasional, dibangun Module 24) — hanya bisa SELECT
 CREATE ROLE nala_readonly WITH LOGIN PASSWORD 'readonly_dev_only';
 GRANT CONNECT ON DATABASE nala_operasional TO nala_readonly;
 GRANT USAGE ON SCHEMA public TO nala_readonly;
@@ -205,7 +205,7 @@ Data awal cuma 2 baris `pengajuan_kredit` + 1 baris `klaim_asuransi` — **senga
 
 ```
 Buat db/seed.sql: skema data operasional minimal + dua role
-terpisah (read-only vs write-only) — Module 21, Langkah 2.
+terpisah (read-only vs write-only) — Module 22, Langkah 2.
 
 GOAL:
 Buat Nala/db/seed.sql: CREATE TABLE
@@ -228,7 +228,7 @@ CONTEXT:
   file ini ke /docker-entrypoint-initdb.d/01-seed.sql — otomatis
   dijalankan sekali oleh image Postgres saat container pertama kali
   dibuat (volume masih kosong).
-- nala_readonly BELUM dipakai kode apa pun sampai Module 23 (SQL Tool)
+- nala_readonly BELUM dipakai kode apa pun sampai Module 24 (SQL Tool)
   — di module ini cuma dibuat role-nya saja.
 
 GUARDRAIL:
@@ -298,7 +298,7 @@ def get_write_connection():
     return psycopg.connect(POSTGRES_WRITER_DSN, connect_timeout=5)
 ```
 
-Dua fungsi terpisah, masing-masing pakai DSN role yang berbeda — `get_connection()` (readonly) dipakai untuk **menampilkan** data di halaman `/data-operasional` dan nanti tool SQL Module 23, `get_write_connection()` (writer) dipakai **hanya** oleh endpoint `POST` form di Langkah 5. Tambahkan juga dua env var ini ke service `api` di `docker-compose.yml`:
+Dua fungsi terpisah, masing-masing pakai DSN role yang berbeda — `get_connection()` (readonly) dipakai untuk **menampilkan** data di halaman `/data-operasional` dan nanti tool SQL Module 24, `get_write_connection()` (writer) dipakai **hanya** oleh endpoint `POST` form di Langkah 5. Tambahkan juga dua env var ini ke service `api` di `docker-compose.yml`:
 
 ```yaml
 # docker-compose.yml, service api — tambahan environment
@@ -313,7 +313,7 @@ Dua fungsi terpisah, masing-masing pakai DSN role yang berbeda — `get_connecti
 
 ```
 Tambah dependency database (psycopg) dan dua fungsi koneksi
-terpisah (readonly vs writer) — Module 21, Langkah 3.
+terpisah (readonly vs writer) — Module 22, Langkah 3.
 
 GOAL:
 1. Di Nala/requirements.txt: tambah baris
@@ -363,7 +363,7 @@ with get_write_connection() as conn:
 
 **Langkah 4 — Buat `app/templates/data_operasional.html`**
 
-Mengikuti pola `upload.html` (Module 15) — form di atas, tabel daftar data di bawah, untuk **kedua** tabel (`pengajuan_kredit`, `klaim_asuransi`):
+Mengikuti pola `upload.html` (Module 16) — form di atas, tabel daftar data di bawah, untuk **kedua** tabel (`pengajuan_kredit`, `klaim_asuransi`):
 
 ```html
 <!-- app/templates/data_operasional.html -->
@@ -462,7 +462,7 @@ Tambah juga link nav baru (`| <a href="/data-operasional">Data Operasional</a>`)
 
 ```
 Buat halaman /data-operasional (template + nav + CSS) untuk staff
-menambah data pengajuan kredit dan klaim asuransi — Module 21,
+menambah data pengajuan kredit dan klaim asuransi — Module 22,
 Langkah 4.
 
 GOAL:
@@ -477,7 +477,7 @@ GOAL:
    Nala/app/static/style.css.
 
 CONTEXT:
-- Mengikuti pola upload.html (Module 15) — form di atas, tabel daftar
+- Mengikuti pola upload.html (Module 16) — form di atas, tabel daftar
   data di bawah.
 - Endpoint yang merender template ini (GET /data-operasional) belum
   ada — dibuat di Langkah 5 terpisah, jadi halaman ini belum bisa
@@ -602,7 +602,7 @@ Perhatikan: `add_pengajuan_kredit`/`add_klaim_asuransi` memakai `get_write_conne
 
 ```
 Tambah endpoint GET/POST /data-operasional di app/main.py — Module
-21, Langkah 5.
+22, Langkah 5.
 
 GOAL:
 Di Nala/app/main.py: import Form dari
@@ -625,7 +625,7 @@ GUARDRAIL:
 - JANGAN pakai get_connection() (readonly) untuk INSERT — role
   nala_readonly tidak punya izin INSERT, akan gagal.
 - JANGAN ubah endpoint /chat/stream, /upload, /health yang sudah ada
-  (endpoint /chat belum ada sampai Module 22 membuatnya).
+  (endpoint /chat belum ada sampai Module 23 membuatnya).
 ```
 
 </details>
@@ -642,7 +642,7 @@ Buka `http://localhost:8000/data-operasional` di browser — halaman menampilkan
 
 **Langkah 6 — Isi data operasional lewat form**
 
-Tambahkan data lewat kedua form di `/data-operasional` sampai datanya representatif untuk latihan module-module berikutnya — bukan lewat SQL manual atau seeder. Target yang dipakai di contoh-contoh Module 22-25 selanjutnya (lihat Bagian 4 "Hasil Uji Nyata" di bawah): total **7 baris** `pengajuan_kredit` (variasi status: `pending`×3, `disetujui`×1, `pencairan`×1, `ditolak`×2 — dua di antaranya sudah ada dari seed Langkah 2: `N-00231` `pending` dan `N-00305` `ditolak` dengan `alasan_penolakan` "Skor kredit di bawah ambang batas minimum", jadi tambahkan **5 baris lagi** lewat form) dan total **4 baris** `klaim_asuransi` (1 sudah ada dari seed — `N-00305`, jenis `kendaraan`, `disetujui` — tambahkan **3 baris lagi**), dengan minimal satu `nasabah_id` yang sengaja muncul di kedua tabel (mis. `N-00305`, yang kreditnya ditolak **dan** punya klaim asuransi — bahan uji skenario gabungan RAG+SQL di Module 24).
+Tambahkan data lewat kedua form di `/data-operasional` sampai datanya representatif untuk latihan module-module berikutnya — bukan lewat SQL manual atau seeder. Target yang dipakai di contoh-contoh Module 23-26 selanjutnya (lihat Bagian 4 "Hasil Uji Nyata" di bawah): total **7 baris** `pengajuan_kredit` (variasi status: `pending`×3, `disetujui`×1, `pencairan`×1, `ditolak`×2 — dua di antaranya sudah ada dari seed Langkah 2: `N-00231` `pending` dan `N-00305` `ditolak` dengan `alasan_penolakan` "Skor kredit di bawah ambang batas minimum", jadi tambahkan **5 baris lagi** lewat form) dan total **4 baris** `klaim_asuransi` (1 sudah ada dari seed — `N-00305`, jenis `kendaraan`, `disetujui` — tambahkan **3 baris lagi**), dengan minimal satu `nasabah_id` yang sengaja muncul di kedua tabel (mis. `N-00305`, yang kreditnya ditolak **dan** punya klaim asuransi — bahan uji skenario gabungan RAG+SQL di Module 25).
 
 ```bash
 docker compose exec postgres psql -U nala_admin -d nala_operasional -c "SELECT COUNT(*) FROM pengajuan_kredit;"
@@ -651,15 +651,15 @@ docker compose exec postgres psql -U nala_admin -d nala_operasional -c "SELECT C
 
 ✅ **Indikator sukses**: `7` dan `4` (berbeda dari indikator `2`/`1` di Langkah 2 — itu memverifikasi seed awal, ini memverifikasi data hasil input manual lewat form sudah representatif), dan refresh halaman `/data-operasional` menunjukkan seluruh baris yang baru ditambahkan tetap ada (data tersimpan permanen). Langkah 6 ini murni input data manual lewat UI, bukan perubahan kode — tidak ada prompt Claude Code untuk langkah ini.
 
-**📄 Kode lengkap Module 21** (`docker-compose.yml` bagian `postgres`, `db/seed.sql`, `app/db.py`, `app/templates/data_operasional.html`, potongan relevan `app/main.py` — sudah ditampilkan utuh di Langkah 1-5 di atas).
+**📄 Kode lengkap Module 22** (`docker-compose.yml` bagian `postgres`, `db/seed.sql`, `app/db.py`, `app/templates/data_operasional.html`, potongan relevan `app/main.py` — sudah ditampilkan utuh di Langkah 1-5 di atas).
 
 ### Troubleshooting
 
 - **`psycopg.OperationalError: connection to server ... failed`**: kemungkinan besar DSN masih memakai `localhost` padahal dipanggil dari dalam container `api` — harus memakai nama service Docker Compose (`postgres`), lihat catatan di Langkah 3. Cek juga `postgres` sudah `healthy` (`docker compose ps`).
-- **`permission denied for table ...` padahal seharusnya diizinkan**: cek role/DSN yang dipakai — form `/data-operasional` (Module 21) harus memakai `nala_writer`, tool SQL (Module 23) harus memakai `nala_readonly`; tertukar salah satunya akan memicu `permission denied` untuk operasi yang seharusnya sah.
+- **`permission denied for table ...` padahal seharusnya diizinkan**: cek role/DSN yang dipakai — form `/data-operasional` (Module 22) harus memakai `nala_writer`, tool SQL (Module 24) harus memakai `nala_readonly`; tertukar salah satunya akan memicu `permission denied` untuk operasi yang seharusnya sah.
 - **Seed data tidak berubah setelah mengedit `db/seed.sql`**: script init PostgreSQL cuma jalan sekali saat volume database masih kosong — kalau volume `postgres_data` sudah ada dari percobaan sebelumnya, `docker compose up` **tidak** menjalankan ulang seed. Hapus volume dulu (`docker compose down && docker volume rm nala_postgres_data`) lalu `docker compose up -d --build postgres` lagi. Ini juga penyebab paling umum kalau tabel/role baru "tidak muncul" setelah mengikuti Langkah 2.
 - **`docker compose exec postgres psql -U nala_admin ...` minta password / gagal autentikasi**: pastikan env var `POSTGRES_ADMIN_PASSWORD` (kalau di-override di `.env` atau shell) konsisten dengan yang dipakai saat container `postgres` dibuat — kalau volume sudah lama ada dengan password lama, password baru di env var tidak otomatis berlaku sampai volume direset (sama seperti poin seed data di atas).
-- **Error umum lain** (`no configuration file provided`, `failed to read dockerfile`, port sudah dipakai, dsb.): lihat bagian Troubleshooting di materi.md module-module sebelumnya (Module 7-16) — penyebab dan solusinya sama, tidak spesifik rangkaian Module 21-25.
+- **Error umum lain** (`no configuration file provided`, `failed to read dockerfile`, port sudah dipakai, dsb.): lihat bagian Troubleshooting di materi.md module-module sebelumnya (Module 7-17) — penyebab dan solusinya sama, tidak spesifik rangkaian Module 22-26.
 
 ## 4. Hasil Uji Nyata
 
@@ -667,22 +667,22 @@ Setup ini sudah diuji langsung, bukan cuma teori:
 
 - **Pemisahan role dua arah terbukti bekerja**: `nala_readonly` ditolak saat mencoba `DELETE` (`permission denied for table pengajuan_kredit`), dan `nala_writer` **juga** ditolak saat mencoba `SELECT` — bukti kedua role benar-benar terisolasi sesuai perannya masing-masing, bukan cuma dibatasi di satu arah.
 - **Form UI diuji end-to-end**: data baru ditambahkan lewat `POST /data-operasional/pengajuan-kredit` dan `POST /data-operasional/klaim-asuransi`, langsung terlihat di tabel tanpa restart container apa pun.
-- **Data operasional untuk latihan Module 23 dst. sudah terisi lewat form** (bukan seeder): 7 baris `pengajuan_kredit` (variasi status: `pending`×3, `disetujui`×1, `pencairan`×1, `ditolak`×2) dan 4 baris `klaim_asuransi`, dengan beberapa `nasabah_id` sengaja muncul di kedua tabel (mis. nasabah yang kreditnya ditolak **dan** punya klaim asuransi) — bahan uji untuk skenario gabungan RAG+SQL di Module 24.
+- **Data operasional untuk latihan Module 24 dst. sudah terisi lewat form** (bukan seeder): 7 baris `pengajuan_kredit` (variasi status: `pending`×3, `disetujui`×1, `pencairan`×1, `ditolak`×2) dan 4 baris `klaim_asuransi`, dengan beberapa `nasabah_id` sengaja muncul di kedua tabel (mis. nasabah yang kreditnya ditolak **dan** punya klaim asuransi) — bahan uji untuk skenario gabungan RAG+SQL di Module 25.
 
 ## 5. Checkpoint Praktik
 
-Langkah eksekusi lengkap ada di Bagian 3 di atas (Langkah 1-6). Yang perlu dipastikan sebelum lanjut ke Module 22:
+Langkah eksekusi lengkap ada di Bagian 3 di atas (Langkah 1-6). Yang perlu dipastikan sebelum lanjut ke Module 23:
 
 - [ ] Service `postgres` sehat (`healthy`), 2 tabel terbentuk dengan seed minimal (2 baris + 1 baris)
 - [ ] `nala_readonly` ditolak `INSERT`/`UPDATE`/`DELETE`, `nala_writer` ditolak `SELECT` — dua arah, bukan cuma satu
 - [ ] Halaman `/data-operasional` menampilkan data yang ada dan berhasil menerima data baru lewat kedua form
-- [ ] Sudah ada beberapa baris data operasional sungguhan (ditambahkan lewat form, bukan SQL manual) sebagai bahan uji Module 23 dan seterusnya
+- [ ] Sudah ada beberapa baris data operasional sungguhan (ditambahkan lewat form, bukan SQL manual) sebagai bahan uji Module 24 dan seterusnya
 
 ## Kesimpulan
 
-Module ini menyiapkan fondasi data operasional NALA dengan filosofi yang konsisten dengan Module 9 (Knowledge Base): sumber data baru diperkenalkan lewat halaman web yang staff pakai sendiri, bukan data yang tiba-tiba "sudah ada" lewat skrip seeder. Pemisahan role baca/tulis (`nala_readonly`/`nala_writer`) disiapkan sejak awal — supaya begitu Module 22 (LangGraph Agent) dan Module 23 (SQL Tool) dibangun di atasnya, fondasi keamanannya sudah teruji, bukan ditambal belakangan.
+Module ini menyiapkan fondasi data operasional NALA dengan filosofi yang konsisten dengan Module 9 (Knowledge Base): sumber data baru diperkenalkan lewat halaman web yang staff pakai sendiri, bukan data yang tiba-tiba "sudah ada" lewat skrip seeder. Pemisahan role baca/tulis (`nala_readonly`/`nala_writer`) disiapkan sejak awal — supaya begitu Module 23 (LangGraph Agent) dan Module 24 (SQL Tool) dibangun di atasnya, fondasi keamanannya sudah teruji, bukan ditambal belakangan.
 
-Module 22 selanjutnya membangun agent LangGraph (fokus pada tool dokumen SOP dulu, melanjutkan RAG chain Module 9-20) — belum menyentuh data operasional yang baru disiapkan di module ini. Module 23 baru kembali ke data ini, membangun tool SQL yang membaca lewat `nala_readonly` yang sudah ada di sini, lalu mendaftarkannya ke agent yang sudah dibangun Module 22.
+Module 23 selanjutnya membangun agent LangGraph (fokus pada tool dokumen SOP dulu, melanjutkan RAG chain Module 9-21) — belum menyentuh data operasional yang baru disiapkan di module ini. Module 24 baru kembali ke data ini, membangun tool SQL yang membaca lewat `nala_readonly` yang sudah ada di sini, lalu mendaftarkannya ke agent yang sudah dibangun Module 23.
 
 ---
 

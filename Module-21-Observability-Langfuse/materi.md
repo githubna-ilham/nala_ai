@@ -1,8 +1,8 @@
-# Module 20: Observability & Tracing dengan Langfuse
+# Module 21: Observability & Tracing dengan Langfuse
 
 ## Tujuan
 
-Menambahkan Langfuse self-hosted untuk mencatat setiap request `/chat/stream` (satu-satunya endpoint chat NALA sejak Module 8) sebagai satu trace terstruktur (retrieval, rerank, generation), supaya jawaban NALA yang terlihat buruk bisa ditelusuri persis di tahap mana masalahnya muncul — melengkapi evaluasi batch Module 19 dengan visibilitas per-request.
+Menambahkan Langfuse self-hosted untuk mencatat setiap request `/chat/stream` (satu-satunya endpoint chat NALA sejak Module 8) sebagai satu trace terstruktur (retrieval, rerank, generation), supaya jawaban NALA yang terlihat buruk bisa ditelusuri persis di tahap mana masalahnya muncul — melengkapi evaluasi batch Module 20 dengan visibilitas per-request.
 
 ## Definisi
 
@@ -22,14 +22,14 @@ flowchart TD
 
 ## Hasil Akhir yang Diharapkan
 
-- Service `langfuse-db` (Postgres khusus trace, terpisah dari Postgres data operasional Module 21) dan `langfuse` (v2, self-hosted) berjalan lewat Docker Compose, bisa diakses di `http://localhost:3000`
+- Service `langfuse-db` (Postgres khusus trace, terpisah dari Postgres data operasional Module 22) dan `langfuse` (v2, self-hosted) berjalan lewat Docker Compose, bisa diakses di `http://localhost:3000`
 - `/chat/stream` menghasilkan satu trace per request dengan span `hybrid_search` dan `rerank` (dibuka/ditutup langsung di badan endpoint) plus `generation` (dibuka/ditutup lewat generator `traced_chat_stream()` **setelah** token terakhir, bukan di badan fungsi endpoint), dengan `try/finally` supaya tetap tercatat walau koneksi terputus
 - Kita bisa membuka sebuah trace di UI Langfuse dan membaca `input`/`output` tiap span untuk mendiagnosis apakah masalah ada di retrieval, reranking, atau generation
-- Trade-off dicatat jujur: overhead latensi tambahan, enam container berjalan bersamaan (beban RAM terbesar sepanjang Module 1-20), dan data trace berisi potongan dokumen internal (aman karena self-hosted, jadi perhatian kalau dipindah ke cloud)
+- Trade-off dicatat jujur: overhead latensi tambahan, enam container berjalan bersamaan (beban RAM terbesar sepanjang Module 1-21), dan data trace berisi potongan dokumen internal (aman karena self-hosted, jadi perhatian kalau dipindah ke cloud)
 
 ## 1. Kenapa "Baca Log Container" Tidak Lagi Cukup
 
-Di Module 1-16, kalau `/chat/stream` menjawab aneh, menelusurinya masih realistis lewat `docker compose logs api` — alurnya pendek: terima pesan, panggil Ollama, kembalikan jawaban. Setelah Module 17-19, alur `/chat/stream` sudah jauh lebih panjang dan setiap tahap bisa jadi sumber masalah:
+Di Module 1-17, kalau `/chat/stream` menjawab aneh, menelusurinya masih realistis lewat `docker compose logs api` — alurnya pendek: terima pesan, panggil Ollama, kembalikan jawaban. Setelah Module 18-20, alur `/chat/stream` sudah jauh lebih panjang dan setiap tahap bisa jadi sumber masalah:
 
 ```mermaid
 flowchart LR
@@ -43,7 +43,7 @@ flowchart LR
 
 Kalau seorang staff komplain "NALA jawab salah untuk pertanyaan X", pertanyaan diagnostiknya sekarang bercabang: apakah `search_hybrid()` gagal menemukan chunk yang benar? Apakah chunk yang benar ditemukan tapi `reranker.rerank()` malah menurunkan peringkatnya? Apakah konteks yang dikirim ke LLM sudah benar, tapi `llama3.2:3b` sendiri yang berhalusinasi mengabaikannya? Log teks biasa di `docker compose logs` tidak terstruktur untuk menjawab ini per-request — perlu menelusuri banyak baris log manual untuk merekonstruksi satu alur request.
 
-**Observability** menyelesaikan ini dengan mencatat setiap tahap sebagai satu **trace** terstruktur per request — bukan menggantikan Module 19 (evaluasi batch, mengukur kualitas rata-rata di banyak pertanyaan), tapi melengkapinya untuk kasus "satu jawaban tertentu ini kenapa salah, tepatnya di mana".
+**Observability** menyelesaikan ini dengan mencatat setiap tahap sebagai satu **trace** terstruktur per request — bukan menggantikan Module 20 (evaluasi batch, mengukur kualitas rata-rata di banyak pertanyaan), tapi melengkapinya untuk kasus "satu jawaban tertentu ini kenapa salah, tepatnya di mana".
 
 ## 2. Langfuse: Self-Hosted, Bukan SaaS
 
@@ -57,27 +57,27 @@ Langfuse adalah platform observability untuk aplikasi LLM — mencatat trace (in
 |---|---|---|
 | **v2** *(dipakai module ini)* | Aplikasi Next.js tunggal + **1 Postgres** — trace ditulis langsung ke Postgres, tanpa lapisan tambahan | Paling sederhana — 2 container (`langfuse` + `postgres`), cocok untuk skala kecil/training |
 | **v3** | Memisahkan proses **ingestion** dari **aplikasi web** — menambahkan **ClickHouse** (database analitik kolumnar untuk query agregat cepat di volume trace besar) dan **object storage S3-compatible** (MinIO, untuk payload/blob besar), plus **Redis** sebagai antrian di depan proses ingestion | Jauh lebih kompleks — 4-5 service, tapi jauh lebih skalabel untuk volume trace besar |
-| **v4** *(dipakai di rencana Module 26-29)* | Melanjutkan arsitektur v3 — memisahkan `langfuse-web` (UI/API) dan `langfuse-worker` (proses ingestion async) jadi 2 image container terpisah, tetap dengan Postgres+ClickHouse+Redis+MinIO di belakangnya | Paling kompleks — 5+ service pendukung, didesain untuk beban produksi tinggi dengan worker yang bisa di-scale terpisah dari web UI |
+| **v4** *(dipakai di rencana Module 27-30)* | Melanjutkan arsitektur v3 — memisahkan `langfuse-web` (UI/API) dan `langfuse-worker` (proses ingestion async) jadi 2 image container terpisah, tetap dengan Postgres+ClickHouse+Redis+MinIO di belakangnya | Paling kompleks — 5+ service pendukung, didesain untuk beban produksi tinggi dengan worker yang bisa di-scale terpisah dari web UI |
 
-Module ini sengaja pakai v2 (cukup untuk belajar konsep trace/span/generation tanpa membebani laptop training dengan service yang fungsinya — skalabilitas tinggi — belum relevan untuk puluhan trace). Module 26-29 (materi, belum dibangun kodenya) merencanakan upgrade ke v4 sebagai simulasi "production-grade", mengajarkan bahwa observability skala produksi sungguhan butuh arsitektur jauh lebih berat — walau di titik itu cuma jadi demo konsep, bukan benar-benar menangani jutaan trace.
+Module ini sengaja pakai v2 (cukup untuk belajar konsep trace/span/generation tanpa membebani laptop training dengan service yang fungsinya — skalabilitas tinggi — belum relevan untuk puluhan trace). Module 27-30 (materi, belum dibangun kodenya) merencanakan upgrade ke v4 sebagai simulasi "production-grade", mengajarkan bahwa observability skala produksi sungguhan butuh arsitektur jauh lebih berat — walau di titik itu cuma jadi demo konsep, bukan benar-benar menangani jutaan trace.
 
 **Catatan kejujuran teknis**: seperti disebutkan di README pemetaan sumber materi, detail *environment variable* dan bentuk API SDK Langfuse bisa sedikit berbeda tergantung versi patch yang tersedia saat pelatihan berjalan — bagian docker-compose dan kode di bawah menunjukkan **bentuk dan pola yang benar secara konsep** (trace → span → generation → flush), tapi selalu cek dokumentasi resmi self-hosting Langfuses (`https://langfuse.com/self-hosting`) untuk nama env var/parameter persis yang berlaku di versi yang benar-benar terpasang saat pelatihan.
 
-## 3. Postgres Langfuse ≠ Postgres Module 21
+## 3. Postgres Langfuse ≠ Postgres Module 22
 
-Penting untuk tidak tertukar: Postgres yang ditambahkan module ini (`langfuse-db`) **khusus untuk menyimpan data trace Langfuse** — bukan Postgres yang akan diperkenalkan Module 21 untuk data operasional (pengajuan kredit, klaim, dst, dipakai agent tool query SQL). Keduanya berdiri sendiri, database terpisah, tujuan berbeda. Module 21 akan menambah service Postgres-nya sendiri (`postgres` atau nama serupa) — jangan menyatukan keduanya walau sama-sama "Postgres".
+Penting untuk tidak tertukar: Postgres yang ditambahkan module ini (`langfuse-db`) **khusus untuk menyimpan data trace Langfuse** — bukan Postgres yang akan diperkenalkan Module 22 untuk data operasional (pengajuan kredit, klaim, dst, dipakai agent tool query SQL). Keduanya berdiri sendiri, database terpisah, tujuan berbeda. Module 22 akan menambah service Postgres-nya sendiri (`postgres` atau nama serupa) — jangan menyatukan keduanya walau sama-sama "Postgres".
 
 ## 4. Struktur Kode yang Ditambahkan
 
 Dua Tahap: **Tahap A** menambah service `langfuse-db` + `langfuse` di `docker-compose.yml` dan setup akun. **Tahap B** instrumentasi `/chat/stream` (satu-satunya endpoint chat NALA) — span `hybrid_search`/`rerank` dibuka/ditutup langsung di badan endpoint, tapi `generation` untuk pemanggilan LLM harus ditutup **di dalam generator**, setelah token terakhir, bukan di badan fungsi endpoint, karena endpoint ini streaming.
 
 **Prasyarat sebelum mulai:**
-- Sudah menyelesaikan **Module 19** — `Nala/` sudah punya framework evaluasi bekerja.
+- Sudah menyelesaikan **Module 20** — `Nala/` sudah punya framework evaluasi bekerja.
 - Docker Desktop dinaikkan lagi alokasi RAM-nya untuk menampung dua service baru:
 
 | Setting | Minimal | Direkomendasikan | Alasan |
 |---|---|---|---|
-| **Memory (RAM)** | 16 GB | 20 GB+ jika tersedia | Semua service sebelumnya (Ollama, OpenSearch, Airflow, api dengan reranker) + Langfuse & Postgres-nya (`langfuse-db`, terpisah dari Postgres data operasional yang baru akan muncul di Module 21) berjalan bersamaan di titik puncak. |
+| **Memory (RAM)** | 16 GB | 20 GB+ jika tersedia | Semua service sebelumnya (Ollama, OpenSearch, Airflow, api dengan reranker) + Langfuse & Postgres-nya (`langfuse-db`, terpisah dari Postgres data operasional yang baru akan muncul di Module 22) berjalan bersamaan di titik puncak. |
 | **Disk image size** | 100 GB | 120 GB+ | Image `langfuse/langfuse` menambah beberapa GB lagi di atas image sebelumnya. |
 
 Kalau laptop mulai terasa berat, pertimbangkan mematikan sementara `airflow` (tidak dipakai lagi setelah ingest awal selesai — lihat Bagian 6).
@@ -125,7 +125,7 @@ volumes:
 
 ```
 Tambah service langfuse-db dan langfuse di docker-compose.yml (Module
-20, Tahap A, Langkah 1) — belum ada instrumentasi kode Python.
+21, Tahap A, Langkah 1) — belum ada instrumentasi kode Python.
 
 GOAL:
 - Di Nala/docker-compose.yml, tambah dua
@@ -144,7 +144,7 @@ CONTEXT:
   ClickHouse+Redis+object storage, terlalu berat untuk laptop 16GB
   yang sudah menjalankan Ollama+OpenSearch+Airflow+reranker.
 - langfuse-db TERPISAH dari Postgres data operasional yang akan
-  ditambahkan Module 21 — jangan digabung.
+  ditambahkan Module 22 — jangan digabung.
 
 GUARDRAIL:
 - JANGAN ubah service ollama, opensearch, airflow, api yang sudah
@@ -229,7 +229,7 @@ curl http://localhost:3000/api/public/health
 
 ```
 Tambah environment variable Langfuse (placeholder) ke service api di
-docker-compose.yml (Module 20, Tahap A, Langkah 2) — nilai key asli
+docker-compose.yml (Module 21, Tahap A, Langkah 2) — nilai key asli
 didapat manual dari UI Langfuse setelah Project & API key dibuat.
 
 GOAL:
@@ -287,7 +287,7 @@ langfuse_client = Langfuse(
 
 ```
 Tambah dependency Langfuse dan setup client Langfuse SDK di
-app/main.py (Module 20, Tahap B, Langkah 3) — belum instrumentasi
+app/main.py (Module 21, Tahap B, Langkah 3) — belum instrumentasi
 endpoint /chat/stream.
 
 GOAL:
@@ -452,7 +452,7 @@ docker compose start opensearch
 ```
 Instrumentasi /chat/stream dengan Langfuse trace/span/generation —
 trace ditutup DI DALAM generator, bukan di badan fungsi endpoint
-(Module 20, Tahap B, Langkah 4).
+(Module 21, Tahap B, Langkah 4).
 
 GOAL:
 - Di Nala/app/main.py:
@@ -486,7 +486,7 @@ CONTEXT:
 - ollama_client.chat_stream() yang sudah ada TIDAK diubah — dibungkus,
   bukan diganti isinya.
 - Alur retrieval-rerank-generate di chat_stream() sudah lengkap dari
-  Module 17-18 — module ini HANYA menambah instrumentasi observability
+  Module 18-19 — module ini HANYA menambah instrumentasi observability
   di sekitarnya, tidak mengubah logika bisnisnya.
 - langfuse_client sudah dibuat sebagai instance modul-level di Langkah
   3 — pakai langsung, jangan buat instance baru.
@@ -503,7 +503,7 @@ GUARDRAIL:
 
 </details>
 
-**📄 Kode lengkap** (bagian relevan `app/main.py` setelah Module 20 — lihat Bagian 4 Tahap B untuk fungsi `traced_chat_stream()` dan `chat_stream()` secara utuh; setup `langfuse_client` di Bagian 4 Tahap B Langkah 3).
+**📄 Kode lengkap** (bagian relevan `app/main.py` setelah Module 21 — lihat Bagian 4 Tahap B untuk fungsi `traced_chat_stream()` dan `chat_stream()` secara utuh; setup `langfuse_client` di Bagian 4 Tahap B Langkah 3).
 
 ### Troubleshooting
 
@@ -540,8 +540,8 @@ Alur debugging sebuah jawaban yang terasa buruk (misalnya staff komplain jawaban
 2. Buka trace tersebut — klik node trace paling atas, lihat `Input` (pertanyaan user) dan `Output` (jawaban final) di panel kanan. Perhatikan **urutan span**: `hybrid_search` → `rerank` → `llm_generate`/`llm_generate_stream`.
 3. Klik span `hybrid_search`: lihat `output.candidate_count` — kalau nol atau sangat kecil, kemungkinan besar masalahnya di retrieval (index kosong, atau dokumen yang relevan memang belum ter-*ingest*), bukan di LLM.
 4. Klik span `rerank`: lihat `output.top_chunks` — apakah cuplikan chunk yang dipilih **benar-benar** relevan dengan pertanyaan? Kalau kandidat di `hybrid_search` sudah benar tapi `rerank` menaruh chunk yang salah di posisi teratas, itu petunjuk model reranker perlu ditinjau (atau `RERANK_ENABLED=false` sementara sebagai pembanding).
-5. Klik span `llm_generate`/`llm_generate_stream`: baca `input` (prompt lengkap yang dikirim ke `llama3.2:3b`, termasuk konteks yang disusun) dan `output` (jawaban model). Kalau konteks di `input` sudah benar tapi `output` tetap salah/mengarang, itu petunjuk masalahnya ada di generation — grounding di system prompt (Module 13 Bagian 4) mungkin perlu diperkuat, atau modelnya memang mengabaikan instruksi untuk kasus tertentu.
-6. Perhatikan **durasi tiap span** (ditampilkan di UI sebagai badge kecil di samping tiap node, atau saat hover) — kalau `rerank` memakan waktu jauh lebih lama dari yang diharapkan, itu petunjuk nyata untuk pertimbangan trade-off di Module 18 Bagian 6 (`RERANK_ENABLED=false` sebagai katup pengaman). Di sistem ini, generation (LLM) biasanya paling dominan durasinya dibanding kedua span retrieval.
+5. Klik span `llm_generate`/`llm_generate_stream`: baca `input` (prompt lengkap yang dikirim ke `llama3.2:3b`, termasuk konteks yang disusun) dan `output` (jawaban model). Kalau konteks di `input` sudah benar tapi `output` tetap salah/mengarang, itu petunjuk masalahnya ada di generation — grounding di system prompt (Module 14 Bagian 4) mungkin perlu diperkuat, atau modelnya memang mengabaikan instruksi untuk kasus tertentu.
+6. Perhatikan **durasi tiap span** (ditampilkan di UI sebagai badge kecil di samping tiap node, atau saat hover) — kalau `rerank` memakan waktu jauh lebih lama dari yang diharapkan, itu petunjuk nyata untuk pertimbangan trade-off di Module 19 Bagian 6 (`RERANK_ENABLED=false` sebagai katup pengaman). Di sistem ini, generation (LLM) biasanya paling dominan durasinya dibanding kedua span retrieval.
 
 Alur ini yang membedakan observability dari sekadar membaca log: setiap tahap punya **input dan output yang tercatat terpisah**, jadi diagnosis "di tahap mana masalahnya muncul" tidak perlu menebak-nebak dari baris log yang bercampur.
 
@@ -551,20 +551,20 @@ Trace dengan `level="ERROR"` (hasil `trace.update(output={"error": ...}, level="
 
 ### e. Catatan: Kolom "Scores" Masih Kosong
 
-Tiap trace juga punya field `scores` (terlihat kosong `[]` kalau dicek lewat API `GET /api/public/traces`, atau tab **Scores** di UI) — ini **normal** untuk module ini, bukan bug. "Scores" di Langfuse adalah fitur terpisah untuk melekatkan penilaian kualitas ke sebuah trace (dari manusia lewat UI, atau dari kode). Module 20 ini cuma fokus mencatat **apa yang terjadi** (trace/span/generation), belum menilai **seberapa bagus** hasilnya.
+Tiap trace juga punya field `scores` (terlihat kosong `[]` kalau dicek lewat API `GET /api/public/traces`, atau tab **Scores** di UI) — ini **normal** untuk module ini, bukan bug. "Scores" di Langfuse adalah fitur terpisah untuk melekatkan penilaian kualitas ke sebuah trace (dari manusia lewat UI, atau dari kode). Module 21 ini cuma fokus mencatat **apa yang terjadi** (trace/span/generation), belum menilai **seberapa bagus** hasilnya.
 
-Koneksi yang belum dimanfaatkan di sini: `judge_answer()` dari Module 19 (`app/llm_judge.py`) menghasilkan skor `faithfulness`/`relevance` — secara konsep persis jenis data yang cocok dikirim lewat `trace.score(name=..., value=..., comment=...)`, supaya skor itu langsung terlihat melekat di tiap trace UI, bukan cuma di output terpisah `run_evaluation.py`. Ini di luar cakupan Module 20 yang sudah ditentukan (fokus instrumentasi dasar dulu), tapi dicatat di sini sebagai perluasan alami yang masuk akal untuk pengembangan lebih lanjut.
+Koneksi yang belum dimanfaatkan di sini: `judge_answer()` dari Module 20 (`app/llm_judge.py`) menghasilkan skor `faithfulness`/`relevance` — secara konsep persis jenis data yang cocok dikirim lewat `trace.score(name=..., value=..., comment=...)`, supaya skor itu langsung terlihat melekat di tiap trace UI, bukan cuma di output terpisah `run_evaluation.py`. Ini di luar cakupan Module 21 yang sudah ditentukan (fokus instrumentasi dasar dulu), tapi dicatat di sini sebagai perluasan alami yang masuk akal untuk pengembangan lebih lanjut.
 
 ## 6. Trade-off Observability: Overhead yang Tidak Gratis
 
 **Yang didapat:**
 - Debugging jawaban buruk jadi jauh lebih cepat — tidak perlu mereproduksi ulang masalah sambil membaca log manual, cukup buka trace yang sudah tersimpan.
 - Visibilitas latensi per tahap (retrieval vs rerank vs generation) — data konkret untuk memutuskan optimisasi mana yang paling berdampak, bukan tebakan.
-- Riwayat trace historis berguna sebagai bahan tambahan untuk memperluas test set Module 19 — pertanyaan nyata dari staff yang jawabannya buruk bisa dijadikan entri baru di `QA_TESTSET`.
+- Riwayat trace historis berguna sebagai bahan tambahan untuk memperluas test set Module 20 — pertanyaan nyata dari staff yang jawabannya buruk bisa dijadikan entri baru di `QA_TESTSET`.
 
 **Yang dibayar:**
 - **Latensi tambahan per request** — setiap `trace.span()`/`.generation()` dan `flush()` adalah kerja tambahan (walau SDK Langfuse mem-buffer dan mengirim secara batch di background, `flush()` eksplisit di akhir `traced_chat_stream()` menunggu pengiriman selesai). Untuk `/chat/stream`, ini terjadi **setelah** token terakhir dikirim ke user, jadi user tidak merasakan langsung — tapi tetap menahan koneksi/proses sedikit lebih lama di sisi server.
-- **Dua service tambahan** (`langfuse`, `langfuse-db`) menambah beban RAM di atas stack yang sudah berat sejak Module 18 (reranker). Ini kemungkinan besar titik dengan jumlah service **terbanyak** sepanjang Module 1-20: `ollama`, `opensearch`, `airflow`, `api` (dengan reranker), `langfuse`, `langfuse-db` — enam container berjalan bersamaan. Kalau laptop mulai terasa berat, pertimbangkan mematikan sementara `airflow`: DAG-nya cuma dipicu manual (lihat Module 16 Bagian 6, "Cara Trigger DAG Manual") dan tidak dipakai lagi setelah ingest dokumen awal selesai, jadi mematikannya sementara selama eksplorasi Langfuse tidak mengganggu `/chat/stream`, yang tidak bergantung pada Airflow sama sekali:
+- **Dua service tambahan** (`langfuse`, `langfuse-db`) menambah beban RAM di atas stack yang sudah berat sejak Module 19 (reranker). Ini kemungkinan besar titik dengan jumlah service **terbanyak** sepanjang Module 1-21: `ollama`, `opensearch`, `airflow`, `api` (dengan reranker), `langfuse`, `langfuse-db` — enam container berjalan bersamaan. Kalau laptop mulai terasa berat, pertimbangkan mematikan sementara `airflow`: DAG-nya cuma dipicu manual (lihat Module 17 Bagian 6, "Cara Trigger DAG Manual") dan tidak dipakai lagi setelah ingest dokumen awal selesai, jadi mematikannya sementara selama eksplorasi Langfuse tidak mengganggu `/chat/stream`, yang tidak bergantung pada Airflow sama sekali:
 
   ```bash
   docker compose stop airflow
@@ -579,7 +579,7 @@ Koneksi yang belum dimanfaatkan di sini: `judge_answer()` dari Module 19 (`app/l
 
 ## 7. Checkpoint Praktik
 
-Langkah eksekusi lengkap ada di Bagian 4 (Struktur Kode yang Ditambahkan) di atas, Langkah 1-4. Yang perlu dipastikan sebelum Module 17-20 dianggap selesai:
+Langkah eksekusi lengkap ada di Bagian 4 (Struktur Kode yang Ditambahkan) di atas, Langkah 1-4. Yang perlu dipastikan sebelum Module 18-21 dianggap selesai:
 
 - [ ] `http://localhost:3000` bisa diakses, akun dan Project sudah dibuat, API key sudah tersambung ke service `api`
 - [ ] Trace baru muncul di Langfuse setiap kali `/chat/stream` dipanggil, dengan span `hybrid_search`, `rerank`, dan generation `llm_generate_stream` tersusun bersarang, muncul setelah stream selesai (bukan gagal/tidak muncul sama sekali)
@@ -588,7 +588,7 @@ Langkah eksekusi lengkap ada di Bagian 4 (Struktur Kode yang Ditambahkan) di ata
 
 ## Kesimpulan
 
-Module ini menutup rangkaian Module 17-20 dengan lapisan yang membungkus **seluruh** yang sudah dibangun — hybrid search (Module 17), reranking (Module 18), dan evaluasi batch (Module 19) — dengan visibilitas per-request. Sebelumnya, kalau ada satu jawaban NALA yang terlihat buruk, jalan satu-satunya adalah menduga-duga atau membaca log mentah; sekarang, tiap trace menunjukkan persis apa yang terjadi di tiap tahap (kandidat yang ditemukan, urutan setelah rerank, prompt lengkap yang dikirim ke LLM, jawaban akhir), lengkap dengan waktu eksekusinya.
+Module ini menutup rangkaian Module 18-21 dengan lapisan yang membungkus **seluruh** yang sudah dibangun — hybrid search (Module 18), reranking (Module 19), dan evaluasi batch (Module 20) — dengan visibilitas per-request. Sebelumnya, kalau ada satu jawaban NALA yang terlihat buruk, jalan satu-satunya adalah menduga-duga atau membaca log mentah; sekarang, tiap trace menunjukkan persis apa yang terjadi di tiap tahap (kandidat yang ditemukan, urutan setelah rerank, prompt lengkap yang dikirim ke LLM, jawaban akhir), lengkap dengan waktu eksekusinya.
 
-**Module 17-20 secara keseluruhan** mengangkat NALA dari sistem RAG dasar (Module 7-16, retrieval vector murni, tidak terukur) menjadi sistem yang lebih akurat retrievalnya (hybrid search + reranking), terukur kualitasnya (framework evaluasi), dan bisa didiagnosis per-request (observability). Yang **belum** disentuh sejauh ini: NALA masih hanya bisa menjawab dari dokumen SOP — belum bisa menjawab pertanyaan yang jawabannya ada di data operasional terstruktur (status pengajuan kredit tertentu, riwayat klaim seorang nasabah, dst). Module 21-25 menambah agentic tools: NALA belajar memilih kapan menjawab dari RAG dokumen (yang baru saja disempurnakan sepanjang Module 17-20 ini) dan kapan menjalankan query SQL langsung ke database operasional — dengan Langfuse yang sudah terpasang di module ini siap merekam trace kedua jalur itu sekaligus.
+**Module 18-21 secara keseluruhan** mengangkat NALA dari sistem RAG dasar (Module 7-17, retrieval vector murni, tidak terukur) menjadi sistem yang lebih akurat retrievalnya (hybrid search + reranking), terukur kualitasnya (framework evaluasi), dan bisa didiagnosis per-request (observability). Yang **belum** disentuh sejauh ini: NALA masih hanya bisa menjawab dari dokumen SOP — belum bisa menjawab pertanyaan yang jawabannya ada di data operasional terstruktur (status pengajuan kredit tertentu, riwayat klaim seorang nasabah, dst). Module 22-26 menambah agentic tools: NALA belajar memilih kapan menjawab dari RAG dokumen (yang baru saja disempurnakan sepanjang Module 18-21 ini) dan kapan menjalankan query SQL langsung ke database operasional — dengan Langfuse yang sudah terpasang di module ini siap merekam trace kedua jalur itu sekaligus.
 
