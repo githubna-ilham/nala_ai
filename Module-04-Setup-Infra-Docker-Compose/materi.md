@@ -436,23 +436,9 @@ Response (dipotong) menunjukkan `parameters` (default seperti `temperature`, `nu
 }
 ```
 
-### 4.2 Endpoint Lain yang Tersedia (Belum Dipakai NALA)
+### 4.2 Contoh Cepat: Memanggil Beberapa Endpoint Lain Lewat `curl`
 
-| Endpoint | Fungsi |
-|---|---|
-| `POST /api/pull` | Download model — setara `ollama pull`, tapi bisa dipicu dari kode, bukan cuma terminal |
-| `DELETE /api/delete` | Hapus model dari disk — setara `ollama rm` |
-| `POST /api/copy` | Duplikasi model dengan nama baru — setara `ollama cp` |
-| `POST /api/create` | Build model custom dari Modelfile — setara `ollama create` (dipakai manual di Module 3, lewat CLI) |
-| `POST /api/push` | Upload model ke registry Ollama sendiri — jarang relevan untuk NALA (tidak mendistribusikan model custom) |
-| `POST /api/embed` | Generate embedding vector dari teks — **ini yang dipanggil** fungsi `embed_text()` NALA nanti di Module 10, di balik layar |
-| `GET /api/ps` | Model yang sedang di-*load* di memori — setara `ollama ps` |
-| `GET /api/version` | Versi Ollama yang terinstall |
-| `HEAD` / `POST /api/blobs/:digest` | Cek/upload file model mentah (GGUF) — dipakai internal oleh `push`/`create`, jarang dipanggil langsung |
-
-### 4.3 Contoh Cepat: Memanggil Beberapa Endpoint Lain Lewat `curl`
-
-Endpoint-endpoint di Bagian 4.2 tidak dipakai kode NALA saat ini, tapi bisa dicoba langsung untuk memastikan pemahamannya — jalankan sambil container `ollama` dari Bagian 3.4 masih aktif:
+Selain empat endpoint di Bagian 4.1, Ollama juga menyediakan endpoint lain yang belum dipakai langsung oleh kode NALA saat ini, tapi bisa dicoba untuk memastikan pemahamannya — jalankan sambil container `ollama` dari Bagian 3.4 masih aktif:
 
 ```bash
 # Cek versi Ollama
@@ -486,7 +472,7 @@ Field `embeddings` berisi array angka (panjangnya tergantung model — `nomic-em
 
 Catatan: `input` bisa juga berupa array string (`["teks 1", "teks 2"]`) untuk generate beberapa embedding sekaligus dalam satu request — `embeddings` yang dikembalikan akan berisi satu array angka per elemen `input`.
 
-### 4.4 Kenapa `OllamaClient` (Module 6) Nanti Cuma Membungkus Satu Endpoint
+### 4.3 Kenapa `OllamaClient` (Module 6) Nanti Cuma Membungkus Satu Endpoint
 
 Dari daftar di atas, `OllamaClient.generate()` yang dibangun Module 6 sengaja **tidak** membungkus semua endpoint Ollama — cuma `/api/generate`, karena itulah satu-satunya yang dibutuhkan endpoint `/chat` NALA saat itu. Ini konsisten dengan pola yang berulang sepanjang training: tambahkan kemampuan **tepat saat dibutuhkan**, bukan diborong di awal. Kalau nanti NALA butuh riwayat percakapan multi-turn, `OllamaClient` akan diperluas dengan method baru yang memanggil `/api/chat` — bukan mengganti `generate()` yang sudah ada.
 
