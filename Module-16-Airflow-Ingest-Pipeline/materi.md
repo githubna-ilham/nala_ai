@@ -276,7 +276,7 @@ Cuma **satu Tahap** — `ingest_documents()` (Module 13, di-upgrade Module 14) d
     volumes:
       - ./airflow/dags:/opt/airflow/dags
       - ./app:/opt/airflow/dags/app
-      - ../../../sample-knowledge-base:/opt/airflow/knowledge-base
+      - ../resources/sample-knowledge-base:/opt/airflow/knowledge-base
     depends_on:
       - opensearch
       - ollama
@@ -286,7 +286,7 @@ Tambahkan sebagai service baru (sejajar dengan `ollama`, `opensearch`, `api`). E
 
 - **`./airflow/dags:/opt/airflow/dags`**: menghubungkan folder DAG di laptop Anda ke tempat Airflow membaca DAG-nya.
 - **`./app:/opt/airflow/dags/app`**: DAG (Langkah 2) memanggil `from app.ingest import ingest_documents` — supaya `import` itu berhasil **di dalam** container Airflow (terpisah dari container `api`), folder `app/` yang sama dipasang lagi di situ.
-- **`../../../sample-knowledge-base:/opt/airflow/knowledge-base`**: volume terpisah dari yang dipakai `api` (`/app/knowledge-base`) — path beda, tapi **folder sumber di laptop Anda sama persis**.
+- **`../resources/sample-knowledge-base:/opt/airflow/knowledge-base`**: volume terpisah dari yang dipakai `api` (`/app/knowledge-base`) — path beda, tapi **folder sumber di laptop Anda sama persis**.
 - **`_PIP_ADDITIONAL_REQUIREMENTS=pypdf==5.1.0 httpx==0.27.2`**: **wajib**, tanpa ini task DAG gagal dengan `ModuleNotFoundError: No module named 'pypdf'`. Penyebabnya: container `api` di-build dari `Dockerfile` yang menginstall seluruh `requirements.txt`, tapi container `airflow` pakai image `apache/airflow:2.10.2` mentah — tidak pernah menginstall dependency aplikasi kita.
 
 <details>
@@ -306,7 +306,7 @@ GOAL:
   tanpa ini task DAG gagal dengan ModuleNotFoundError), port
   8080:8080, volumes ./airflow/dags:/opt/airflow/dags,
   ./app:/opt/airflow/dags/app,
-  ../../../sample-knowledge-base:/opt/airflow/knowledge-base,
+  ../resources/sample-knowledge-base:/opt/airflow/knowledge-base,
   depends_on opensearch dan ollama).
 
 CONTEXT:

@@ -64,7 +64,7 @@ Dengan dua dokumen pendek ini, versi pertama RAG (Module 13) bisa meng-embed **m
 
 **Langkah 1 — Bind mount folder data seed ke dalam container**
 
-Folder `resources/sample-knowledge-base/` (di root project, sudah berisi kedua dokumen SOP di atas plus satu file PDF contoh) baru tersedia **di laptop Anda** — container `api` belum bisa mengaksesnya sama sekali, karena belum ada volume yang menghubungkan keduanya. Tambahkan satu `volumes:` baru ke service `api` di `docker-compose.yml`:
+Folder `resources/sample-knowledge-base/` (di root project, sudah berisi kedua dokumen SOP di atas plus satu file PDF contoh) baru tersedia **di laptop Anda** — container `api` belum bisa mengaksesnya sama sekali, karena belum ada volume yang menghubungkan keduanya. Tambahkan `volumes:` baru dan environment variable `KNOWLEDGE_BASE_PATH` ke service `api` di `docker-compose.yml`:
 
 ```yaml
 services:
@@ -82,6 +82,7 @@ services:
     environment:
       - OLLAMA_BASE_URL=http://ollama:11434
       - OLLAMA_MODEL=llama3.2:3b
+      - KNOWLEDGE_BASE_PATH=/app/knowledge-base
     volumes:
       - ../resources/sample-knowledge-base:/app/knowledge-base
     depends_on:
@@ -93,6 +94,16 @@ volumes:
 
 - **`../resources/sample-knowledge-base:/app/knowledge-base`** — path host-nya relatif terhadap lokasi `docker-compose.yml` (`Nala/`), jadi `../resources/...` naik satu level ke root project. Path container-nya (`/app/knowledge-base`) inilah yang dipakai kode Python sepanjang module ini dan seterusnya.
 - Ini **bind mount**, bukan named volume seperti `ollama_data` — perubahan file di `resources/sample-knowledge-base/` (tambah/hapus/edit) langsung terlihat di dalam container tanpa perlu rebuild, karena keduanya menunjuk fisik ke folder yang sama.
+- **`KNOWLEDGE_BASE_PATH=/app/knowledge-base`** — nilainya **sama persis** dengan sisi kanan bind mount di atas, sengaja disebut dua kali (bukan tumpang tindih): baris `volumes:` yang membuat Docker benar-benar menghubungkan foldernya, baris `environment:` ini yang nanti dibaca kode Python (langkah berikutnya) supaya path-nya tidak di-hardcode di banyak tempat.
+
+Sekarang baca environment variable itu di `app/main.py`, mengikuti pola `os.environ.get(...)` yang sama dengan `OLLAMA_BASE_URL`/`OLLAMA_MODEL` sejak Module 6:
+
+```python
+# app/main.py, di dekat konstanta lain (OLLAMA_BASE_URL, dst)
+KNOWLEDGE_BASE_PATH = os.environ.get("KNOWLEDGE_BASE_PATH", "/app/knowledge-base")
+```
+
+Konstanta inilah yang dirujuk berulang kali di module-module berikutnya (Module 13, 15) — bukan path `/app/knowledge-base` yang di-hardcode ulang setiap kali dipakai.
 
 **▶️ Jalankan & lihat hasilnya**
 
@@ -107,24 +118,32 @@ docker compose exec api ls -la /app/knowledge-base
 <summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 1</strong></summary>
 
 ```
-Tambahkan bind mount folder knowledge base ke service api
+Tambahkan bind mount + KNOWLEDGE_BASE_PATH ke service api
 (Module 10) — belum ada sebelumnya.
 
 GOAL:
-- Di Nala/docker-compose.yml, tambahkan key `volumes:` baru ke
-  service `api` (sejajar dengan `environment:` dan `depends_on:`
-  yang sudah ada), isinya persis satu baris:
+- Di Nala/docker-compose.yml, service `api`: tambah baris
+  `- KNOWLEDGE_BASE_PATH=/app/knowledge-base` ke `environment:`
+  yang sudah ada, lalu tambah key `volumes:` baru (sejajar dengan
+  `environment:`/`depends_on:`), isinya persis satu baris:
   - ../resources/sample-knowledge-base:/app/knowledge-base
+- Di Nala/app/main.py, tambah baris baru di dekat konstanta
+  OLLAMA_BASE_URL/OLLAMA_MODEL yang sudah ada:
+  KNOWLEDGE_BASE_PATH = os.environ.get("KNOWLEDGE_BASE_PATH", "/app/knowledge-base")
 
 CONTEXT:
-- Service `api` sekarang cuma punya build/ports/environment/depends_on
-  — belum ada volumes sama sekali.
+- Service `api` sekarang cuma punya OLLAMA_BASE_URL/OLLAMA_MODEL di
+  environment, belum ada volumes sama sekali.
 - docker-compose.yml ada di Nala/, folder resources/sample-knowledge-base
   ada satu level di atas (root project), makanya pakai ../.
+- KNOWLEDGE_BASE_PATH belum dipakai fungsi apa pun di langkah ini —
+  baru dipakai mulai Module 13/15.
 
 GUARDRAIL:
-- JANGAN ubah service `ollama` atau bagian lain docker-compose.yml.
-- JANGAN tambah environment variable baru — cukup volumes.
+- JANGAN ubah service `ollama` atau environment variable lain yang
+  sudah ada (OLLAMA_BASE_URL, OLLAMA_MODEL).
+- JANGAN tambah fungsi atau endpoint baru di app/main.py — cukup
+  satu baris konstanta.
 ```
 
 </details>

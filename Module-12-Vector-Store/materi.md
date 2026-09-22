@@ -260,7 +260,7 @@ services:
       - KNOWLEDGE_BASE_PATH=/app/knowledge-base
       - OPENSEARCH_BASE_URL=http://opensearch:9200
     volumes:
-      - ../../../sample-knowledge-base:/app/knowledge-base
+      - ../resources/sample-knowledge-base:/app/knowledge-base
     depends_on:
       - ollama
       - opensearch
