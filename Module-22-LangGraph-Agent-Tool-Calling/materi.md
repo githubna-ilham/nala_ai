@@ -29,7 +29,7 @@ flowchart LR
 
 ## 1. Kenapa NALA Butuh Jadi "Agent", Bukan Cuma Pipeline
 
-Sejak Module 25, `/chat/stream` (satu-satunya endpoint chat NALA sampai sebelum module ini — lihat Module 8) bekerja dengan urutan langkah yang **selalu sama**, apapun pertanyaannya: terima pesan → embed → cari di vector store (Module 17-18: hybrid search + rerank) → susun prompt ber-konteks → generate jawaban. Urutan ini disebut **pipeline linear** — jalurnya lurus, tidak pernah bercabang, tidak pernah "mikir dulu langkah apa yang cocok".
+Sejak Module 8, `/chat/stream` (satu-satunya endpoint chat NALA sampai sebelum module ini — lihat Module 8) bekerja dengan urutan langkah yang **selalu sama**, apapun pertanyaannya: terima pesan → embed → cari di vector store (Module 17-18: hybrid search + rerank) → susun prompt ber-konteks → generate jawaban. Urutan ini disebut **pipeline linear** — jalurnya lurus, tidak pernah bercabang, tidak pernah "mikir dulu langkah apa yang cocok".
 
 Itu bekerja baik selama satu-satunya sumber jawaban adalah dokumen SOP. Tapi mulai module ini, NALA punya sumber jawaban **kedua**: data operasional (pengajuan kredit, klaim asuransi) yang tersimpan di database, bukan di dokumen teks. Pipeline linear tidak punya cara untuk memutuskan "pertanyaan ini butuh dokumen atau butuh angka dari database?" — keputusan itu harus ada di suatu tempat, dan LangGraph adalah alat yang dipakai untuk menaruhnya.
 
@@ -162,7 +162,7 @@ Pola kerjanya:
 
 ## 4. Struktur Kode yang Ditambahkan
 
-Melanjutkan langsung di `Nala/` (folder yang sama sejak Module 1 — lihat bagian Panduan Praktik di materi Module 21). Tiga tahap di module ini:
+Melanjutkan langsung di `Nala/` (folder yang sama sejak Module 1 — lihat bagian "3. Struktur Kode yang Ditambahkan" → "Prasyarat" di materi Module 21). Tiga tahap di module ini:
 
 1. **Tahap A — Tambah kemampuan tool-calling ke `OllamaClient`**, tanpa membuat atau menyentuh endpoint apa pun dulu.
 2. **Tahap B — Tulis tool pertama**: bungkus RAG chain Module 9-20 jadi fungsi `rag_search()` yang berdiri sendiri, plus skema tool-nya.
@@ -590,7 +590,7 @@ nala_agent = build_agent(
 )
 ```
 
-Lalu **buat** fungsi `chat()` (endpoint baru `POST /chat`, belum pernah ada sebelum module ini) yang mendelegasikan sepenuhnya ke agent — logikanya sengaja mengikuti kontrak sederhana `{message}` → `{reply}` (pola yang sama dengan `/chat` temporer Module 25), tapi jalur di baliknya sekarang agent dengan tool-calling, bukan `embed_text`/`vector_store.search`/`ollama_client.generate()` langsung seperti yang masih dipakai `/chat/stream` (Module 13, disempurnakan Module 17-20):
+Lalu **buat** fungsi `chat()` (endpoint baru `POST /chat`, belum pernah ada sebelum module ini) yang mendelegasikan sepenuhnya ke agent — logikanya sengaja mengikuti kontrak sederhana `{message}` → `{reply}`, tapi jalur di baliknya sekarang agent dengan tool-calling, bukan `embed_text`/`vector_store.search`/`ollama_client.generate()` langsung seperti yang masih dipakai `/chat/stream` (Module 13, disempurnakan Module 17-20):
 
 ```python
 # app/main.py
@@ -607,7 +607,7 @@ def chat(request: ChatRequest) -> ChatResponse:
     return ChatResponse(reply=reply)
 ```
 
-`/chat` sengaja diberi kontrak sesederhana mungkin (`ChatRequest{message}` → `ChatResponse{reply}`) — bukan karena mempertahankan kontrak lama (endpoint ini baru), tapi karena mengikuti pola yang sudah dikenal sejak `/chat` temporer Module 25: kontrak paling sederhana, tanpa streaming, supaya `chat.html` (setelah toggle "Pakai Agent" ditambah Module 23) bisa memanggilnya tanpa penyesuaian besar.
+`/chat` sengaja diberi kontrak sesederhana mungkin (`ChatRequest{message}` → `ChatResponse{reply}`) — bukan karena mempertahankan kontrak lama (endpoint ini baru), tapi karena kontrak paling sederhana, tanpa streaming, sudah cukup untuk kebutuhan agent non-streaming ini, supaya `chat.html` (setelah toggle "Pakai Agent" ditambah Module 23) bisa memanggilnya tanpa penyesuaian besar.
 
 ⚠️ **Keputusan scope yang disengaja: `/chat/stream` TIDAK disentuh di module ini.** Endpoint itu tetap memakai retrieval langsung (Module 9-20), belum lewat agent — bukan karena "belum sempat diubah", tapi karena keputusan desain: `chat_stream()` di `OllamaClient` mengalirkan token satu per satu, sedangkan tool-calling butuh respons **utuh** dulu (`message.tool_calls`) sebelum tahu langkah berikutnya — menggabungkan keduanya (streaming + tool loop yang mungkin butuh beberapa putaran) menambah kompleksitas yang tidak sepadan untuk kurikulum ini. Karena itu rangkaian Module 21-25 membangun agent sebagai endpoint **baru** (`/chat`, non-streaming, bisa pakai tool) berdampingan dengan `/chat/stream` (tetap di kemampuan Module 17-20), bukan mengonversi `/chat/stream` menjadi agent. Module 23-25 semuanya dibangun di atas `/chat`, bukan `/chat/stream`.
 
@@ -794,10 +794,10 @@ def chat(request: ChatRequest) -> ChatResponse:
     agent = build_agent(
         ollama_client=ollama_client,
         vector_store=vector_store,
-        ollama_base_url=OLLAMA_BASE_URL_DEFAULT,
+        ollama_base_url=OLLAMA_BASE_URL,
         reranker=reranker,
         trace=trace,
-        model_name=OLLAMA_MODEL_DEFAULT,
+        model_name=OLLAMA_MODEL,
     )
 
     initial_state = {
