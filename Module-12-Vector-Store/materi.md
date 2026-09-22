@@ -27,7 +27,7 @@ flowchart LR
 - `VectorStore.ensure_index()`, `.index_document()`, dan `.search()` berjalan tanpa error
 - Query dengan kata berbeda dari dokumen asli tapi makna serupa tetap menemukan dokumen yang di-index — bukti pencarian semantik, bukan keyword matching
 - Kita paham metrik mana yang **benar-benar** dipakai `VectorStore` NALA (default OpenSearch) dan kenapa itu tetap valid untuk `nomic-embed-text`
-- `/chat/stream` (Module 7, 7) tetap berfungsi seperti sebelumnya
+- `/chat/stream` (Module 7) tetap berfungsi seperti sebelumnya
 
 ## 1. Apa itu Vector Search / Vector Store
 
@@ -276,6 +276,38 @@ volumes:
 
 > **📝 Catatan opsional — UI untuk melihat isi OpenSearch**: **OpenSearch Dashboards** (setara Kibana) bisa ditambahkan sebagai service tambahan kalau mau tampilan visual (Dev Tools untuk query, Discover untuk lihat data per baris) — **tidak wajib** untuk Module 7-16, murni kenyamanan development, dan menambah ~512MB-1GB RAM. Setup detailnya di luar cakupan training ini.
 
+<details>
+<summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 1</strong></summary>
+
+```
+Tambah service opensearch di docker-compose.yml NALA (Module 12,
+Langkah 1) — BELUM membuat kode Python apa pun.
+
+GOAL:
+- Di Nala/docker-compose.yml: tambah
+  service baru `opensearch` (image opensearchproject/opensearch:2.11.0,
+  environment discovery.type=single-node,
+  plugins.security.disabled=true,
+  OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m,
+  DISABLE_INSTALL_DEMO_CONFIG=true, port 9200:9200, volume
+  opensearch_data:/usr/share/opensearch/data), tambah
+  `- OPENSEARCH_BASE_URL=http://opensearch:9200` ke environment
+  service `api`, tambah `opensearch` ke depends_on service `api`, dan
+  tambah `opensearch_data:` ke top-level volumes.
+
+CONTEXT:
+- Env var OPENSEARCH_BASE_URL disiapkan untuk dibaca VectorStore
+  yang akan dibuat di Langkah 2 — belum ada kode yang memakainya.
+
+GUARDRAIL:
+- JANGAN buat app/vector_store.py di langkah ini — itu Langkah 2.
+- JANGAN ubah service ollama atau api selain menambah environment
+  dan depends_on yang disebutkan.
+- JANGAN tambah service airflow — itu baru masuk Module 15.
+```
+
+</details>
+
 **Langkah 2 — Buat `app/vector_store.py`**
 
 ```python
@@ -399,23 +431,13 @@ print(results)
 ✅ **Indikator sukses**: tidak ada error, dan `results` menampilkan list berisi minimal satu dict dengan `text` yang sama dengan yang baru di-index — membuktikan pencarian semantik bekerja walau kata-kata query ("kapan", "beroperasi") berbeda dari kata-kata dokumen ("buka"), memakai metrik L2 di balik layar (Bagian 5.d).
 
 <details>
-<summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 1-2</strong></summary>
+<summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 2</strong></summary>
 
 ```
-Tambah service opensearch di docker-compose.yml dan buat
-app/vector_store.py dengan class VectorStore (Module 12).
+Buat app/vector_store.py dengan class VectorStore (Module 12,
+Langkah 2).
 
 GOAL:
-- Di Nala/docker-compose.yml: tambah
-  service baru `opensearch` (image opensearchproject/opensearch:2.11.0,
-  environment discovery.type=single-node,
-  plugins.security.disabled=true,
-  OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m,
-  DISABLE_INSTALL_DEMO_CONFIG=true, port 9200:9200, volume
-  opensearch_data:/usr/share/opensearch/data), tambah
-  `- OPENSEARCH_BASE_URL=http://opensearch:9200` ke environment
-  service `api`, tambah `opensearch` ke depends_on service `api`, dan
-  tambah `opensearch_data:` ke top-level volumes.
 - Buat Nala/app/vector_store.py berisi
   class VectorStore(base_url, index_name) dengan 3 method:
   ensure_index(dims=768) (HEAD cek index ada, kalau belum PUT index
@@ -427,6 +449,8 @@ GOAL:
   score, metadata} dari hits.hits).
 
 CONTEXT:
+- Service opensearch dan env var OPENSEARCH_BASE_URL sudah
+  ditambahkan ke docker-compose.yml di Langkah 1.
 - app/embeddings.py (embed_text) sudah ada dari Module 11.
 - Pakai httpx (bukan opensearch-py) — konsisten dengan seluruh
   codebase NALA.
@@ -434,7 +458,8 @@ CONTEXT:
 GUARDRAIL:
 - JANGAN tambah opensearch-py atau library client OpenSearch lain ke
   requirements.txt — semua akses OpenSearch lewat httpx langsung.
-- JANGAN ubah app/main.py, app/ingest.py, atau file lain.
+- JANGAN ubah app/main.py, app/ingest.py, docker-compose.yml, atau
+  file lain.
 - JANGAN tambah service airflow — itu baru masuk Module 15.
 ```
 
@@ -452,7 +477,7 @@ Yang perlu dipastikan sebelum lanjut ke Module 13:
 - [ ] Kita bisa menelusuri contoh kasus Bagian 5.e dan menjelaskan kenapa dot product mentah bisa salah ranking, tapi cosine/L2/dot-product-setelah-normalisasi selalu benar
 - [ ] `VectorStore.ensure_index()`, `.index_document()`, `.search()` berjalan tanpa error
 - [ ] Query dengan kata berbeda dari dokumen asli (tapi makna serupa) tetap menemukan dokumen yang di-index
-- [ ] `/chat/stream` (Module 7, 7) masih berfungsi seperti sebelumnya
+- [ ] `/chat/stream` (Module 7) masih berfungsi seperti sebelumnya
 
 Begitu keenam hal ini terverifikasi, lanjut ke Module 13 — menyatukan `extract_text()` (Module 10), embedding (Module 11), dan vector store (module ini) jadi satu fungsi `ingest_documents()` versi pertama (satu dokumen = satu vektor, belum ada chunking), memakai data seed untuk mengisi index untuk pertama kali, lalu **menyambungkan retrieval ke `/chat/stream`** — titik di mana RAG benar-benar "hidup" untuk pertama kalinya.
 

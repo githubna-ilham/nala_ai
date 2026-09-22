@@ -205,6 +205,33 @@ from fastapi.responses import HTMLResponse, StreamingResponse
 - **`HTTPException`**: dipakai untuk menolak request dengan status code tertentu (di sini `400`) kalau `messages` kosong atau elemen terakhirnya bukan `role: "user"` — validasi yang Pydantic saja tidak bisa lakukan (Pydantic cuma memastikan *bentuk* data benar, bukan *isi*nya masuk akal).
 - **`StreamingResponse`**: kelas response FastAPI/Starlette yang menerima generator (di sini `chat_stream()` dari Tahap A) dan meneruskan setiap `yield` langsung ke koneksi HTTP begitu tersedia — inilah mekanisme FastAPI untuk streaming. Sebelumnya Module 7 hanya butuh `HTMLResponse` untuk merender halaman; di sini keduanya diimpor dari modul yang sama, `fastapi.responses`.
 
+<details>
+<summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 2</strong></summary>
+
+```
+Tambah import baru di main.py NALA (Module 8, Langkah 2) — BELUM
+menambah kode lain apa pun.
+
+GOAL:
+- Di Nala/app/main.py, ubah import `from fastapi import FastAPI`
+  jadi `from fastapi import FastAPI, HTTPException, Request` (kalau
+  Request belum ada dari Module 7) dan tambah baris baru
+  `from fastapi.responses import HTMLResponse, StreamingResponse`
+  (kalau HTMLResponse sudah diimpor dari sini di Module 7, gabung
+  jadi satu baris, jangan duplikat import).
+
+CONTEXT:
+- Import ini disiapkan untuk endpoint /chat/stream yang akan dibuat
+  di Langkah 4 — belum dipakai di langkah ini.
+
+GUARDRAIL:
+- JANGAN tambah Pydantic model, konstanta, atau endpoint apa pun di
+  langkah ini — itu Langkah 3-4.
+- JANGAN hapus endpoint /chat yang lama — itu juga Langkah 4.
+```
+
+</details>
+
 **Langkah 3 — Tambah Pydantic models dan `HISTORY_WINDOW`**
 
 ```python
@@ -222,6 +249,42 @@ HISTORY_WINDOW = 10
 ```
 
 Taruh persis di bawah `ChatResponse` (model Module 7) yang sudah ada. `ChatMessage` merepresentasikan satu pesan dalam riwayat (`role`: `"user"` atau `"assistant"`, `content`: isi pesan) — `ChatStreamRequest` membungkusnya jadi array, kontras dengan `ChatRequest{message: str}` yang dipakai `/chat`. `HISTORY_WINDOW = 10` didefinisikan sebagai konstanta modul-level (bukan di dalam fungsi) supaya nilainya gampang diubah tanpa mencari-cari di dalam badan endpoint — dipakai di Langkah 4, dijelaskan lebih lanjut di Bagian 4 di bawah.
+
+<details>
+<summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 3</strong></summary>
+
+```
+Tambah Pydantic models dan konstanta HISTORY_WINDOW di main.py NALA
+(Module 8, Langkah 3) — BELUM menambah endpoint apa pun.
+
+GOAL:
+- Di Nala/app/main.py, tepat di bawah model `ChatResponse` yang
+  sudah ada (Module 7), tambahkan:
+
+  class ChatMessage(BaseModel):
+      role: str
+      content: str
+
+
+  class ChatStreamRequest(BaseModel):
+      messages: list[ChatMessage]
+
+
+  HISTORY_WINDOW = 10
+
+CONTEXT:
+- Import `HTTPException`/`StreamingResponse` sudah ditambahkan di
+  Langkah 2.
+- Model dan konstanta ini disiapkan untuk endpoint /chat/stream yang
+  akan dibuat di Langkah 4 — belum dipakai di langkah ini.
+
+GUARDRAIL:
+- JANGAN tambah endpoint apa pun di langkah ini — itu Langkah 4.
+- JANGAN hapus model ChatRequest/ChatResponse atau endpoint /chat
+  yang lama — itu juga Langkah 4.
+```
+
+</details>
 
 **Langkah 4 — Tambah endpoint `POST /chat/stream`, hapus `POST /chat`**
 
@@ -275,28 +338,18 @@ curl -s -o /dev/null -w "%{http_code}\n" -X POST http://localhost:8000/chat \
 ✅ **Indikator sukses**: `404` (bukan `200`) — bukti `/chat` sudah dihapus, bukan cuma tidak dipakai `chat.html` lagi.
 
 <details>
-<summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 2-4</strong></summary>
+<summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 4</strong></summary>
 
 ```
-Tambah endpoint POST /chat/stream di main.py (Module 8, Tahap B), DAN
-hapus total endpoint POST /chat lama (Module 7) — bukan menambah di
-sampingnya.
+Tambah endpoint POST /chat/stream di main.py (Module 8, Langkah 4),
+DAN hapus total endpoint POST /chat lama (Module 7) — bukan menambah
+di sampingnya.
 
 GOAL:
 - Di Nala/app/main.py:
-  - Ubah import `from fastapi import FastAPI` jadi
-    `from fastapi import FastAPI, HTTPException, Request` (kalau
-    Request belum ada dari Module 7) dan tambah baris baru
-    `from fastapi.responses import HTMLResponse, StreamingResponse`
-    (kalau HTMLResponse sudah diimpor dari sini di Module 7, gabung
-    jadi satu baris, jangan duplikat import).
   - HAPUS fungsi chat() (@app.post("/chat", response_model=ChatResponse))
     beserta model ChatRequest dan ChatResponse — sudah tidak dipakai
     sama sekali sejak endpoint baru di bawah menggantikannya.
-  - Tambah dua Pydantic model baru: ChatMessage(role: str, content: str)
-    dan ChatStreamRequest(messages: list[ChatMessage]).
-  - Tambah konstanta modul-level HISTORY_WINDOW = 10 setelah kedua
-    model itu.
   - Tambah endpoint @app.post("/chat/stream") def chat_stream(request:
     ChatStreamRequest) -> StreamingResponse: yang (a) raise
     HTTPException 400 kalau messages kosong atau elemen terakhir
@@ -309,8 +362,11 @@ GOAL:
 
 CONTEXT:
 - File: Nala/app/main.py
+- Import HTTPException/StreamingResponse sudah ditambahkan Langkah 2.
+- ChatMessage/ChatStreamRequest/HISTORY_WINDOW sudah ditambahkan
+  Langkah 3.
 - chat_stream() generator sudah ada di app/ollama_client.py (Tahap A)
-- NALA_SYSTEM_PROMPT sudah diimpor sejak Module 7
+- NALA_SYSTEM_PROMPT sudah diimpor sejak Module 6.
 - Ini penggantian, bukan penambahan — /chat/stream jadi satu-satunya
   endpoint chat sejak langkah ini.
 
@@ -452,6 +508,42 @@ Dibandingkan akhir Module 7: dua import baru (`HTTPException`, `StreamingRespons
 - `escapeHtml()` tetap dipakai di setiap update tampilan (bukan cuma sekali di akhir) — mencegah karakter HTML dalam token yang baru diterima dieksekusi di `innerHTML`.
 - Riwayat (`conversation`) **hanya hidup di memori tab browser** — tidak disimpan ke server maupun `localStorage`. Reload halaman berarti riwayat hilang; ini konsisten dengan desain NALA yang stateless di sisi server.
 
+<details>
+<summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 5</strong></summary>
+
+```
+Ubah chat.html supaya membaca /chat/stream secara bertahap dan
+mengirim riwayat percakapan (Module 8, Langkah 5) — BELUM menambah
+badge/tombol reset.
+
+GOAL:
+- Di Nala/app/templates/chat.html:
+  - Tambah variabel `let conversation = [];` di awal <script>.
+  - Ubah handler submit form: push pesan user ke conversation, fetch
+    ke "/chat/stream" (bukan "/chat") dengan body
+    JSON.stringify({ messages: conversation }), baca response.body
+    lewat getReader()/TextDecoder secara bertahap (loop while(true)
+    dengan reader.read()), update elemen balasan NALA setiap ada
+    potongan baru (pakai escapeHtml()), lalu push balasan lengkap ke
+    conversation setelah stream selesai.
+
+CONTEXT:
+- File: Nala/app/templates/chat.html
+  (saat ini dari Module 7: fetch ke "/chat" dengan body {message},
+  tanpa riwayat, tanpa streaming)
+- Endpoint /chat/stream sudah ada sejak Tahap B, terima
+  {"messages": [{"role", "content"}, ...]}, balas teks streaming
+  (bukan JSON)
+
+GUARDRAIL:
+- JANGAN tambah badge jumlah pesan atau tombol reset di langkah ini
+  — itu Langkah 6.
+- Pertahankan escapeHtml() dan mekanisme XSS-safe rendering yang
+  sudah ada dari Module 7.
+```
+
+</details>
+
 **Langkah 6 — Tambah badge jumlah pesan dan tombol reset**
 
 ```html
@@ -509,43 +601,37 @@ Buka `http://localhost:8000`, kirim pertanyaan, amati jawaban muncul bertahap. L
 ✅ **Indikator sukses**: jawaban muncul kata demi kata, badge pesan bertambah, keterangan windowing muncul setelah 8 pesan, tombol reset berfungsi dengan konfirmasi.
 
 <details>
-<summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 5-6</strong></summary>
+<summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 6</strong></summary>
 
 ```
-Ubah chat.html supaya membaca /chat/stream secara bertahap dan
-mengirim riwayat percakapan (Module 8, Tahap C).
+Tambah badge jumlah pesan dan tombol reset di chat.html (Module 8,
+Langkah 6).
 
 GOAL:
 - Di Nala/app/templates/chat.html:
-  - Tambah variabel `let conversation = [];` di awal <script>.
-  - Ubah handler submit form: push pesan user ke conversation, fetch
-    ke "/chat/stream" (bukan "/chat") dengan body
-    JSON.stringify({ messages: conversation }), baca response.body
-    lewat getReader()/TextDecoder secara bertahap (loop while(true)
-    dengan reader.read()), update elemen balasan NALA setiap ada
-    potongan baru (pakai escapeHtml()), lalu push balasan lengkap ke
-    conversation setelah stream selesai.
   - Tambah elemen badge jumlah pesan (id="message-count") dan
     keterangan windowing (id="windowing-note", hidden di bawah 9
-    pesan) di atas #history, di-update setiap selesai satu
-    pertukaran pesan.
+    pesan) di dalam <div class="container">, sebelum #history.
+  - Tambah fungsi updateMeta() yang meng-update kedua elemen itu
+    berdasarkan conversation.length.
+  - Panggil updateMeta() di dua tempat: (a) di handler submit,
+    tepat setelah conversation.push({ role: "assistant", ... }) —
+    baris terakhir sebelum handler ditutup, dan (b) di handler
+    tombol reset.
   - Tambah tombol reset (id="reset-btn") yang minta confirm()
-    sebelum mengosongkan conversation dan #history.
+    sebelum mengosongkan conversation dan #history, lalu memanggil
+    updateMeta().
 
 CONTEXT:
 - File: Nala/app/templates/chat.html
-  (saat ini dari Module 7: fetch ke "/chat" dengan body {message},
-  tanpa riwayat, tanpa streaming)
-- Endpoint /chat/stream sudah ada sejak Tahap B, terima
-  {"messages": [{"role", "content"}, ...]}, balas teks streaming
-  (bukan JSON)
+- Variabel `conversation`, handler submit, dan streaming reader
+  sudah dibuat di Langkah 5 — JANGAN ubah logika streaming itu,
+  cuma tambahkan pemanggilan updateMeta() di titik yang disebutkan.
 
 GUARDRAIL:
 - JANGAN ubah app/static/style.css kecuali menambah styling minimal
   untuk .chat-meta/#reset-btn (opsional, jangan redesign).
-- app/main.py sudah tidak punya endpoint /chat sejak Tahap B — file
-  ini (chat.html) memang tidak pernah menyentuh main.py, jadi tidak
-  ada guardrail khusus soal itu di sini.
+- JANGAN ubah logika fetch/streaming dari Langkah 5.
 - Pertahankan escapeHtml() dan mekanisme XSS-safe rendering yang
   sudah ada dari Module 7.
 ```
