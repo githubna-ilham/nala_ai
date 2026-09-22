@@ -162,6 +162,8 @@ GUARDRAIL:
 
 ### Tahap B — Hubungkan: dependency, docker-compose, dan endpoint (langsung ter-index sebagai chunk)
 
+**Prasyarat**: sudah menyelesaikan **Module 14** (Chunking) — `ingest_documents()` sudah level-chunk. Tanpa ini, endpoint `/upload` di bawah tetap bisa menyimpan file, tapi pesan konfirmasinya tidak akan menyebut jumlah chunk seperti yang dijelaskan di Langkah 5.
+
 **Langkah 2 — Tambah volume `knowledge-base` di `docker-compose.yml`**
 
 `/upload` butuh tempat menyimpan file di **luar** container (supaya tidak hilang saat container di-rebuild). Ini sudah ada sejak Module 10 (`KNOWLEDGE_BASE_PATH`, bind mount ke `resources/sample-knowledge-base/`) — tidak ada perubahan `docker-compose.yml` di langkah ini.
@@ -175,6 +177,30 @@ python-multipart==0.0.12
 ```
 
 Tambahkan sebagai baris baru di akhir `requirements.txt`.
+
+<details>
+<summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 3</strong></summary>
+
+```
+Tambah dependency python-multipart di requirements.txt NALA (Module 15,
+Langkah 3) — BELUM mengubah kode apa pun.
+
+GOAL:
+- Di Nala/requirements.txt: tambah baris `python-multipart==0.0.12`
+  di akhir file.
+
+CONTEXT:
+- FastAPI butuh library ini untuk mem-parsing multipart/form-data
+  secara internal begitu ada parameter UploadFile — dipakai di
+  Langkah 5, belum dipakai di langkah ini.
+
+GUARDRAIL:
+- JANGAN sentuh app/main.py atau file lain apa pun di langkah ini —
+  itu Langkah 4-5.
+- JANGAN tambah atau ubah dependency lain di requirements.txt.
+```
+
+</details>
 
 **Langkah 4 — Tambah import dan fungsi `list_knowledge_base_documents()` di `app/main.py`**
 
@@ -197,6 +223,40 @@ def list_knowledge_base_documents() -> list[str]:
 - **`File`**: dipakai bersama `UploadFile` sebagai default value parameter (`file: UploadFile = File(...)`) — memberi tahu FastAPI parameter ini datang dari bagian file di `multipart/form-data`.
 - **`list_knowledge_base_documents()`**: fungsi kecil terpisah supaya logika "ambil daftar file" tidak ditulis dua kali (sekali untuk `GET`, sekali untuk `POST`). Ini tetap daftar **nama dokumen**, bukan daftar chunk — chunking terjadi di belakang layar saat `ingest_documents()` dipanggil, tidak terlihat di UI ini.
 - **`os.path.isdir(...)` guard**: jaga-jaga kalau `KNOWLEDGE_BASE_PATH` belum pernah ada isinya — `os.listdir()` akan melempar `FileNotFoundError` kalau dipanggil ke folder yang tidak ada.
+
+<details>
+<summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 4</strong></summary>
+
+```
+Tambah import File/UploadFile dan fungsi list_knowledge_base_documents()
+di app/main.py NALA (Module 15, Langkah 4) — BELUM menambah endpoint
+/upload apa pun.
+
+GOAL:
+- Di Nala/app/main.py:
+  - Tambah import File, UploadFile dari fastapi (gabungkan dengan
+    import fastapi yang sudah ada, jangan duplikat baris import).
+  - Tambah fungsi list_knowledge_base_documents() -> list[str]: kalau
+    KNOWLEDGE_BASE_PATH bukan folder yang ada, return []; selain itu
+    return sorted(...) daftar nama file langsung di dalam
+    KNOWLEDGE_BASE_PATH yang berakhiran .md/.txt/.pdf. Taruh di dekat
+    definisi KNOWLEDGE_BASE_PATH yang sudah ada.
+
+CONTEXT:
+- KNOWLEDGE_BASE_PATH sudah ada sejak Module 10.
+- Dependency python-multipart sudah ditambahkan Langkah 3.
+- File dan UploadFile dipakai bersama sebagai
+  `file: UploadFile = File(...)` — parameter itu baru ditambahkan
+  Langkah 5, belum di langkah ini.
+
+GUARDRAIL:
+- JANGAN tambah endpoint @app.get("/upload") atau @app.post("/upload")
+  di langkah ini — itu Langkah 5.
+- JANGAN ubah endpoint /chat/stream, /health, atau / (GET) yang sudah
+  ada.
+```
+
+</details>
 
 **Langkah 5 — Tambah endpoint `GET`/`POST /upload`, langsung panggil `ingest_documents()` versi chunking**
 
@@ -243,53 +303,28 @@ from app.ingest import ingest_documents
 - **`POST /upload`**: `os.makedirs`/`open(...).write()` menyimpan file **apa adanya**. Disusul `ingest_documents(KNOWLEDGE_BASE_PATH)` di dalam `try/except` — fungsi ini **sekarang** memecah dokumen jadi chunk dulu (Module 14), jadi pesan konfirmasi menyebut jumlah **chunk**, bukan jumlah dokumen. Kalau berhasil, pesan menyebut jumlah chunk yang ter-index; kalau `httpx.HTTPError` (OpenSearch tidak terjangkau), pesan tetap ramah — file tetap tersimpan, bukan error 500.
 - **`ingest_documents()` yang dipanggil di sini** fungsi yang **sama persis** yang dipanggil manual dari terminal di Module 13 Bagian 1 (lalu di-upgrade Module 14 Bagian 8) — tidak ada logika baru di `main.py`, cuma dipicu dari endpoint web alih-alih CLI. Karena scan ulang seluruh folder (bukan cuma file baru), dokumen lama yang sudah ada juga ikut ter-chunk-dan-embed ulang — konsisten dengan catatan idempotency di Module 13 Bagian 1 (lihat juga Definisi di atas).
 
-**▶️ Jalankan & lihat hasilnya**
-
-```bash
-docker compose up --build api
-```
-
-```bash
-echo "Kantor cabang NALA di Bandung buka setiap hari Selasa sampai Sabtu, pukul 09.00 sampai 17.00 WIB." > catatan-cabang-bandung.md
-
-curl -X POST http://localhost:8000/upload -F "file=@catatan-cabang-bandung.md"
-
-curl -N -X POST http://localhost:8000/chat/stream \
-  -H "Content-Type: application/json" \
-  -d '{"messages": [{"role": "user", "content": "Kapan kantor cabang Bandung buka?"}]}'
-```
-
-✅ **Indikator sukses**: halaman menampilkan pesan **"berhasil diunggah dan di-index (N chunk...)"**, nama filenya langsung muncul di daftar dokumen, dan `/chat/stream` langsung bisa menjawab dari dokumen yang baru diupload **tanpa** `docker compose restart` apa pun di antaranya — buktinya pipeline upload → chunking → embedding → index → retrieve benar-benar tersambung end-to-end.
-
 Coba juga link "Knowledge Base" di halaman chat (`http://localhost:8000`) — harus berpindah ke `/upload`. Ganti `<nav><a href="/">Chat</a></nav>` di `chat.html` jadi `<nav><a href="/">Chat</a> | <a href="/upload">Knowledge Base</a></nav>` kalau belum ada.
 
 <details>
-<summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 2-5</strong></summary>
+<summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 5</strong></summary>
 
 ```
-Hubungkan upload.html ke FastAPI — endpoint GET/POST /upload yang
-langsung memanggil ingest_documents() versi chunking (Module 15,
-Tahap B).
+Tambah endpoint GET/POST /upload di app/main.py NALA, langsung
+memanggil ingest_documents() versi chunking, dan sambungkan link
+"Knowledge Base" dari halaman chat (Module 15, Langkah 5).
 
 GOAL:
-- Di Nala/requirements.txt: tambah baris
-  `python-multipart==0.0.12` di akhir file.
 - Di Nala/app/main.py:
-  - Tambah import File, UploadFile dari fastapi (gabungkan dengan
-    import yang sudah ada, jangan duplikat).
   - Tambah `import httpx` dan `from app.ingest import
     ingest_documents` kalau belum ada dari Module 13.
-  - Tambah fungsi list_knowledge_base_documents() -> list[str]: return
-    [] kalau KNOWLEDGE_BASE_PATH bukan folder yang ada, selain itu
-    return sorted(...) daftar nama file di KNOWLEDGE_BASE_PATH yang
-    berakhiran .md/.txt/.pdf.
   - Tambah endpoint @app.get("/upload") yang render upload.html dengan
     message=None dan documents=list_knowledge_base_documents(), dan
     @app.post("/upload") yang terima file: UploadFile = File(...),
     simpan ke KNOWLEDGE_BASE_PATH/file.filename (bikin folder dulu
     dengan os.makedirs exist_ok=True), lalu try: panggil count =
     ingest_documents(KNOWLEDGE_BASE_PATH), set message dengan jumlah
-    chunk; except httpx.HTTPError: set message fallback. Render ulang
+    chunk; except httpx.HTTPError: set message fallback yang tetap
+    ramah (file tetap tersimpan, bukan error 500). Render ulang
     upload.html dengan message dan documents yang baru.
 - Di Nala/app/templates/chat.html: ganti
   <nav><a href="/">Chat</a></nav> jadi <nav><a href="/">Chat</a> |
@@ -297,6 +332,8 @@ GOAL:
 
 CONTEXT:
 - upload.html sudah ada dari Tahap A.
+- list_knowledge_base_documents(), import File/UploadFile, dan
+  dependency python-multipart sudah ada dari Langkah 3-4.
 - ingest_documents() sudah ada dari Module 13, sudah di-upgrade untuk
   chunking di Module 14 — panggil langsung, jangan tulis ulang
   logikanya.
@@ -310,6 +347,39 @@ GUARDRAIL:
 
 </details>
 
+**▶️ Jalankan & lihat hasilnya**
+
+```bash
+docker compose up --build api
+```
+
+Ada dua cara mencoba upload — pilih salah satu atau keduanya:
+
+- **Lewat browser**: buka `http://localhost:8000/upload`, pilih file `.md`/`.txt`/`.pdf` (bisa file teks singkat baru, atau salah satu dari 10 dokumen PDF latihan di `resources/sample-knowledge-base/`), lalu klik "Upload".
+- **Lewat curl** (lebih mudah dipakai ulang untuk demo/testing):
+
+```bash
+echo "Kantor cabang NALA di Bandung buka setiap hari Selasa sampai Sabtu, pukul 09.00 sampai 17.00 WIB." > catatan-cabang-bandung.md
+
+curl -X POST http://localhost:8000/upload -F "file=@catatan-cabang-bandung.md"
+```
+
+Setelah upload (lewat cara mana pun), cek file **benar-benar tersimpan** — dua cara, pilih salah satu:
+- Di dalam container: `docker compose exec api ls -la /app/knowledge-base`
+- Langsung di laptop Anda (tanpa masuk container): `ls resources/sample-knowledge-base/` — folder ini adalah bind mount yang sama persis dengan `/app/knowledge-base` di container, jadi isinya selalu identik.
+
+Nama file yang diupload harus muncul di kedua tempat itu, dan juga langsung terlihat di daftar dokumen pada halaman `/upload` (termasuk 10 PDF latihan yang sudah ada sejak awal) — tanpa perlu refresh manual kedua kalinya.
+
+Terakhir, buktikan dokumen baru **langsung bisa ditanyakan** ke `/chat/stream` tanpa restart apa pun:
+
+```bash
+curl -N -X POST http://localhost:8000/chat/stream \
+  -H "Content-Type: application/json" \
+  -d '{"messages": [{"role": "user", "content": "Kapan kantor cabang Bandung buka?"}]}'
+```
+
+✅ **Indikator sukses**: halaman menampilkan pesan **"berhasil diunggah dan di-index (N chunk...)"**, nama filenya langsung muncul di daftar dokumen, dan `/chat/stream` langsung bisa menjawab dari dokumen yang baru diupload **tanpa** `docker compose restart` apa pun di antaranya — buktinya pipeline upload → chunking → embedding → index → retrieve benar-benar tersambung end-to-end.
+
 ## 3. Checkpoint Praktik
 
 Yang perlu dipastikan sebelum lanjut ke Module 16:
@@ -322,29 +392,3 @@ Yang perlu dipastikan sebelum lanjut ke Module 16:
 - [ ] `/chat/stream` (Module 7, 7, 12, 13) masih berfungsi seperti sebelumnya
 
 Begitu keenam hal ini terverifikasi, lanjut ke Module 16 — Airflow, cara **lain** memicu `ingest_documents()` yang sama, cocok untuk skenario batch/terjadwal yang tidak dicakup form upload satu-file ini.
-
-## Panduan Praktik
-
-### Prasyarat
-- Sudah menyelesaikan **Module 14** (Chunking) — `ingest_documents()` sudah level-chunk
-
-### Langkah 1: Upload dokumen baru lewat halaman `/upload`
-
-Buka `http://localhost:8000/upload` di browser. Halaman ini punya form upload dengan input file yang membatasi tipe ke `.md`, `.txt`, atau `.pdf` (lihat `accept=".md,.txt,.pdf"` di `app/templates/upload.html`).
-
-1. Siapkan file teks singkat baru (misalnya `catatan-test.md`) berisi satu-dua kalimat — contoh: "Kantor cabang NALA di Surabaya buka setiap hari Senin sampai Jumat pukul 08.00-16.00." Atau pakai salah satu dari 10 dokumen PDF latihan di `resources/sample-knowledge-base/`.
-2. Upload file tersebut lewat form.
-3. Halaman akan menampilkan pesan **"berhasil diunggah dan di-index (N chunk...)"** — `ingest_documents()` (sudah ada sejak Module 13, sudah di-upgrade untuk chunking di Module 14) langsung dipanggil, tidak ada jeda "simpan dulu proses belakangan". Lihat Bagian 1 di atas untuk penjelasan lengkap.
-4. Cek file benar-benar tersimpan — dua cara, pilih salah satu:
-   - Di dalam container: `docker compose exec api ls -la /app/knowledge-base`
-   - Langsung di laptop Anda (tanpa masuk container): `ls resources/sample-knowledge-base/` — folder ini adalah bind mount yang sama persis dengan `/app/knowledge-base` di container, jadi isinya selalu identik.
-
-   Nama file yang Anda upload harus muncul di kedua tempat itu.
-5. Halaman `/upload` juga menampilkan **daftar dokumen di knowledge base** — dokumen contoh yang sudah ada sejak awal (termasuk 10 PDF latihan) harus langsung terlihat begitu halaman dibuka, dan dokumen yang baru Anda upload harus langsung muncul di daftar itu setelah halaman reload, tanpa perlu refresh manual kedua kalinya.
-6. Coba tanyakan isi dokumen yang baru diupload ke `/chat/stream`, misalnya "Kapan kantor cabang Surabaya buka?" — NALA harus bisa menjawab **tanpa restart apa pun**, membuktikan pipeline upload → chunking → index → retrieve berjalan end-to-end:
-
-```bash
-curl -N -X POST http://localhost:8000/chat/stream \
-  -H "Content-Type: application/json" \
-  -d '{"messages": [{"role": "user", "content": "Kapan kantor cabang Surabaya buka?"}]}'
-```
