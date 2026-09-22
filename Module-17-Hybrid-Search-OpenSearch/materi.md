@@ -67,6 +67,27 @@ flowchart LR
     F --> R["Top-K hasil gabungan"]
 ```
 
+### Coba Langsung: Verifikasi Baseline Vector Search dengan Data Anda Sendiri
+
+Angka "`top_k=15` dari 29 chunk" di atas berasal dari index dan isi dokumen tertentu — bisa berbeda di komputer Anda tergantung dokumen apa saja yang sudah ter-*ingest*. Sebelum menulis kode apa pun di Bagian 6, jalankan dulu `search()` murni (vector, sudah ada sejak Module 12) untuk query yang sama, dan catat di posisi keberapa chunk `### 2.1 Untuk Nasabah Perorangan` muncul — ini baseline yang nanti dibandingkan lagi setelah `search_hybrid()` ditulis di Bagian 6:
+
+```bash
+docker compose exec api python -c "
+from app.embeddings import embed_text
+from app.vector_store import VectorStore
+
+store = VectorStore(base_url='http://opensearch:9200', index_name='nala-docs')
+query = 'Apa saja syarat pengajuan kredit untuk nasabah perorangan?'
+query_embedding = embed_text(query, base_url='http://ollama:11434')
+
+results = store.search(query_embedding, top_k=10)
+for i, r in enumerate(results):
+    print(i, round(r['score'], 4), '-', r['text'][:70])
+"
+```
+
+✅ **Indikator sukses**: baris tercetak untuk tiap hasil — catat posisi (kalau muncul sama sekali di top-10) chunk `### 2.1 Untuk Nasabah Perorangan`. Angka ini yang jadi pembanding "sebelum" begitu `search_hybrid()` selesai ditulis dan diuji di Bagian 6.
+
 ## 2. Apa itu BM25: Cara Kerja di Balik Layar
 
 **BM25** (singkatan dari *Best Matching 25* — versi ke-25 dari rumus yang dikembangkan tim riset *information retrieval* mulai era 1970-1990an) adalah algoritma scoring standar untuk pencarian berbasis kata kunci, dipakai sebagai default oleh hampir semua search engine modern berbasis Lucene — termasuk OpenSearch dan Elasticsearch. Intuisinya sederhana: dokumen yang **lebih sering menyebut kata-kata dari query**, terutama kata-kata yang **jarang muncul** di seluruh koleksi dokumen (makanya lebih "khas"/informatif kalau sampai cocok), mendapat skor lebih tinggi.
@@ -233,6 +254,40 @@ RRF(Dok C) = 1/(60+1)  +  1/(60+3)  = 0.01639 + 0.01587 = 0.03226   (peringkat 1
 
 Dua Tahap: **Tahap A** menambah kemampuan baru di `VectorStore` (`search_bm25()`, `search_hybrid()`), belum dipakai siapa pun. **Tahap B** mengganti pemanggilan `vector_store.search()` di `/chat/stream` (`app/main.py`) jadi `vector_store.search_hybrid()`.
 
+### Prasyarat & Setup Sebelum Mulai
+
+- Sudah menyelesaikan **Module 16** (`Nala/` berjalan lengkap: chat UI, streaming/multi-turn, upload, embedding/vector store, chunking, Airflow, RAG chain)
+- Docker Desktop sudah dialokasikan resource yang cukup — minimal 16GB RAM (sama seperti kebutuhan sejak Module 12-16); module ini sendiri tidak menambah service Docker baru, jadi belum perlu menaikkan alokasi lagi
+
+`Nala/` sudah dibangun bertahap sejak Module 1 dan berjalan lengkap sampai akhir Module 16 — module ini melanjutkan **edit langsung di folder yang sama** (`Nala/`), tidak ada folder baru yang perlu dibuat atau disalin. Sepanjang seluruh kurikulum (Module 1 sampai Module 29) hanya ada **satu** folder kode: `Nala/`.
+
+Container dan volume Docker (`ollama`, `opensearch`, `airflow`, dst) yang sudah berjalan sejak Module 7-16 tetap dipakai apa adanya di module ini — karena `docker-compose.yml` yang dipakai memang tetap sama satu-satunya, data yang sudah ada (index OpenSearch yang sudah terisi dari ingest sebelumnya, model Ollama yang sudah di-*pull*) otomatis ikut terbawa, tidak perlu diulang dari nol. Masuk ke folder dan jalankan service yang relevan:
+
+```bash
+cd Nala
+docker compose up --build ollama opensearch api
+```
+
+Tiga service ini sudah pernah dijalankan sebelumnya — kalau model `llama3.2:3b` dan `nomic-embed-text` sudah pernah di-*pull* ke volume `ollama_data` sebelumnya, tidak perlu di-*pull* ulang (volume Docker persisten, selama tidak dihapus). Verifikasi:
+
+```bash
+docker compose exec ollama ollama list
+```
+
+Kalau `llama3.2:3b` dan `nomic-embed-text` sudah muncul, lanjut ke Tahap A. Kalau belum, ulangi `docker compose exec ollama ollama pull <nama-model>` untuk masing-masing (lihat Module 2 materi.md (bagian Panduan Praktik) dan Module 11 materi.md untuk detail model yang dipakai).
+
+Pastikan juga index `nala-docs` di OpenSearch masih terisi dari ingest sebelumnya:
+
+```bash
+curl http://localhost:9200/nala-docs/_count
+```
+
+Kalau `count` bernilai `0` (index kosong, misalnya karena volume `opensearch_data` baru), jalankan ulang ingest:
+
+```bash
+docker compose exec api python -c "from app.ingest import ingest_documents; print(ingest_documents('/app/knowledge-base'))"
+```
+
 ### Tahap A — Tambah `search_bm25()` dan `search_hybrid()` di `app/vector_store.py`
 
 **Langkah 1 — Tambah `_id` ke hasil `search()` yang sudah ada**
@@ -267,6 +322,35 @@ def search(self, query_embedding: list[float], top_k: int = 3) -> list[dict]:
 ```
 
 Satu-satunya perubahan: baris `"_id": hit["_id"],` ditambahkan ke dict hasil. Ini **tidak** memutus pemanggil yang sudah ada — kode Module 12 yang memakai `r["text"]` atau `r["metadata"]` tetap berfungsi, `_id` cuma key tambahan.
+
+<details>
+<summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 1</strong></summary>
+
+```
+Tambah key _id ke hasil search() yang sudah ada di VectorStore
+(Module 17, Tahap A, Langkah 1) — belum dipakai method atau endpoint
+baru apa pun.
+
+GOAL:
+- Di Nala/app/vector_store.py, method search() yang sudah ada:
+  tambahkan key "_id": hit["_id"] ke setiap dict di list yang
+  dikembalikan (selain "text", "score", "metadata" yang sudah ada).
+
+CONTEXT:
+- File ini (`app/vector_store.py`) sudah ada di `Nala/` sejak
+  Module 12 — edit langsung di file yang sama, tidak ada folder
+  lain yang perlu disalin.
+- _id ini dibutuhkan RRF (Langkah 3) untuk mencocokkan dokumen yang
+  sama di dua daftar hasil (BM25 dan vector).
+
+GUARDRAIL:
+- JANGAN ubah signature search() (nama, parameter, return type list
+  of dict) — cuma tambah key _id ke tiap dict hasil.
+- JANGAN ubah ensure_index() atau index_document().
+- JANGAN sentuh app/main.py di langkah ini.
+```
+
+</details>
 
 **Langkah 2 — Tambah method `search_bm25()`**
 
@@ -316,35 +400,31 @@ for r in results:
 ✅ **Indikator sukses**: tidak ada error, dan hasil teratas berisi kata-kata yang cocok persis dengan query ("KTP", "NPWP", "slip gaji") — bandingkan dengan hasil `store.search()` (vector) untuk query yang sama, urutannya kemungkinan besar berbeda.
 
 <details>
-<summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 1-2</strong></summary>
+<summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 2</strong></summary>
 
 ```
-Tambah _id ke hasil search() dan method baru search_bm25() di
-VectorStore (Module 17, Tahap A, Langkah 1-2) — belum dipakai endpoint
-apa pun.
+Tambah method baru search_bm25() di VectorStore (Module 17, Tahap A,
+Langkah 2) — belum dipakai endpoint apa pun.
 
 GOAL:
-- Di Nala/app/vector_store.py:
-  - Di method search() yang sudah ada, tambahkan key "_id": hit["_id"]
-    ke setiap dict di list yang dikembalikan (selain "text", "score",
-    "metadata" yang sudah ada).
-  - Tambah method baru search_bm25(self, query_text: str, top_k: int
-    = 10) -> list[dict]: POST ke {base_url}/{index_name}/_search
-    dengan body {"size": top_k, "query": {"match": {"text":
-    query_text}}}, parse hits sama persis seperti search() (termasuk
-    _id), return list of dict {_id, text, score, metadata}.
+- Di Nala/app/vector_store.py, tambah method baru
+  search_bm25(self, query_text: str, top_k: int = 10) -> list[dict]:
+  POST ke {base_url}/{index_name}/_search dengan body {"size": top_k,
+  "query": {"match": {"text": query_text}}}, parse hits sama persis
+  seperti search() (termasuk _id), return list of dict {_id, text,
+  score, metadata}.
 
 CONTEXT:
-- File ini (`app/vector_store.py`) sudah ada di `Nala/`
-  sejak Module 12 — edit langsung di file yang sama, tidak ada
-  folder lain yang perlu disalin.
+- File ini (`app/vector_store.py`) sudah ada di `Nala/` sejak
+  Module 12 — edit langsung di file yang sama, tidak ada folder lain
+  yang perlu disalin.
+- Key _id di hasil search() sudah ditambahkan di Langkah 1.
 - Field "text" di mapping index nala-docs (dibuat ensure_index())
-  sudah bertipe "text" sejak Module 12 — BM25 bisa langsung dipakai tanpa
-  reindex.
+  sudah bertipe "text" sejak Module 12 — BM25 bisa langsung dipakai
+  tanpa reindex.
 
 GUARDRAIL:
-- JANGAN ubah signature search() (nama, parameter, return type list
-  of dict) — cuma tambah key _id ke tiap dict hasil.
+- JANGAN ubah search() yang sudah ada.
 - JANGAN ubah ensure_index() atau index_document().
 - JANGAN sentuh app/main.py di langkah ini.
 ```
@@ -612,7 +692,9 @@ curl -N -X POST http://localhost:8000/chat/stream \
   -d '{"messages": [{"role": "user", "content": "Apa saja syarat pengajuan kredit untuk nasabah perorangan?"}]}'
 ```
 
-✅ **Indikator sukses**: jawaban sekarang menyebut item konkret dari `### 2.1` (KTP, Kartu Keluarga, slip gaji, dst) — bandingkan dengan jawaban yang lebih umum/tidak lengkap yang didapat di Module 13 sebelum hybrid search ditambahkan, muncul bertahap seperti biasa (flag `-N`).
+✅ **Indikator sukses**: jawaban terasa lebih relevan dibanding sebelumnya, idealnya menyebut item konkret dari `### 2.1` (KTP, Kartu Keluarga, slip gaji, dst) — bandingkan dengan jawaban yang lebih umum/tidak lengkap yang didapat di Module 13 sebelum hybrid search ditambahkan, muncul bertahap seperti biasa (flag `-N`).
+
+Tapi untuk pertanyaan spesifik ini, jawaban **belum tentu** sudah menyebut keempat item itu secara lengkap — hybrid search terbukti menaikkan peringkat chunk yang benar (dari #10-14 di vector murni jadi sekitar #8, lihat Bagian 8), tapi belum cukup untuk selalu masuk `top_k=3` di kasus keras ini. Kalau jawabannya masih bilang "tidak ditemukan informasi spesifik", itu **bukan tanda ada yang salah** — itu justru bukti grounding masih bekerja jujur (Module 13 Bagian 2.d), dan alasan kenapa Module 18 (reranking) berikutnya diperlukan. Lihat Bagian 7 untuk checklist lengkap sebelum lanjut ke Module 18.
 
 <details>
 <summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 4</strong></summary>
@@ -687,9 +769,15 @@ def chat_stream(request: ChatStreamRequest) -> StreamingResponse:
     )
 ```
 
+### Troubleshooting
+
+- **`search_hybrid()` melempar error field `text` tidak ditemukan / query `match` gagal**: index `nala-docs` yang dipakai kemungkinan dibuat sebelum field `text` ada di mapping (versi index yang sangat lama) — hapus dan buat ulang index (`curl -X DELETE http://localhost:9200/nala-docs`) lalu jalankan ulang `ingest_documents()` (lihat Prasyarat & Setup Sebelum Mulai di atas).
+- **Port sudah dipakai (8000/9200/11434)**: ubah mapping port yang bentrok di `docker-compose.yml`, atau pastikan container lama sudah benar-benar dimatikan (`docker compose down` di `Nala`).
+- **`docker compose exec ollama ollama list` tidak menampilkan model**: model belum pernah di-pull ke volume container ini — jalankan ulang `docker compose exec ollama ollama pull <nama-model>` (lihat Prasyarat & Setup Sebelum Mulai di atas).
+
 ## 7. Checkpoint Praktik
 
-Langkah eksekusi lengkap ada di bagian **Panduan Praktik** di bawah, Langkah 1-4. Yang perlu dipastikan sebelum lanjut ke Module 18:
+Langkah eksekusi lengkap ada di Bagian 6 di atas (Tahap A Langkah 1-3, Tahap B Langkah 4). Yang perlu dipastikan sebelum lanjut ke Module 18:
 
 - [ ] `store.search_bm25()` mengembalikan hasil yang cocok kata kunci eksak dengan query
 - [ ] `store.search_hybrid()` mengembalikan hasil yang berbeda urutannya dibanding `store.search()` murni, untuk query yang sama, dan skor `rrf_score` untuk chunk `### 2.1 Untuk Nasabah Perorangan` naik dibanding peringkatnya di `store.search()` murni (lihat Bagian 8 di bawah — belum tentu masuk `top_k=3`, itu wajar di titik ini)
@@ -774,116 +862,3 @@ Ini bukan bug, dan bukan berarti Module 17 gagal — dibanding vector murni, hyb
 Module ini menutup celah yang secara eksplisit didokumentasikan sebagai keterbatasan di akhir Module 16: vector search murni bisa kalah oleh chunk pendek yang "kebetulan" mirip secara makna, padahal kecocokan kata kunci eksak justru menunjuk ke chunk yang benar. Hybrid search (BM25 + vector, digabung lewat RRF berbasis rank — bukan skor mentah yang rawan beda skala) memperbaiki ini **tanpa reindex** dan **tanpa mengubah kontrak endpoint** (`/chat/stream` tetap menerima/mengembalikan bentuk yang sama).
 
 Yang belum diselesaikan (dan sudah dibuktikan langsung dengan angka di Bagian 8): hybrid search memperbaiki *recall* di level kandidat (dokumen yang benar kini punya peluang lebih besar masuk top-K yang lebih besar seperti `candidate_pool=20`), tapi belum tentu selalu menaruhnya di posisi #1-3 secara konsisten — kombinasi BM25+vector tetap heuristik berbasis rank, bukan penilaian relevansi langsung. Module 18 (Reranking) mengambil pool kandidat yang lebih besar (`candidate_pool=20`, sudah disiapkan di `search_hybrid()`) dan menyortirnya ulang pakai model yang secara khusus dilatih untuk menilai relevansi query-dokumen — dibahas berikutnya di Module 18.
-
-## Panduan Praktik
-
-> **Catatan penomoran**: "Langkah N" di bagian Panduan Praktik ini adalah urutan eksekusi tersendiri (langkah demi langkah menjalankan perintah), terpisah dari "Langkah N" yang sudah dipakai di bagian kode/struktur di atas (langkah menulis kode). Keduanya kebetulan memakai nomor yang sama tapi menghitung hal yang berbeda — jangan disamakan urutannya.
-
-#### Catatan penting sebelum mulai
-
-`Nala/` sudah dibangun bertahap sejak Module 1 dan berjalan lengkap sampai akhir Module 16 (chat UI, streaming/multi-turn, upload, embedding/vector store, chunking, Airflow, RAG chain) — module ini melanjutkan **edit langsung di folder yang sama**, tidak ada folder baru yang perlu dibuat atau disalin. Perintah-perintah di bawah ini mendeskripsikan apa yang akan dijalankan peserta mengikuti panduan ini; kalau ada perintah yang tidak berjalan persis seperti yang tertulis begitu Anda benar-benar menjalankannya, cocokkan dulu dengan kode lengkap ("📄 Kode lengkap") di `materi.md` — itu sumber kebenaran yang lebih rinci dari sekadar cuplikan perintah di sini.
-
-Sepanjang seluruh kurikulum (Module 1 sampai Module 29) hanya ada **satu** folder kode: `Nala/` — dibangun dan diedit langsung di situ, module demi module, memakai kode lengkap di tiap `materi.md` sebagai rujukan kalau ingin membandingkan hasil.
-
-### Prasyarat
-- Sudah menyelesaikan **Module 16** (`Nala/` berjalan lengkap: chat UI, streaming/multi-turn, upload, embedding/vector store, chunking, Airflow, RAG chain)
-- Docker Desktop sudah dialokasikan resource yang cukup — minimal 16GB RAM (sama seperti kebutuhan sejak Module 12-16); module ini sendiri tidak menambah service Docker baru, jadi belum perlu menaikkan alokasi lagi
-
-#### Container Module 7-16 tetap dipakai
-
-Container dan volume Docker (`ollama`, `opensearch`, `airflow`, dst) yang sudah berjalan sejak Module 7-16 tetap dipakai apa adanya di module ini — karena folder kerja dan `docker-compose.yml` yang dipakai memang tetap sama satu-satunya (`Nala/`), data yang sudah ada (index OpenSearch yang sudah terisi dari ingest sebelumnya, model Ollama yang sudah di-pull) otomatis ikut terbawa, tidak perlu diulang dari nol.
-
-### Langkah 1: Masuk ke folder starter code, mulai service yang sudah ada sejak Module 7-16
-
-```bash
-cd Nala
-docker compose up --build ollama opensearch api
-```
-
-Tiga service ini sudah pernah dijalankan sebelumnya — kalau model `llama3.2:3b` dan `nomic-embed-text` sudah pernah di-*pull* ke volume `ollama_data` sebelumnya, tidak perlu di-*pull* ulang (volume Docker persisten, selama tidak dihapus). Verifikasi:
-
-```bash
-docker compose exec ollama ollama list
-```
-
-Kalau `llama3.2:3b` dan `nomic-embed-text` sudah muncul, lanjut ke Langkah 2. Kalau belum, ulangi `docker compose exec ollama ollama pull <nama-model>` untuk masing-masing (lihat Module 2 materi.md (bagian Panduan Praktik) dan Module 11 materi.md untuk detail model yang dipakai).
-
-Pastikan juga index `nala-docs` di OpenSearch masih terisi dari ingest sebelumnya:
-
-```bash
-curl http://localhost:9200/nala-docs/_count
-```
-
-Kalau `count` bernilai `0` (index kosong, misalnya karena volume `opensearch_data` baru), jalankan ulang ingest:
-
-```bash
-docker compose exec api python -c "from app.ingest import ingest_documents; print(ingest_documents('/app/knowledge-base'))"
-```
-
-### Langkah 2: Bandingkan `search()` vs `search_hybrid()` sebelum menulis kode
-
-Sebelum menulis `search_bm25()`/`search_hybrid()`, coba dulu query yang sama lewat `search()` murni (vector, sudah ada sejak Module 12) untuk melihat baseline yang akan dibandingkan:
-
-```bash
-docker compose exec api python -c "
-from app.embeddings import embed_text
-from app.vector_store import VectorStore
-
-store = VectorStore(base_url='http://opensearch:9200', index_name='nala-docs')
-query = 'Apa saja syarat pengajuan kredit untuk nasabah perorangan?'
-query_embedding = embed_text(query, base_url='http://ollama:11434')
-
-results = store.search(query_embedding, top_k=10)
-for i, r in enumerate(results):
-    print(i, round(r['score'], 4), '-', r['text'][:70])
-"
-```
-
-Catat di posisi keberapa chunk `### 2.1 Untuk Nasabah Perorangan` muncul (kalau muncul sama sekali di top-10) — ini baseline yang akan dibandingkan setelah Langkah 3-4.
-
-### Langkah 3: Tulis `search_bm25()` dan `search_hybrid()`
-
-Ikuti Module 17 Bagian 6 Tahap A Langkah 1-3 di `materi.md` untuk menambah `_id` ke `search()`, lalu method baru `search_bm25()` dan `search_hybrid()` di `app/vector_store.py`.
-
-```bash
-docker compose up --build api
-```
-
-```bash
-docker compose exec api python -c "
-from app.embeddings import embed_text
-from app.vector_store import VectorStore
-
-store = VectorStore(base_url='http://opensearch:9200', index_name='nala-docs')
-query = 'Apa saja syarat pengajuan kredit untuk nasabah perorangan?'
-query_embedding = embed_text(query, base_url='http://ollama:11434')
-
-results = store.search_hybrid(query, query_embedding, top_k=10, candidate_pool=20)
-for i, r in enumerate(results):
-    print(i, round(r['rrf_score'], 4), '-', r['text'][:70])
-"
-```
-
-✅ **Indikator sukses**: bandingkan posisi chunk `### 2.1` di sini dengan catatan Langkah 2 — seharusnya naik ke posisi yang lebih tinggi (idealnya masuk top-5).
-
-### Langkah 4: Wiring hybrid search ke `/chat/stream`
-
-Ikuti Module 17 Bagian 6 Tahap B Langkah 4.
-
-```bash
-docker compose up --build api
-```
-
-```bash
-curl -N -X POST http://localhost:8000/chat/stream \
-  -H "Content-Type: application/json" \
-  -d '{"messages": [{"role": "user", "content": "Apa saja syarat pengajuan kredit untuk nasabah perorangan?"}]}'
-```
-
-✅ **Indikator sukses**: jawaban terasa lebih relevan dibanding sebelumnya (menyebut konteks yang lebih tepat sasaran), tapi untuk pertanyaan spesifik ini **belum tentu** sudah menyebut item konkret (KTP, Kartu Keluarga, slip gaji, NPWP) — hybrid search terbukti meningkatkan peringkat chunk yang benar (dari #10-14 di vector murni jadi sekitar #8), tapi belum cukup untuk masuk `top_k=3` di kasus keras ini (lihat data lengkap di Module 17 Bagian 8). Kalau jawabannya masih bilang "tidak ditemukan informasi spesifik", itu **bukan tanda ada yang salah** — itu justru bukti grounding masih bekerja jujur (Module 13 Bagian 2.d), dan alasan kenapa Module 18 (reranking) berikutnya diperlukan. Lihat Module 17 Bagian 7 untuk checklist lengkap sebelum lanjut ke Module 18.
-
-### Troubleshooting
-
-- **`search_hybrid()` melempar error field `text` tidak ditemukan / query `match` gagal**: index `nala-docs` yang dipakai kemungkinan dibuat sebelum field `text` ada di mapping (versi index yang sangat lama) — hapus dan buat ulang index (`curl -X DELETE http://localhost:9200/nala-docs`) lalu jalankan ulang `ingest_documents()` (lihat Langkah 1).
-- **Port sudah dipakai (8000/9200/11434)**: ubah mapping port yang bentrok di `docker-compose.yml`, atau pastikan container lama sudah benar-benar dimatikan (`docker compose down` di `Nala`).
-- **`docker compose exec ollama ollama list` tidak menampilkan model**: model belum pernah di-pull ke volume container ini — jalankan ulang `docker compose exec ollama ollama pull <nama-model>` (lihat Langkah 1).
