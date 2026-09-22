@@ -493,4 +493,4 @@ Yang perlu dipastikan sebelum lanjut ke Module 13:
 - [ ] Query dengan kata berbeda dari dokumen asli (tapi makna serupa) tetap menemukan dokumen yang di-index
 - [ ] `/chat/stream` (Module 7) masih berfungsi seperti sebelumnya
 
-Begitu keenam hal ini terverifikasi, lanjut ke Module 13 — menyatukan `extract_text()` (Module 10), embedding (Module 11), dan vector store (module ini) jadi satu fungsi `ingest_documents()` versi pertama (satu dokumen = satu vektor, belum ada chunking), memakai data seed untuk mengisi index untuk pertama kali, lalu **menyambungkan retrieval ke `/chat/stream`** — titik di mana RAG benar-benar "hidup" untuk pertama kalinya.
+Begitu kesembilan hal ini terverifikasi, lanjut ke Module 13 — menyatukan `extract_text()` (Module 10), embedding (Module 11), dan vector store (module ini) jadi satu fungsi `ingest_documents()` versi pertama (satu dokumen = satu vektor, belum ada chunking), memakai data seed untuk mengisi index untuk pertama kali, lalu **menyambungkan retrieval ke `/chat/stream`** — titik di mana RAG benar-benar "hidup" untuk pertama kalinya.

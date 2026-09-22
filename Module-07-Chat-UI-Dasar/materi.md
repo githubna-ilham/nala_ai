@@ -75,7 +75,7 @@ Dibanding starter code Module 1-6, ada tiga penambahan di `Nala/`. Daripada lang
 - Sudah menyelesaikan **Module 1-6** (Docker Desktop terinstall, `llama3.2:3b` pernah dipakai, familiar dengan `docker compose up --build`).
 - **`Nala/`** adalah satu-satunya folder kerja Anda, dipakai sejak Module 1-6 dan terus sama sepanjang Module 7-29 — panduan Module 7-16 membangunnya **bertahap, module demi module, langsung di tempat**, bukan disalin ke folder baru. `ollama_client.py`, `system_prompt.py`, `main.py`, `docker-compose.yml`, dan seterusnya sudah ada di sana dari Module 1-6. Konsekuensinya: **tidak ada folder lain untuk dipindahkan, dan tidak ada container yang perlu dimatikan** — container Ollama yang sudah jalan sejak Module 1-6 terus dipakai apa adanya (project Docker Compose-nya sama, karena foldernya sama), dan model yang sudah di-pull otomatis ikut terbawa, tidak perlu di-pull ulang.
 
-⚠️ **Naikkan alokasi RAM Docker Desktop sebelum Module 16.** Module 7-16 menambahkan dua service baru di atas stack Module 1-6: **OpenSearch** (vector store, mulai Module 12) dan **Airflow** (orchestrator, mode `standalone`, mulai Module 16) — keduanya jauh lebih berat dibanding FastAPI/Ollama saja: OpenSearch adalah JVM yang butuh heap tersendiri, dan Airflow standalone menjalankan webserver + scheduler + database sekaligus dalam satu container. Kalau di Module 1-6 Anda mengalokasikan Docker Desktop di batas minimal (8–12GB), **naikkan ke 16GB+**. Ikuti langkah yang sama seperti **Langkah 0 di `Module-04-Setup-Infra-Docker-Compose/materi.md`, bagian Panduan Praktik** (Docker Desktop → ⚙️ Settings → tab Resources):
+⚠️ **Naikkan alokasi RAM Docker Desktop sebelum Module 16.** Module 7-16 menambahkan dua service baru di atas stack Module 1-6: **OpenSearch** (vector store, mulai Module 12) dan **Airflow** (orchestrator, mode `standalone`, mulai Module 16) — keduanya jauh lebih berat dibanding FastAPI/Ollama saja: OpenSearch adalah JVM yang butuh heap tersendiri, dan Airflow standalone menjalankan webserver + scheduler + database sekaligus dalam satu container. Kalau di Module 1-6 Anda mengalokasikan Docker Desktop di batas minimal (8–12GB), **naikkan ke 16GB+**. Ikuti langkah yang sama seperti **Langkah 0 di `Module-04-Setup-Infra-Docker-Compose/materi.md`, section 3.4** (Docker Desktop → ⚙️ Settings → tab Resources):
 
 | Setting | Minimal Module 7-16 | Direkomendasikan | Alasan |
 |---|---|---|---|
@@ -88,7 +88,7 @@ Kalau Anda sudah mengubah setting ini di Module 1-6 ke 16GB+, tidak perlu diubah
 
 Catatan: panduan Module 7-16 menyalakan service **secara bertahap**, mengikuti urutan module — `ollama`+`api` dulu di Langkah 1 di bawah (Module 7-10 cuma butuh ini — Module 9 malah tidak butuh service apa pun, murni diskusi), `opensearch` menyusul di Module 12, `airflow` terakhir di Module 16 — jadi beban RAM di Module 7-11 jauh lebih ringan dari 16GB. Alokasi 16GB+ tetap perlu disiapkan sebelum Module 16, begitu keempat service jalan bersamaan.
 
-Kalau disk mulai penuh, bersihkan image/volume lama yang tidak terpakai (lihat peringatan di `Module-04-Setup-Infra-Docker-Compose/materi.md`, bagian Panduan Praktik, soal `docker system prune -a --volumes` — perintah ini menghapus model Ollama yang sudah di-pull juga).
+Kalau disk mulai penuh, bersihkan image/volume lama yang tidak terpakai (lihat peringatan di `Module-04-Setup-Infra-Docker-Compose/materi.md`, section 3.4, soal `docker system prune -a --volumes` — perintah ini menghapus model Ollama yang sudah di-pull juga).
 
 **Langkah 1 — Pastikan fondasi Module 1-6 masih utuh**
 
