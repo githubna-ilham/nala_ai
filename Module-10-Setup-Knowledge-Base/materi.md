@@ -62,15 +62,72 @@ Dengan dua dokumen pendek ini, versi pertama RAG (Module 13) bisa meng-embed **m
 
 **Format dokumen yang didukung NALA**: Markdown, plain text, dan PDF. Markdown dan plain text mudah diparsing tanpa library eksternal; PDF ditambahkan karena di dunia nyata, SOP dan kebijakan perusahaan sering sudah dalam bentuk PDF (hasil ekspor Word, atau dokumen resmi) — mengabaikannya berarti NALA tidak bisa dipakai untuk sebagian besar dokumen yang sudah ada. Contoh filenya juga ada di folder module ini: `sop-pembukaan-rekening-tabungan.pdf`. ⚠️ **Tetap di luar scope training ini**: DOCX dan PDF hasil scan gambar (butuh OCR) — keduanya butuh library terpisah yang tidak dibahas di training ini.
 
-**Langkah 1 — Pastikan folder `knowledge-base/` ada dan berisi data seed**
+**Langkah 1 — Bind mount folder data seed ke dalam container**
 
-```bash
-ls resources/sample-knowledge-base/
+Folder `resources/sample-knowledge-base/` (di root project, sudah berisi kedua dokumen SOP di atas plus satu file PDF contoh) baru tersedia **di laptop Anda** — container `api` belum bisa mengaksesnya sama sekali, karena belum ada volume yang menghubungkan keduanya. Tambahkan satu `volumes:` baru ke service `api` di `docker-compose.yml`:
+
+```yaml
+services:
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - OLLAMA_MODEL=llama3.2:3b
+    volumes:
+      - ../resources/sample-knowledge-base:/app/knowledge-base
+    depends_on:
+      - ollama
+
+volumes:
+  ollama_data:
 ```
 
-Folder ini sudah disiapkan sejak awal training (bind mount `KNOWLEDGE_BASE_PATH`, lihat Module 4) — berisi kedua dokumen SOP di atas, plus satu file PDF contoh untuk menguji cabang `.pdf` di `extract_text()` nanti. Tidak ada kode yang ditulis di langkah ini, cuma verifikasi bahwa fondasi datanya sudah ada sebelum lanjut ke `extract_text()`.
+- **`../resources/sample-knowledge-base:/app/knowledge-base`** — path host-nya relatif terhadap lokasi `docker-compose.yml` (`Nala/`), jadi `../resources/...` naik satu level ke root project. Path container-nya (`/app/knowledge-base`) inilah yang dipakai kode Python sepanjang module ini dan seterusnya.
+- Ini **bind mount**, bukan named volume seperti `ollama_data` — perubahan file di `resources/sample-knowledge-base/` (tambah/hapus/edit) langsung terlihat di dalam container tanpa perlu rebuild, karena keduanya menunjuk fisik ke folder yang sama.
 
-✅ **Indikator sukses**: `sop-pengajuan-kredit.md`, `sop-klaim-asuransi.md`, dan `sop-pembukaan-rekening-tabungan.pdf` muncul di listing.
+**▶️ Jalankan & lihat hasilnya**
+
+```bash
+docker compose up --build -d api
+docker compose exec api ls -la /app/knowledge-base
+```
+
+✅ **Indikator sukses**: `sop-pengajuan-kredit.md`, `sop-klaim-asuransi.md`, dan `sop-pembukaan-rekening-tabungan.pdf` muncul di listing — dari **dalam** container, bukan cuma di laptop Anda (`ls resources/sample-knowledge-base/` di host akan menunjukkan isi yang sama persis, karena bind mount menyamakan keduanya).
+
+<details>
+<summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 1</strong></summary>
+
+```
+Tambahkan bind mount folder knowledge base ke service api
+(Module 10) — belum ada sebelumnya.
+
+GOAL:
+- Di Nala/docker-compose.yml, tambahkan key `volumes:` baru ke
+  service `api` (sejajar dengan `environment:` dan `depends_on:`
+  yang sudah ada), isinya persis satu baris:
+  - ../resources/sample-knowledge-base:/app/knowledge-base
+
+CONTEXT:
+- Service `api` sekarang cuma punya build/ports/environment/depends_on
+  — belum ada volumes sama sekali.
+- docker-compose.yml ada di Nala/, folder resources/sample-knowledge-base
+  ada satu level di atas (root project), makanya pakai ../.
+
+GUARDRAIL:
+- JANGAN ubah service `ollama` atau bagian lain docker-compose.yml.
+- JANGAN tambah environment variable baru — cukup volumes.
+```
+
+</details>
 
 ## 3. Struktur Kode yang Ditambahkan: `extract_text()`
 
