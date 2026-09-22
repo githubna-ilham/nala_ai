@@ -323,11 +323,9 @@ def chat(request: ChatRequest) -> ChatResponse:
     - Input: ChatRequest (auto-validated)
     - Output: ChatResponse (JSON schema enforced)
     """
-    # Process pertanyaan
-    reply = ollama_client.generate(system_prompt=NALA_SYSTEM_PROMPT, user_message=request.message)
-
-    # Return response sesuai ChatResponse schema
-    return ChatResponse(reply=reply)
+    # Belum tersambung ke Ollama — itu baru dibangun di Module 6.
+    # Di sini cukup dibuktikan alur validasi & schema-nya jalan.
+    return ChatResponse(reply=f"Anda bertanya: {request.message}")
 ```
 
 **Keuntungan Pydantic:**
