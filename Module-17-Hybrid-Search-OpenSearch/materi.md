@@ -43,9 +43,9 @@ flowchart LR
 
 ## 1. Kenapa Vector Search Murni Tidak Cukup
 
-Module 14 Bagian 9 sudah mendokumentasikan kasus nyata yang jadi motivasi module ini. Pertanyaan *"Apa saja syarat pengajuan kredit untuk nasabah perorangan?"* punya jawaban lengkap di `sop-pengajuan-kredit.md`, tepat di chunk `### 2.1 Untuk Nasabah Perorangan` — tapi chunk itu baru masuk di peringkat **`top_k=15` dari total 29 chunk** saat vector search murni dijalankan. Chunk heading pendek (`## 2. Syarat dan Ketentuan Pengajuan Kredit`) justru mendapat *similarity score* lebih tinggi, karena vektornya "tajam" (fokus ke satu makna singkat), sementara chunk jawaban yang panjang (berisi KTP, KK, slip gaji, NPWP, usia, dst) menghasilkan vektor yang "diencerkan" oleh banyak sub-konsep sekaligus.
+Module 14 Bagian 9 sudah mendokumentasikan kasus nyata yang jadi motivasi module ini. Pertanyaan *"Apa saja syarat pengajuan kredit untuk nasabah perorangan?"* punya jawaban lengkap di `sop-pengajuan-kredit.md`, tepat di chunk `### 2.1 Untuk Nasabah Perorangan` — tapi chunk itu baru berperingkat **#11 dari 14 chunk** saat vector search murni dijalankan, jauh di luar jangkauan `top_k=6` yang dipakai Module 14 (Bagian 8 Langkah 4). Chunk heading pendek (`## 2. Syarat dan Ketentuan Pengajuan Kredit`) justru mendapat *similarity score* lebih tinggi, karena vektornya "tajam" (fokus ke satu makna singkat), sementara chunk jawaban yang panjang (berisi KTP, KK, slip gaji, NPWP, usia, dst) menghasilkan vektor yang "diencerkan" oleh banyak sub-konsep sekaligus.
 
-NALA saat itu tidak salah menjawab — dengan `top_k=3` yang dipakai module ini, chunk jawaban yang tepat memang tidak pernah terlihat sama sekali. Menaikkan `top_k` ke 15 bukan solusi murah: mayoritas dari 15 chunk itu tidak relevan, dan mengirim itu semua ke `llama3.2:3b` (context window terbatas) berisiko mengencerkan fokus model, bukan membantunya.
+NALA saat itu tidak salah menjawab — dengan `top_k=3` yang dipakai module ini, chunk jawaban yang tepat memang tidak pernah terlihat sama sekali. Menaikkan `top_k` ke 11 bukan solusi murah: mayoritas dari 11 chunk itu tidak relevan, dan mengirim itu semua ke `llama3.2:3b` (context window terbatas) berisiko mengencerkan fokus model, bukan membantunya.
 
 **Akar masalahnya**: vector search murni bagus untuk menangkap *makna* (nasabah bertanya "syarat kredit", dokumen bicara "dokumen yang dibutuhkan" — beda kata, makna dekat), tapi lemah menangkap **kecocokan kata kunci eksak** — istilah seperti "KTP", "NPWP", "slip gaji", atau nomor SOP justru lebih baik ditangkap oleh pencarian lexical (keyword matching) klasik seperti **BM25**. Kedua metode punya kelemahan yang saling melengkapi:
 
@@ -69,7 +69,7 @@ flowchart LR
 
 ### Coba Langsung: Verifikasi Baseline Vector Search dengan Data Anda Sendiri
 
-Angka "`top_k=15` dari 29 chunk" di atas berasal dari index dan isi dokumen tertentu — bisa berbeda di komputer Anda tergantung dokumen apa saja yang sudah ter-*ingest*. Sebelum menulis kode apa pun di Bagian 6, jalankan dulu `search()` murni (vector, sudah ada sejak Module 12) untuk query yang sama, dan catat di posisi keberapa chunk `### 2.1 Untuk Nasabah Perorangan` muncul — ini baseline yang nanti dibandingkan lagi setelah `search_hybrid()` ditulis di Bagian 6:
+Angka "**#11 dari 14** chunk" di atas berasal dari index dan isi dokumen tertentu — bisa berbeda di komputer Anda tergantung dokumen apa saja yang sudah ter-*ingest*. Sebelum menulis kode apa pun di Bagian 6, jalankan dulu `search()` murni (vector, sudah ada sejak Module 12) untuk query yang sama, dan catat di posisi keberapa chunk `### 2.1 Untuk Nasabah Perorangan` muncul — ini baseline yang nanti dibandingkan lagi setelah `search_hybrid()` ditulis di Bagian 6:
 
 ```bash
 docker compose exec api python -c "
@@ -146,7 +146,7 @@ Dokumen A cocok dengan **ketiga** kata query, termasuk kata paling langka "duduk
 | "pengajuan" | Mungkin muncul juga di chunk lain | Sedang |
 | "kredit" | Muncul di hampir semua chunk (topik seluruh dokumen ini memang kredit) | **Rendah** — IDF rendah, kata ini terlalu umum di index ini untuk jadi pembeda |
 
-Persis seperti "duduk" di contoh kucing tadi: "perorangan" dan "nasabah" adalah kata paling diskriminatif (jarang, spesifik) di query ini — itulah yang mendorong BM25 memberi skor tinggi ke chunk `### 2.1`, konsisten dengan angka pengujian nyata di Bagian 8: BM25 menempatkan chunk ini di peringkat **#4 dari 14** chunk, jauh lebih tinggi dibanding vector search murni yang menaruhnya di peringkat **#10 dari 14** (Bagian 1) — bukti langsung bahwa BM25 dan vector search benar-benar menilai relevansi lewat mekanisme yang sama sekali berbeda, bukan cuma varian dari hal yang sama.
+Persis seperti "duduk" di contoh kucing tadi: "perorangan" dan "nasabah" adalah kata paling diskriminatif (jarang, spesifik) di query ini — itulah yang mendorong BM25 memberi skor tinggi ke chunk `### 2.1`, konsisten dengan angka pengujian nyata di Bagian 8: BM25 menempatkan chunk ini di peringkat **#4 dari 14** chunk, jauh lebih tinggi dibanding vector search murni yang menaruhnya di peringkat **#11 dari 14** (Bagian 1) — bukti langsung bahwa BM25 dan vector search benar-benar menilai relevansi lewat mekanisme yang sama sekali berbeda, bukan cuma varian dari hal yang sama.
 
 ### Coba Langsung: Lihat Skor BM25 Mentah dari OpenSearch
 
@@ -222,7 +222,7 @@ Alih-alih menormalisasi skor BM25 dan skor vector (yang butuh tahu rentang masin
 
 $$\text{RRF\_score}(d) = \sum_{\text{daftar} \in \{BM25, Vector\}} \frac{1}{k + \text{rank}_{\text{daftar}}(d)}$$
 
-Dengan `k` (konstanta, umumnya `60`) sebagai peredam supaya peringkat-peringkat teratas tidak mendominasi berlebihan. Dokumen yang muncul di peringkat atas di **kedua** daftar (BM25 maupun vector) akan mendapat skor RRF tertinggi — dokumen yang cuma muncul di satu daftar saja tetap dapat skor, tapi lebih rendah. Karena berbasis rank (bukan skor mentah), RRF otomatis kebal terhadap masalah skala yang membuat Bagian 3 gagal — tidak perlu tahu skor BM25 "biasanya" berapa dibanding skor `knn`.
+Dengan `k` (konstanta, umumnya `60`) sebagai peredam supaya peringkat-peringkat teratas tidak mendominasi berlebihan. Dokumen yang muncul di peringkat atas di **kedua** daftar (BM25 maupun vector) akan mendapat skor RRF tertinggi — dokumen yang cuma muncul di satu daftar saja tetap dapat skor, tapi lebih rendah. Karena berbasis rank (bukan skor mentah), RRF otomatis kebal terhadap masalah skala yang membuat Bagian 4 gagal — tidak perlu tahu skor BM25 "biasanya" berapa dibanding skor `knn`.
 
 **Contoh Kasus: Menggabungkan Dua Daftar Peringkat**
 
@@ -379,7 +379,7 @@ def search_bm25(self, query_text: str, top_k: int = 10) -> list[dict]:
         ]
 ```
 
-Perhatikan kemiripannya dengan `search()`: bedanya cuma bagian `query` — `{"match": {"text": query_text}}` (BM25 lexical, mencari `query_text` mentah, bukan embedding) menggantikan `{"knn": {...}}`. Ini query BM25 paling dasar di OpenSearch — tidak butuh konfigurasi index tambahan (lihat Bagian 2), field `text` sudah otomatis punya scoring BM25 bawaan.
+Perhatikan kemiripannya dengan `search()`: bedanya cuma bagian `query` — `{"match": {"text": query_text}}` (BM25 lexical, mencari `query_text` mentah, bukan embedding) menggantikan `{"knn": {...}}`. Ini query BM25 paling dasar di OpenSearch — tidak butuh konfigurasi index tambahan (lihat Bagian 3), field `text` sudah otomatis punya scoring BM25 bawaan.
 
 **▶️ Jalankan & lihat hasilnya**
 
@@ -490,7 +490,7 @@ for r in results:
 "
 ```
 
-✅ **Indikator sukses**: tidak ada error, dan chunk `### 2.1 Untuk Nasabah Perorangan` (yang di Module 14 Bagian 9 baru muncul di `top_k=15` lewat vector search murni) sekarang seharusnya muncul jauh lebih tinggi — idealnya masuk `top_k=5` — karena BM25 menangkap kecocokan kata "syarat", "perorangan" secara eksak, ditambah sinyal semantik dari vector search.
+✅ **Indikator sukses**: tidak ada error, dan chunk `### 2.1 Untuk Nasabah Perorangan` (yang di Module 14 Bagian 9 berperingkat #11 dari 14 lewat vector search murni) sekarang seharusnya muncul jauh lebih tinggi — idealnya masuk `top_k=5` — karena BM25 menangkap kecocokan kata "syarat", "perorangan" secara eksak, ditambah sinyal semantik dari vector search.
 
 <details>
 <summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 3</strong></summary>
@@ -694,7 +694,7 @@ curl -N -X POST http://localhost:8000/chat/stream \
 
 ✅ **Indikator sukses**: jawaban terasa lebih relevan dibanding sebelumnya, idealnya menyebut item konkret dari `### 2.1` (KTP, Kartu Keluarga, slip gaji, dst) — bandingkan dengan jawaban yang lebih umum/tidak lengkap yang didapat di Module 13 sebelum hybrid search ditambahkan, muncul bertahap seperti biasa (flag `-N`).
 
-Tapi untuk pertanyaan spesifik ini, jawaban **belum tentu** sudah menyebut keempat item itu secara lengkap — hybrid search terbukti menaikkan peringkat chunk yang benar (dari #10-14 di vector murni jadi sekitar #8, lihat Bagian 8), tapi belum cukup untuk selalu masuk `top_k=3` di kasus keras ini. Kalau jawabannya masih bilang "tidak ditemukan informasi spesifik", itu **bukan tanda ada yang salah** — itu justru bukti grounding masih bekerja jujur (Module 13 Bagian 2.d), dan alasan kenapa Module 18 (reranking) berikutnya diperlukan. Lihat Bagian 7 untuk checklist lengkap sebelum lanjut ke Module 18.
+Tapi untuk pertanyaan spesifik ini, jawaban **belum tentu** sudah menyebut keempat item itu secara lengkap — hybrid search terbukti menaikkan peringkat chunk yang benar (dari #11 di vector murni jadi sekitar #8, lihat Bagian 8), tapi belum cukup untuk selalu masuk `top_k=3` di kasus keras ini. Kalau jawabannya masih bilang "tidak ditemukan informasi spesifik", itu **bukan tanda ada yang salah** — itu justru bukti grounding masih bekerja jujur (Module 13 Bagian 2.d), dan alasan kenapa Module 18 (reranking) berikutnya diperlukan. Lihat Bagian 7 untuk checklist lengkap sebelum lanjut ke Module 18.
 
 <details>
 <summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 4</strong></summary>
@@ -789,11 +789,11 @@ Pengujian langsung terhadap index `nala-docs` (13 chunk `sop-pengajuan-kredit.md
 
 | Metode | Peringkat chunk `### 2.1 Untuk Nasabah Perorangan` |
 |---|---|
-| Vector murni (`store.search()`) | #10 dari 14 |
+| Vector murni (`store.search()`) | #11 dari 14 |
 | BM25 saja (`store.search_bm25()`) | **#4** dari 14 |
 | Hybrid RRF (`store.search_hybrid()`) | #8 dari 14 |
 
-BM25 sendirian, untuk kasus spesifik ini, sebenarnya mengungguli hasil gabungan RRF — bukan aneh, ini konsekuensi logis dari RRF: dokumen ini kuat secara lexical (peringkat #4) tapi tetap lemah secara semantic (peringkat #10), jadi skor RRF gabungannya "ditarik turun" oleh komponen vector yang masih rendah. Hasilnya: **`top_k=3` di `/chat/stream` masih belum cukup untuk pertanyaan spesifik ini** — chunk yang benar ada di posisi #8, bukan di 3 besar.
+BM25 sendirian, untuk kasus spesifik ini, sebenarnya mengungguli hasil gabungan RRF — bukan aneh, ini konsekuensi logis dari RRF: dokumen ini kuat secara lexical (peringkat #4) tapi tetap lemah secara semantic (peringkat #11), jadi skor RRF gabungannya "ditarik turun" oleh komponen vector yang masih rendah. Hasilnya: **`top_k=3` di `/chat/stream` masih belum cukup untuk pertanyaan spesifik ini** — chunk yang benar ada di posisi #8, bukan di 3 besar.
 
 ### Alat Bantu: Cek Posisi Chunk Tertentu di Ketiga Metode
 
@@ -849,7 +849,7 @@ cari_posisi(query, query_embedding, 'Fotokopi KTP')
 "
 ```
 
-Ganti `query` dengan pertanyaan apa pun yang ingin dicoba, dan `'Fotokopi KTP'` dengan potongan teks unik dari chunk yang Anda harapkan muncul — cara ini jauh lebih cepat daripada scroll manual lewat puluhan baris hasil `print()` seperti yang dipakai di Bagian 7. `max_k=50` cukup besar untuk index saat ini yang masih berisi belasan-puluhan chunk; naikkan kalau index Anda sudah jauh lebih besar (banyak dokumen ter-*ingest*).
+Ganti `query` dengan pertanyaan apa pun yang ingin dicoba, dan `'Fotokopi KTP'` dengan potongan teks unik dari chunk yang Anda harapkan muncul — cara ini jauh lebih cepat daripada scroll manual lewat belasan baris hasil `print()` seperti yang dipakai di Bagian 1. `max_k=50` cukup besar untuk index saat ini yang masih berisi belasan-puluhan chunk; naikkan kalau index Anda sudah jauh lebih besar (banyak dokumen ter-*ingest*).
 
 ⚠️ **Jebakan umum — dua argumen ini gampang tertukar**: `query` (baris `query = '...'`) adalah **pertanyaan** yang mau dicari, sedangkan argumen ketiga `cari_posisi(query, query_embedding, '...')` adalah **potongan isi dokumen** yang diharapkan muncul di jawaban — bukan pertanyaannya lagi. Kalau keduanya tertukar (misal argumen ketiga ikut diisi pertanyaan, bukan potongan isi dokumen), hasilnya akan selalu "tidak ditemukan di top-N" untuk ketiga metode sekaligus — bukan berarti retrieval-nya gagal, tapi karena `potongan_teks` yang dicocokkan (`if potongan_teks in r["text"]`) memang tidak pernah muncul persis sebagai substring di teks chunk manapun. Kalau ketiga metode kompak "tidak ditemukan", curigai dulu argumen yang tertukar, baru curigai retrieval-nya.
 
@@ -859,6 +859,6 @@ Ini bukan bug, dan bukan berarti Module 17 gagal — dibanding vector murni, hyb
 
 ## Kesimpulan
 
-Module ini menutup celah yang secara eksplisit didokumentasikan sebagai keterbatasan di akhir Module 16: vector search murni bisa kalah oleh chunk pendek yang "kebetulan" mirip secara makna, padahal kecocokan kata kunci eksak justru menunjuk ke chunk yang benar. Hybrid search (BM25 + vector, digabung lewat RRF berbasis rank — bukan skor mentah yang rawan beda skala) memperbaiki ini **tanpa reindex** dan **tanpa mengubah kontrak endpoint** (`/chat/stream` tetap menerima/mengembalikan bentuk yang sama).
+Module ini menutup celah yang secara eksplisit didokumentasikan sebagai keterbatasan di Module 14 Bagian 9: vector search murni bisa kalah oleh chunk pendek yang "kebetulan" mirip secara makna, padahal kecocokan kata kunci eksak justru menunjuk ke chunk yang benar. Hybrid search (BM25 + vector, digabung lewat RRF berbasis rank — bukan skor mentah yang rawan beda skala) memperbaiki ini **tanpa reindex** dan **tanpa mengubah kontrak endpoint** (`/chat/stream` tetap menerima/mengembalikan bentuk yang sama).
 
 Yang belum diselesaikan (dan sudah dibuktikan langsung dengan angka di Bagian 8): hybrid search memperbaiki *recall* di level kandidat (dokumen yang benar kini punya peluang lebih besar masuk top-K yang lebih besar seperti `candidate_pool=20`), tapi belum tentu selalu menaruhnya di posisi #1-3 secara konsisten — kombinasi BM25+vector tetap heuristik berbasis rank, bukan penilaian relevansi langsung. Module 18 (Reranking) mengambil pool kandidat yang lebih besar (`candidate_pool=20`, sudah disiapkan di `search_hybrid()`) dan menyortirnya ulang pakai model yang secara khusus dilatih untuk menilai relevansi query-dokumen — dibahas berikutnya di Module 18.
