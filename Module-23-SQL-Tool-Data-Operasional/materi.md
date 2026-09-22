@@ -260,7 +260,7 @@ from app.tools.rag_tool import RAG_TOOL_SCHEMA, rag_search
 from app.tools.sql_tool import SQL_TOOL_SCHEMA, query_data_operasional
 
 
-def build_agent(ollama_client, vector_store, ollama_base_url: str):
+def build_agent(ollama_client, vector_store, ollama_base_url: str, reranker=None, trace=None, model_name: str = "llama3.2:3b"):
     tools_schema = [RAG_TOOL_SCHEMA, SQL_TOOL_SCHEMA]
 
     def call_model(state: AgentState) -> dict:
@@ -291,7 +291,7 @@ def build_agent(ollama_client, vector_store, ollama_base_url: str):
     ...
 ```
 
-Perubahan dibanding Module 22: `tools_schema` sekarang berisi **dua** skema (bukan satu), dan `call_tool` punya cabang `elif` baru yang memanggil `query_data_operasional(**args)`. Struktur graph itu sendiri (`call_model` → `should_continue` → `call_tool`/`END` → kembali ke `call_model`) **tidak berubah sama sekali** — inilah keuntungan pola LangGraph yang sudah dibangun di Module 22: menambah tool kedua tidak butuh mendesain ulang alur, cukup mendaftarkan skema baru dan menambah satu cabang di `call_tool`.
+Perubahan dibanding Module 22: `tools_schema` sekarang berisi **dua** skema (bukan satu), dan `call_tool` punya cabang `elif` baru yang memanggil `query_data_operasional(**args)`. Signature `build_agent()` sendiri **tidak berubah** di langkah ini — parameter `reranker`, `trace`, dan `model_name` sudah ada sejak versi final Module 22 (Bagian 7a-7b) dan dipertahankan apa adanya di sini, supaya `reranker` yang dipakai di pemanggilan `rag_search()` tetap terdefinisi. Struktur graph itu sendiri (`call_model` → `should_continue` → `call_tool`/`END` → kembali ke `call_model`) **tidak berubah sama sekali** — inilah keuntungan pola LangGraph yang sudah dibangun di Module 22: menambah tool kedua tidak butuh mendesain ulang alur, cukup mendaftarkan skema baru dan menambah satu cabang di `call_tool`.
 
 Dua penambahan lain (di luar rencana awal, ditemukan lewat uji nyata — lihat Bagian 6):
 
