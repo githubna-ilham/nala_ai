@@ -596,9 +596,9 @@ Sesuai prinsip kurikulum ini untuk jujur soal keterbatasan (lihat catatan retrie
 - Login/session/JWT sungguhan — lihat Bagian 1 dan Bagian 5.
 - Audit logging asinkron/queue — lihat Bagian 5.
 - Mitigasi gap audit untuk percobaan akses role tidak berwenang (Bagian 4.b-c) — teridentifikasi lewat pengujian, belum diperbaiki di rangkaian Module 22-26.
-- UI khusus NALA untuk melihat audit trail (mis. halaman `/audit-log` custom seperti `/data-operasional`) — bisa jadi bahan capstone (Module 27-30) kalau kelompok tertentu ingin menambahkannya. Untuk kebutuhan langsung, `docker-compose.yml` menyediakan **Adminer** (`http://localhost:8081`, image generik `adminer:latest`, bukan dibuat khusus untuk NALA) sebagai GUI database ringan — jauh lebih hemat RAM dibanding pgAdmin, penting karena laptop kita sudah menjalankan banyak service sekaligus (Ollama, OpenSearch, PostgreSQL, Airflow, Langfuse).
+- UI khusus NALA untuk melihat audit trail (mis. halaman `/audit-log` custom seperti `/data-operasional`) — bisa jadi bahan capstone (Module 27-30) kalau kelompok tertentu ingin menambahkannya. Untuk kebutuhan langsung, **Module 27** menambahkan **Adminer** (`http://localhost:8081`, image generik `adminer:latest`, bukan dibuat khusus untuk NALA) ke `docker-compose.yml` sebagai GUI database ringan — jauh lebih hemat RAM dibanding pgAdmin, penting karena laptop kita sudah menjalankan banyak service sekaligus (Ollama, OpenSearch, PostgreSQL, Airflow, Langfuse). Belum tersedia di module ini — kredensial di bawah baru relevan begitu Anda sampai di Module 27.
 
-  Login Adminer (`http://localhost:8081`) pakai salah satu kredensial berikut (default, kecuali `POSTGRES_ADMIN_PASSWORD` di-override lewat `.env`):
+  Login Adminer (`http://localhost:8081`, mulai Module 27) pakai salah satu kredensial berikut (default, kecuali `POSTGRES_ADMIN_PASSWORD` di-override lewat `.env`):
 
   | Field | Akses penuh (`nala_admin`) | Akses terbatas ke `audit_log` saja (`nala_app`) |
   |---|---|---|
