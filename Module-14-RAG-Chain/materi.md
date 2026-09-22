@@ -1,8 +1,8 @@
-# Module 13: RAG Chain v1 — RAG Mulai "Hidup"
+# Module 14: RAG Chain v1 — RAG Mulai "Hidup"
 
 ## Tujuan
 
-Menyatukan tiga potongan yang sudah dibangun (`extract_text()` Module 10, `embed_text()` Module 11, `VectorStore` Module 12) jadi satu fungsi `ingest_documents()` **versi pertama** — belum ada chunking, satu dokumen di-embed jadi **satu vektor utuh**. Memakainya untuk mengisi index dengan **data seed** (Bagian 2), lalu menyambungkan `/chat/stream` — satu-satunya endpoint chat NALA sejak Module 8 — ke retrieval. Ini titik paling penting Module 7-16 sejauh ini: **RAG benar-benar bekerja untuk pertama kalinya** — NALA menjawab dari dokumen sungguhan, bukan lagi generik. Chunking (Module 14) akan meng-upgrade `ingest_documents()` ini nanti — bukan menggantinya dari nol.
+Menyatukan tiga potongan yang sudah dibangun (`extract_text()` Module 10, `embed_text()` Module 11, `VectorStore` Module 13) jadi satu fungsi `ingest_documents()` **versi pertama** — belum ada chunking, satu dokumen di-embed jadi **satu vektor utuh**. Memakainya untuk mengisi index dengan **data seed** (Bagian 2), lalu menyambungkan `/chat/stream` — satu-satunya endpoint chat NALA sejak Module 8 — ke retrieval. Ini titik paling penting Module 7-17 sejauh ini: **RAG benar-benar bekerja untuk pertama kalinya** — NALA menjawab dari dokumen sungguhan, bukan lagi generik. Chunking (Module 15) akan meng-upgrade `ingest_documents()` ini nanti — bukan menggantinya dari nol.
 
 ## Definisi
 
@@ -27,15 +27,15 @@ flowchart LR
 - `/chat/stream` menjawab berdasarkan isi dokumen SOP yang ter-index, bukan generik lagi, untuk pertanyaan yang jawabannya ada di knowledge base
 - Multi-turn (Module 8) tetap berfungsi setelah retrieval ditambahkan — pertanyaan lanjutan tanpa kata kunci eksplisit tetap dipahami dan tetap memicu retrieval baru
 - Index kosong/OpenSearch tak terjangkau menghasilkan fallback ke `NALA_SYSTEM_PROMPT_NO_CONTEXT` (jawaban tetap mengalir normal, bukan error)
-- Kita memahami keterbatasan nyata retrieval **level-dokumen** (Bagian 7) sebagai motivasi jujur untuk chunking di Module 14 — bukan diklaim sebagai retrieval yang sudah optimal
+- Kita memahami keterbatasan nyata retrieval **level-dokumen** (Bagian 7) sebagai motivasi jujur untuk chunking di Module 15 — bukan diklaim sebagai retrieval yang sudah optimal
 
 ## 1. Menyatukan Tiga Potongan: `ingest_documents()` v1
 
-**Prasyarat**: sudah menyelesaikan **Module 12** (Vector Store & Semantic Search) — `opensearch` sudah menyala dan sehat.
+**Prasyarat**: sudah menyelesaikan **Module 12-13** (OpenSearch & Semantic Search) — `opensearch` sudah menyala dan sehat.
 
-Module 10-12 membangun tiga alat terpisah: `extract_text()` (Module 10), `embed_text()` (Module 11), dan `VectorStore` (Module 12). Sekarang saatnya menyatukan ketiganya jadi satu fungsi — `ingest_documents()`, yang menerima path folder dan mengembalikan jumlah dokumen yang ter-index.
+Module 10-13 membangun tiga alat terpisah: `extract_text()` (Module 10), `embed_text()` (Module 11), dan `VectorStore` (Module 13). Sekarang saatnya menyatukan ketiganya jadi satu fungsi — `ingest_documents()`, yang menerima path folder dan mengembalikan jumlah dokumen yang ter-index.
 
-⚠️ **Belum ada chunking di versi ini**: tiap dokumen dibaca `extract_text()` **secara utuh**, langsung di-embed **secara utuh** jadi satu vektor, lalu disimpan sebagai **satu entri** di OpenSearch (`doc_id` = nama file apa adanya, bukan `filename-0`, `filename-1`, dst). Ini sengaja — versi pertama RAG dibuat sesederhana mungkin supaya cepat terbukti bekerja. Bagian 7 di bawah akan menunjukkan keterbatasan nyata dari pendekatan ini, yang jadi alasan konkret Module 14 menambahkan chunking.
+⚠️ **Belum ada chunking di versi ini**: tiap dokumen dibaca `extract_text()` **secara utuh**, langsung di-embed **secara utuh** jadi satu vektor, lalu disimpan sebagai **satu entri** di OpenSearch (`doc_id` = nama file apa adanya, bukan `filename-0`, `filename-1`, dst). Ini sengaja — versi pertama RAG dibuat sesederhana mungkin supaya cepat terbukti bekerja. Bagian 7 di bawah akan menunjukkan keterbatasan nyata dari pendekatan ini, yang jadi alasan konkret Module 15 menambahkan chunking.
 
 **Langkah 1 — Tambah `ingest_documents()` di `app/ingest.py`**
 
@@ -79,7 +79,7 @@ def ingest_documents(folder_path: str) -> int:
     return total_documents
 ```
 
-Fungsi ini: memastikan index OpenSearch sudah ada (`ensure_index()`), scan semua file `.md`/`.txt`/`.pdf` di folder tersebut (urut alfabetis), baca isinya jadi string utuh (`extract_text`, Module 10), embed **seluruh isi dokumen sekaligus** (`embed_text`, Module 11), lalu index-kan satu entri per dokumen ke OpenSearch (`store.index_document`, Module 12) dengan `doc_id` = nama filenya sendiri. Inilah titik di mana ketiga potongan (ekstraksi teks, embedding, vector store) akhirnya bertemu di satu file — versi paling sederhana yang mungkin.
+Fungsi ini: memastikan index OpenSearch sudah ada (`ensure_index()`), scan semua file `.md`/`.txt`/`.pdf` di folder tersebut (urut alfabetis), baca isinya jadi string utuh (`extract_text`, Module 10), embed **seluruh isi dokumen sekaligus** (`embed_text`, Module 11), lalu index-kan satu entri per dokumen ke OpenSearch (`store.index_document`, Module 13) dengan `doc_id` = nama filenya sendiri. Inilah titik di mana ketiga potongan (ekstraksi teks, embedding, vector store) akhirnya bertemu di satu file — versi paling sederhana yang mungkin.
 
 > **📝 Catatan penting — semua dokumen di-embed ulang, bukan cuma yang baru**: `ingest_documents()` **tidak** membedakan dokumen lama vs baru — setiap kali dipanggil, fungsi ini scan ulang **seluruh isi folder**, lalu embed ulang semuanya dari nol. **Kenapa ini tidak menyebabkan duplikat**: `doc_id=filename` bersifat deterministik — dokumen yang sama selalu punya ID yang sama, jadi `index_document()` **menimpa** (overwrite), bukan menambah entri baru — idempotent, aman dijalankan berkali-kali. **Tapi ini boros**: makin banyak dokumen lama, makin banyak panggilan Ollama yang tidak perlu tiap kali di-ingest ulang. Di production nyata, biasanya ditambah pengecekan `mtime`/hash file untuk skip dokumen yang tidak berubah — di luar cakupan training ini, demi kesederhanaan belajar konsep.
 
@@ -103,17 +103,17 @@ harus menunjukkan angka yang sama.
 
 > 🔧 **Troubleshooting — chat menjawab generik / bilang belum ada dokumen internal padahal sudah ingest**: `/chat/stream` (Bagian 2) otomatis jatuh ke mode tanpa-konteks saat index OpenSearch masih kosong (atau belum menyala) — itu normal, bukan error, tapi tandanya ingest belum berhasil. Cek lagi `curl http://localhost:9200/nala-docs/_count` — kalau `count` bernilai 0, index memang kosong, jalankan ulang Langkah 1 ini.
 
-> **📝 Catatan — beda dengan Module 14 nanti**: angka yang dikembalikan di sini adalah jumlah **dokumen**, bukan jumlah chunk — karena belum ada chunking. Setelah Module 14 meng-upgrade `ingest_documents()` untuk memecah tiap dokumen jadi beberapa chunk dulu sebelum di-embed, angka yang sama akan jauh lebih besar (satu dokumen bisa jadi 8-13 chunk, tergantung strategi chunking-nya) — perbandingan langsung ini jadi bukti konkret kenapa chunking penting, bukan cuma teori.
+> **📝 Catatan — beda dengan Module 15 nanti**: angka yang dikembalikan di sini adalah jumlah **dokumen**, bukan jumlah chunk — karena belum ada chunking. Setelah Module 15 meng-upgrade `ingest_documents()` untuk memecah tiap dokumen jadi beberapa chunk dulu sebelum di-embed, angka yang sama akan jauh lebih besar (satu dokumen bisa jadi 8-13 chunk, tergantung strategi chunking-nya) — perbandingan langsung ini jadi bukti konkret kenapa chunking penting, bukan cuma teori.
 
-**Ini juga langkah "data dasar awal" yang dijanjikan Module 10 Bagian 1** — index sekarang terisi dari data seed, tanpa perlu form upload apa pun (itu baru Module 15). Kita sudah bisa lanjut ke Bagian 3 di bawah dan melihat RAG bekerja.
+**Ini juga langkah "data dasar awal" yang dijanjikan Module 10 Bagian 1** — index sekarang terisi dari data seed, tanpa perlu form upload apa pun (itu baru Module 16). Kita sudah bisa lanjut ke Bagian 3 di bawah dan melihat RAG bekerja.
 
 <details>
 <summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 1</strong></summary>
 
 ```
 Tambah ingest_documents() v1 ke app/ingest.py yang sudah ada
-(Module 13) — menyatukan extract_text() (Module 10) dengan embed_text()
-(Module 11) dan VectorStore (Module 12). BELUM ADA CHUNKING.
+(Module 14) — menyatukan extract_text() (Module 10) dengan embed_text()
+(Module 11) dan VectorStore (Module 13). BELUM ADA CHUNKING.
 
 GOAL:
 - Di Nala/app/ingest.py (saat ini berisi
@@ -135,15 +135,15 @@ GOAL:
     jumlah DOKUMEN (bukan chunk) yang ter-index.
 
 CONTEXT:
-- app/embeddings.py (Module 11) dan app/vector_store.py (Module 12)
+- app/embeddings.py (Module 11) dan app/vector_store.py (Module 13)
   sudah ada dan tidak perlu diubah.
 - BELUM ADA chunking di versi ini — satu dokumen = satu vektor. Itu
-  baru ditambahkan Module 14.
+  baru ditambahkan Module 15.
 
 GUARDRAIL:
 - JANGAN ubah extract_text() yang sudah ada.
 - JANGAN tambah fungsi chunk_text()/chunk_markdown() di file ini —
-  itu Module 14.
+  itu Module 15.
 - JANGAN sentuh app/main.py, docker-compose.yml, atau requirements.txt
   di langkah ini.
 ```
@@ -206,7 +206,7 @@ docker compose up --build api
 
 ```
 Tambah NALA_SYSTEM_PROMPT_NO_CONTEXT dan setup VectorStore di main.py
-(Module 13, Langkah 2) — fondasi untuk retrieval, belum mengubah
+(Module 14, Langkah 2) — fondasi untuk retrieval, belum mengubah
 endpoint apa pun.
 
 GOAL:
@@ -232,7 +232,7 @@ GOAL:
     index_name="nala-docs")`, ditaruh dekat KNOWLEDGE_BASE_PATH.
 
 CONTEXT:
-- app/embeddings.py dan app/vector_store.py sudah ada dari Module 11-12.
+- app/embeddings.py dan app/vector_store.py sudah ada dari Module 11-13.
 - BELUM mengubah endpoint /chat/stream sama sekali.
 
 GUARDRAIL:
@@ -283,7 +283,7 @@ def chat_stream(request: ChatStreamRequest) -> StreamingResponse:
 ```
 
 - **Embedding pesan user**: `embed_text(last_user_message, ...)` — model yang sama (`nomic-embed-text`, Module 11) yang dipakai saat indexing (Bagian 1), menghasilkan vektor 768-dimensi, dari pesan **terakhir** di riwayat (bukan seluruh percakapan).
-- **Retrieval**: `vector_store.search(query_embedding, top_k=2)` — mengambil top-2 dokumen berdasarkan k-NN similarity (Module 12). `top_k` kecil sengaja — index baru berisi segelintir dokumen utuh (Bagian 1), bukan puluhan chunk, jadi tidak ada gunanya minta lebih dari yang ada.
+- **Retrieval**: `vector_store.search(query_embedding, top_k=2)` — mengambil top-2 dokumen berdasarkan k-NN similarity (Module 13). `top_k` kecil sengaja — index baru berisi segelintir dokumen utuh (Bagian 1), bukan puluhan chunk, jadi tidak ada gunanya minta lebih dari yang ada.
 - **Fallback**: dua kondisi masuk ke cabang `else` (tanpa `results`): (1) `embed_text()`/`vector_store.search()` melempar `httpx.HTTPError` (OpenSearch tidak terjangkau), atau (2) keduanya berhasil tapi `results` kosong (index belum pernah di-ingest, atau tidak ada dokumen relevan). Di kedua kasus, `NALA_SYSTEM_PROMPT_NO_CONTEXT` dipakai sebagai pengganti — isinya sama persis kecuali instruksi terakhir: alih-alih "jawab HANYA dari konteks", mengizinkan jawaban dari pengetahuan umum sambil jujur bilang belum ada dokumen internal yang terhubung.
 - **Kalau retrieval berhasil**: teks dokumen (utuh, belum dipecah) digabungkan jadi satu string konteks, `grounded_content` menggantikan isi pesan user terakhir sebelum dikirim ke Ollama — riwayat pesan-pesan **sebelumnya** (`recent[:-1]`) tetap dikirim apa adanya, tidak ikut di-grounding. `windowing` (`HISTORY_WINDOW = 10`, Module 8 Bagian 4) tidak berubah sama sekali.
 
@@ -299,13 +299,13 @@ curl -N -X POST http://localhost:8000/chat/stream \
   -d '{"messages": [{"role": "user", "content": "Berapa lama proses pengajuan kredit sampai pencairan dana?"}]}'
 ```
 
-✅ **Indikator sukses**: jawaban menyebut angka dari dokumen (bukan estimasi generik), muncul bertahap (streaming) — **ini pertama kalinya sepanjang Module 7-16, NALA benar-benar menjawab dari dokumen sungguhan.** Bandingkan dengan jawaban Module 7-8 (sebelum RAG) yang selalu generik. Coba juga percakapan multi-turn (pertanyaan lanjutan tanpa menyebut kata kunci) — harus tetap dipahami **dan** tetap memicu retrieval baru untuk tiap pesan.
+✅ **Indikator sukses**: jawaban menyebut angka dari dokumen (bukan estimasi generik), muncul bertahap (streaming) — **ini pertama kalinya sepanjang Module 7-17, NALA benar-benar menjawab dari dokumen sungguhan.** Bandingkan dengan jawaban Module 7-8 (sebelum RAG) yang selalu generik. Coba juga percakapan multi-turn (pertanyaan lanjutan tanpa menyebut kata kunci) — harus tetap dipahami **dan** tetap memicu retrieval baru untuk tiap pesan.
 
 <details>
 <summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 3</strong></summary>
 
 ```
-Ubah endpoint POST /chat/stream supaya retrieval-augmented (Module 13,
+Ubah endpoint POST /chat/stream supaya retrieval-augmented (Module 14,
 Langkah 3).
 
 GOAL:
@@ -382,27 +382,27 @@ curl -N -X POST http://localhost:8000/chat/stream \
 
 `NALA_SYSTEM_PROMPT` (Module 1-6, tidak diganti nama) sudah mencakup instruksi **grounding** — memaksa model menjawab **hanya** dari konteks yang diberikan, bukan dari pengetahuan umum. `NALA_SYSTEM_PROMPT_NO_CONTEXT` (Bagian 2) sama persis kecuali instruksi terakhir: mengizinkan pengetahuan umum saat retrieval gagal/kosong, sambil jujur bilang belum ada dokumen. Ini instruksi grounding yang membuat jawaban Module 7-8, 9-11 (sebelum ada retrieval, atau saat index kosong) terasa "generik tapi jujur", bukan mengarang seolah tahu SOP internal — konsisten dengan pembahasan halusinasi di Module 9 Bagian 1.
 
-⚠️ Grounding lewat instruksi prompt **membantu**, tapi bukan jaminan mutlak — model kecil (`llama3.2:3b`) tetap bisa sesekali mengabaikan instruksi ini. Ini akan dibahas lebih detail konsistensinya di Module 21 saat model dipakai untuk tool-calling.
+⚠️ Grounding lewat instruksi prompt **membantu**, tapi bukan jaminan mutlak — model kecil (`llama3.2:3b`) tetap bisa sesekali mengabaikan instruksi ini. Ini akan dibahas lebih detail konsistensinya di Module 22 saat model dipakai untuk tool-calling.
 
-## 5. Data Operasional: Upload vs Airflow (Preview Module 15-16)
+## 5. Data Operasional: Upload vs Airflow (Preview Module 16-17)
 
-Sejauh ini, data seed (Bagian 1) diisi lewat pemanggilan `ingest_documents()` secara manual dari terminal. Module 14 dulu meng-**upgrade** `ingest_documents()` supaya memecah dokumen jadi chunk sebelum embed, baru Module 15-16 menambahkan **dua cara lain** memicu proses yang sudah di-upgrade itu:
+Sejauh ini, data seed (Bagian 1) diisi lewat pemanggilan `ingest_documents()` secara manual dari terminal. Module 15 dulu meng-**upgrade** `ingest_documents()` supaya memecah dokumen jadi chunk sebelum embed, baru Module 16-17 menambahkan **dua cara lain** memicu proses yang sudah di-upgrade itu:
 
-| Aspek | Endpoint Upload (Module 15) | Airflow Pipeline (Module 16) |
+| Aspek | Endpoint Upload (Module 16) | Airflow Pipeline (Module 17) |
 |---|---|---|
 | Trigger | Staff upload lewat form web | Manual trigger di Airflow UI/CLI |
 | Cocok untuk | Satu dokumen, cepat, reaktif | Batch, audit trail, siap upgrade ke terjadwal |
-| Kode yang dipanggil | `ingest_documents()` — versi **upgrade** dari Module 14 | `ingest_documents()` — fungsi **sama persis** dengan yang dipanggil Upload |
+| Kode yang dipanggil | `ingest_documents()` — versi **upgrade** dari Module 15 | `ingest_documents()` — fungsi **sama persis** dengan yang dipanggil Upload |
 
-**Poin penting**: kode `/chat/stream` di module ini **tidak akan berubah sama sekali** setelah Module 14-16 selesai — chunking, upload, dan Airflow cuma menambah/mengubah **cara mengisi index**, retrieval-nya tetap membaca index `nala-docs` apa adanya, tidak peduli dokumen itu masuk lewat CLI manual (Bagian 1), form upload (Module 15), atau Airflow (Module 16), dan tidak peduli isinya satu vektor per dokumen (sekarang) atau beberapa chunk per dokumen (setelah Module 14). Ini dibuktikan langsung setelah Module 15-16 selesai.
+**Poin penting**: kode `/chat/stream` di module ini **tidak akan berubah sama sekali** setelah Module 15-17 selesai — chunking, upload, dan Airflow cuma menambah/mengubah **cara mengisi index**, retrieval-nya tetap membaca index `nala-docs` apa adanya, tidak peduli dokumen itu masuk lewat CLI manual (Bagian 1), form upload (Module 16), atau Airflow (Module 17), dan tidak peduli isinya satu vektor per dokumen (sekarang) atau beberapa chunk per dokumen (setelah Module 15). Ini dibuktikan langsung setelah Module 16-17 selesai.
 
 ## 6. Bentuk Uji Coba per Checklist
 
-Skenario konkret untuk memverifikasi Bagian 3 — pakai pertanyaan yang jawabannya cukup jelas ada di salah satu dari dua dokumen SOP, supaya hasilnya bisa diprediksi. Karena retrieval di module ini masih level-dokumen (Bagian 7), pertanyaan yang **sangat spesifik** ke sub-bagian dokumen (misal "syarat nasabah perorangan") tetap terjawab — seluruh dokumen ikut jadi konteks — tapi jawabannya bisa terasa kurang fokus dibanding setelah Module 14 menambahkan chunking.
+Skenario konkret untuk memverifikasi Bagian 3 — pakai pertanyaan yang jawabannya cukup jelas ada di salah satu dari dua dokumen SOP, supaya hasilnya bisa diprediksi. Karena retrieval di module ini masih level-dokumen (Bagian 7), pertanyaan yang **sangat spesifik** ke sub-bagian dokumen (misal "syarat nasabah perorangan") tetap terjawab — seluruh dokumen ikut jadi konteks — tapi jawabannya bisa terasa kurang fokus dibanding setelah Module 15 menambahkan chunking.
 
-Contoh konkret: coba tanyakan "Apa saja syarat pengajuan kredit untuk nasabah perorangan?" — jawabannya mungkin terasa kurang fokus (seluruh dokumen ikut jadi konteks, bukan cuma bagian yang relevan). Ini **bukan bug** — lihat Bagian 7 untuk penjelasan kenapa ini terjadi dan kenapa itu jadi motivasi Module 14 (chunking).
+Contoh konkret: coba tanyakan "Apa saja syarat pengajuan kredit untuk nasabah perorangan?" — jawabannya mungkin terasa kurang fokus (seluruh dokumen ikut jadi konteks, bukan cuma bagian yang relevan). Ini **bukan bug** — lihat Bagian 7 untuk penjelasan kenapa ini terjadi dan kenapa itu jadi motivasi Module 15 (chunking).
 
-## 7. Catatan: Keterbatasan Retrieval Level-Dokumen (Preview Module 14)
+## 7. Catatan: Keterbatasan Retrieval Level-Dokumen (Preview Module 15)
 
 RAG sudah bekerja (Bagian 3) — tapi retrieval-nya masih sangat kasar: **satu dokumen SOP yang panjang di-embed jadi satu vektor tunggal**, lalu **seluruh isinya** (bisa ribuan karakter) dikirim utuh sebagai konteks ke LLM, walau pertanyaan user cuma butuh satu-dua kalimat spesifik di dalamnya.
 
@@ -411,20 +411,20 @@ RAG sudah bekerja (Bagian 3) — tapi retrieval-nya masih sangat kasar: **satu d
 1. **Konteks yang dikirim ke LLM jauh lebih besar dari yang perlu.** Kalau ada 2 dokumen SOP relevan (`top_k=2`), keduanya dikirim **utuh** — model kecil (`llama3.2:3b`, context window terbatas) harus "menyaring" sendiri bagian mana yang relevan dari ribuan karakter, alih-alih menerima langsung bagian yang sudah difokuskan.
 2. **Satu vektor tidak bisa mewakili banyak sub-topik sekaligus dengan baik.** Model embedding merangkum **seluruh** isi dokumen (semua tahapan, semua syarat, semua istilah) jadi satu vektor 768-dimensi — makna spesifik seperti "syarat khusus nasabah perorangan" jadi "diencerkan" oleh bagian-bagian lain dokumen yang tidak berhubungan (misal bagian tentang pencairan dana atau kontak layanan). Akibatnya, similarity antara query yang sangat spesifik dan vektor dokumen yang "umum" ini tidak setajam kalau saja ada representasi yang fokus ke bagian itu saja.
 
-**Ini persis motivasi Module 14**: chunking memecah tiap dokumen jadi potongan-potongan kecil **sebelum** di-embed, supaya tiap vektor mewakili satu sub-topik yang fokus (misal satu vektor khusus untuk bagian "syarat nasabah perorangan"), dan konteks yang dikirim ke LLM jadi jauh lebih ringkas dan relevan. Setelah Module 14, kita akan mengulang perbandingan retrieval sebelum/sesudah chunking secara langsung — termasuk kasus di mana bahkan chunking pun ternyata belum menyelesaikan semuanya (motivasi lebih lanjut untuk hybrid search + reranking di Module 17).
+**Ini persis motivasi Module 15**: chunking memecah tiap dokumen jadi potongan-potongan kecil **sebelum** di-embed, supaya tiap vektor mewakili satu sub-topik yang fokus (misal satu vektor khusus untuk bagian "syarat nasabah perorangan"), dan konteks yang dikirim ke LLM jadi jauh lebih ringkas dan relevan. Setelah Module 15, kita akan mengulang perbandingan retrieval sebelum/sesudah chunking secara langsung — termasuk kasus di mana bahkan chunking pun ternyata belum menyelesaikan semuanya (motivasi lebih lanjut untuk hybrid search + reranking di Module 18).
 
 ## 8. Checkpoint Praktik
 
-Yang perlu dipastikan sebelum lanjut ke Module 14:
+Yang perlu dipastikan sebelum lanjut ke Module 15:
 
 - [ ] `ingest_documents()` mengembalikan jumlah dokumen lebih dari 0 (satu vektor per dokumen, bukan per chunk)
 - [ ] `/chat/stream` menjawab berdasarkan isi dokumen SOP (bukan generik) untuk pertanyaan yang jawabannya ada di knowledge base, sambil tetap streaming bertahap
 - [ ] Percakapan multi-turn tetap berfungsi setelah retrieval ditambahkan
 - [ ] Index kosong menghasilkan fallback ke jawaban generik, bukan crash
-- [ ] Kita paham keterbatasan retrieval level-dokumen (Bagian 7) sebagai motivasi Module 14, bukan dianggap "RAG sudah optimal"
+- [ ] Kita paham keterbatasan retrieval level-dokumen (Bagian 7) sebagai motivasi Module 15, bukan dianggap "RAG sudah optimal"
 
-Begitu kelima hal ini terverifikasi, lanjut ke Module 14 — menambahkan chunking (memecah dokumen jadi potongan fokus sebelum di-embed), sebelum Module 15 menambah form upload web sebagai cara staff menambahkan dokumen baru ke sistem yang **sudah hidup** ini.
+Begitu kelima hal ini terverifikasi, lanjut ke Module 15 — menambahkan chunking (memecah dokumen jadi potongan fokus sebelum di-embed), sebelum Module 16 menambah form upload web sebagai cara staff menambahkan dokumen baru ke sistem yang **sudah hidup** ini.
 
 ---
 
-> 📌 **Catatan untuk fasilitator**: setelah Module 14 (Chunking), Module 15 (Upload), dan Module 16 (Airflow) selesai dibangun, kembali ke module ini untuk verifikasi tambahan — pastikan dokumen yang diupload lewat form web atau di-trigger lewat Airflow **langsung bisa ditanyakan** ke `/chat/stream` tanpa mengubah satu baris pun kode di module ini. Ini bukti nyata desain "retrieval generik terhadap sumber data" yang dijelaskan Bagian 5.
+> 📌 **Catatan untuk fasilitator**: setelah Module 15 (Chunking), Module 16 (Upload), dan Module 17 (Airflow) selesai dibangun, kembali ke module ini untuk verifikasi tambahan — pastikan dokumen yang diupload lewat form web atau di-trigger lewat Airflow **langsung bisa ditanyakan** ke `/chat/stream` tanpa mengubah satu baris pun kode di module ini. Ini bukti nyata desain "retrieval generik terhadap sumber data" yang dijelaskan Bagian 5.
