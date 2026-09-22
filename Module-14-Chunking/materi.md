@@ -96,6 +96,8 @@ Diberikan paragraf berikut dari SOP Pengajuan Kredit:
 
 ## 7. Struktur Kode: `chunk_text()` dan `chunk_markdown()`
 
+**Prasyarat**: sudah menyelesaikan Module 13 (RAG Chain) — RAG sudah "hidup", index `nala-docs` sudah terisi minimal sekali.
+
 `app/ingest.py` sekarang berisi `extract_text()` (Module 10) dan `ingest_documents()` (Module 13). Dua Tahap: **Tahap A** — `chunk_text()`, pure function tanpa I/O; **Tahap B** — `chunk_markdown()`, versi structure-aware khusus `.md`. Keduanya belum butuh Ollama atau OpenSearch, jadi tidak ada perubahan `docker-compose.yml` di tahap ini — upgrade `ingest_documents()` untuk memakainya baru terjadi di Bagian 8.
 
 ### Tahap A — Buat `chunk_text()` di `app/ingest.py`
@@ -227,10 +229,11 @@ from app.ingest import chunk_markdown, chunk_text, extract_text
 text = extract_text('/app/knowledge-base/sop-pengajuan-kredit.md')
 print('chunk_text:', len(chunk_text(text)), 'chunk')
 print('chunk_markdown:', len(chunk_markdown(text)), 'chunk')
+print('Chunk pertama (markdown):', chunk_markdown(text)[0])
 "
 ```
 
-✅ **Indikator sukses**: `chunk_markdown()` menghasilkan **13 chunk** untuk `sop-pengajuan-kredit.md`, dibandingkan `chunk_text()` yang cuma **8 chunk** pada file yang sama — dan tiap chunk `chunk_markdown()` dimulai dengan baris heading (`#`/`##`), bukan potongan sembarang di tengah kalimat. Bandingkan juga dengan Module 13 Bagian 1: dokumen ini sebelumnya jadi **1 vektor tunggal** — sekarang jadi 13 vektor yang masing-masing fokus ke satu bagian.
+✅ **Indikator sukses**: `chunk_markdown()` menghasilkan **13 chunk** untuk `sop-pengajuan-kredit.md`, dibandingkan `chunk_text()` yang cuma **8 chunk** pada file yang sama — dan tiap chunk `chunk_markdown()` dimulai dengan baris heading (`#`/`##`), bukan potongan sembarang di tengah kalimat. Chunk pertama harus berupa satu heading utuh (`# SOP Pengajuan Kredit...`), bukan potongan 500 karakter sembarang. Bandingkan juga dengan Module 13 Bagian 1: dokumen ini sebelumnya jadi **1 vektor tunggal** — sekarang jadi 13 vektor yang masing-masing fokus ke satu bagian.
 
 <details>
 <summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 2</strong></summary>
@@ -327,14 +330,14 @@ Re-ingest data seed supaya index terisi chunk (bukan lagi dokumen utuh dari Modu
 docker compose exec api python -c "from app.ingest import ingest_documents; print(ingest_documents('/app/knowledge-base'))"
 ```
 
-✅ **Indikator sukses**: angka yang dikembalikan **jauh lebih besar** dari hasil Module 13 Bagian 1 (dulu = jumlah dokumen, misal 5; sekarang = jumlah chunk, puluhan). `curl "http://localhost:9200/nala-docs/_count"` juga harus menunjukkan angka yang sama.
+✅ **Indikator sukses**: angka yang dikembalikan **jauh lebih besar** dari hasil Module 13 Bagian 1 (dulu = jumlah dokumen, misal 5; sekarang = jumlah chunk, puluhan). `curl "http://localhost:9200/nala-docs/_count"` juga harus menunjukkan angka yang sama. Coba lagi lewat `/chat/stream` pertanyaan spesifik yang terasa kurang fokus di Module 13 — retrieval sekarang seharusnya lebih presisi karena tiap chunk mewakili satu sub-topik, bukan seluruh dokumen. Lihat Bagian 9 di bawah untuk kasus di mana bahkan chunking pun belum cukup (motivasi Module 17).
 
 <details>
-<summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 3-4</strong></summary>
+<summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 3</strong></summary>
 
 ```
-Upgrade ingest_documents() untuk memakai chunking, dan naikkan top_k
-di /chat/stream (Module 14, Langkah 3-4).
+Upgrade ingest_documents() supaya memakai chunking, bukan meng-embed
+dokumen utuh (Module 14, Langkah 3).
 
 GOAL:
 - Di Nala/app/ingest.py: ganti ISI fungsi
@@ -346,21 +349,41 @@ GOAL:
   text=chunk, embedding=embedding, metadata={"source": filename}),
   total_chunks += 1. Return total_chunks. JANGAN ubah signature fungsi
   atau bagian ensure_index()/VectorStore setup di awal fungsi.
-- Di Nala/app/main.py: cari pemanggilan
-  vector_store.search(query_embedding, top_k=2) di dalam chat_stream()
-  (satu-satunya endpoint chat), ganti top_k=2 jadi top_k=6.
 
 CONTEXT:
 - chunk_text() dan chunk_markdown() sudah ada dari Bagian 7 (Tahap A, B).
 - ingest_documents() versi lama (Module 13, tanpa chunking) sudah ada
   dan sedang di-upgrade di sini — bukan dibuat dari nol.
-- chat_stream() adalah satu-satunya endpoint chat sejak Module 8 —
-  tidak ada endpoint /chat lain yang perlu diubah.
 
 GUARDRAIL:
 - JANGAN ubah extract_text(), chunk_text(), atau chunk_markdown().
-- JANGAN ubah bagian lain chat_stream() selain angka top_k.
+- JANGAN sentuh app/main.py — itu diubah di Langkah 4, bukan di sini.
 - JANGAN sentuh docker-compose.yml.
+```
+
+</details>
+
+<details>
+<summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 4</strong></summary>
+
+```
+Naikkan top_k di /chat/stream dari 2 jadi 6 (Module 14, Langkah 4).
+
+GOAL:
+- Di Nala/app/main.py: cari pemanggilan
+  vector_store.search(query_embedding, top_k=2) di dalam chat_stream()
+  (satu-satunya endpoint chat), ganti top_k=2 jadi top_k=6.
+
+CONTEXT:
+- chat_stream() adalah satu-satunya endpoint chat sejak Module 8 —
+  tidak ada endpoint /chat lain yang perlu diubah.
+- ingest_documents() sudah di-upgrade untuk memakai chunking di
+  Langkah 3 — index sekarang berisi puluhan chunk, bukan segelintir
+  dokumen utuh, jadi top_k=2 terlalu kecil.
+
+GUARDRAIL:
+- JANGAN ubah bagian lain chat_stream() selain angka top_k.
+- JANGAN sentuh app/ingest.py atau docker-compose.yml.
 ```
 
 </details>
@@ -391,44 +414,3 @@ Yang perlu dipastikan sebelum lanjut ke Module 15:
 - [ ] `/chat/stream` (Module 7, 7, 12) masih berfungsi seperti sebelumnya, dengan jawaban yang sekarang berbasis chunk yang lebih fokus
 
 Begitu semua hal di atas terverifikasi, lanjut ke Module 15 — form upload web, cara staff menambahkan dokumen baru ke sistem yang **sudah hidup dan sudah level-chunk** ini.
-
-## Panduan Praktik
-
-### Prasyarat
-- Sudah menyelesaikan **Module 13** (RAG Chain v1) — RAG sudah "hidup", index `nala-docs` sudah terisi minimal sekali
-
-### Langkah 1: Chunking + upgrade `ingest_documents()`, naikkan `top_k`
-
-Sekarang tambahkan `chunk_text()` (fixed-size dengan overlap) dan `chunk_markdown()` (structure-aware berbasis heading), lalu upgrade `ingest_documents()` supaya memecah dokumen jadi chunk dulu sebelum embed. Setelah kode di Bagian 7 di atas selesai ditulis, coba:
-
-```bash
-docker compose exec api python -c "
-from app.ingest import chunk_text
-text = 'x' * 1200
-chunks = chunk_text(text)
-print(f'Jumlah chunk: {len(chunks)}')
-print(f'Panjang tiap chunk: {[len(c) for c in chunks]}')
-"
-```
-
-Harus menghasilkan 3 chunk dengan panjang `[500, 500, 300]`.
-
-```bash
-docker compose exec api python -c "
-from app.ingest import chunk_markdown, chunk_text, extract_text
-text = extract_text('/app/knowledge-base/sop-pengajuan-kredit.md')
-print('chunk_text:', len(chunk_text(text)), 'chunk')
-print('chunk_markdown:', len(chunk_markdown(text)), 'chunk')
-print('Chunk pertama (markdown):', chunk_markdown(text)[0])
-"
-```
-
-`chunk_markdown()` harus menghasilkan **13 chunk**, `chunk_text()` cuma **8 chunk** pada dokumen yang sama — dan chunk pertama dari `chunk_markdown` berupa satu heading utuh (`# SOP Pengajuan Kredit...`), bukan potongan 500 karakter sembarang.
-
-Setelah `ingest_documents()` di-upgrade (Bagian 8 Langkah 3 di atas) dan `top_k` dinaikkan jadi 6 di `chat_stream()` (Bagian 8 Langkah 4 di atas), re-ingest data seed:
-
-```bash
-docker compose exec api python -c "from app.ingest import ingest_documents; print(ingest_documents('/app/knowledge-base'))"
-```
-
-Bandingkan angkanya dengan hasil Module 13, bagian Panduan Praktik, Langkah 1 — sekarang harus **jauh lebih besar** (dulu = jumlah dokumen, sekarang = jumlah chunk). Coba lagi lewat `/chat/stream` pertanyaan spesifik yang terasa kurang fokus di Module 13 — retrieval sekarang seharusnya lebih presisi karena tiap chunk mewakili satu sub-topik, bukan seluruh dokumen. Lihat Bagian 9 di atas untuk kasus di mana bahkan chunking pun belum cukup (motivasi Module 17).
