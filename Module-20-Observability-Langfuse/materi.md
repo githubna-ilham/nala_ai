@@ -173,27 +173,27 @@ Tunggu sampai log menunjukkan service siap menerima koneksi, lalu `Ctrl+C` untuk
 
 Setelah sign up/sign in, Langfuse v2 **tidak langsung** menampilkan form buat Project — ada wizard setup 4 langkah yang mudah terlewat kalau tidak diberi tahu dulu, dimulai dari halaman "Home":
 
-![Halaman Home Langfuse meminta Organization dibuat lebih dulu sebelum Project](../../resources/images/langfuse-setup/langfuse-home-get-started.png)
+![Halaman Home Langfuse meminta Organization dibuat lebih dulu sebelum Project](../resources/images/langfuse-setup/langfuse-home-get-started.png)
 
 Klik **"+ New Organization"** — ini membuka wizard **Setup** dengan 4 langkah eksplisit (terlihat sebagai breadcrumb di bagian atas): **1. Create Organization → 2. Invite Members → 3. Create Project → 4. Setup Tracing**.
 
 **Langkah wizard 1 — Create Organization**: isi nama bebas (misal "PT Nusantara Finance" — satu akun bisa menaungi beberapa organization, tiap organization menaungi beberapa Project), klik **Create**:
 
-![Form Create Organization dengan input nama organization](../../resources/images/langfuse-setup/langfuse-create-organization.png)
+![Form Create Organization dengan input nama organization](../resources/images/langfuse-setup/langfuse-create-organization.png)
 
 **Langkah wizard 2 — Invite Members**: langsung menampilkan tabel **Organization Members** dengan akun Anda sendiri sebagai **Owner** — untuk pelatihan solo, **tidak perlu** mengundang siapa pun di sini, langsung klik **Next** untuk lanjut:
 
-![Halaman Invite Members menampilkan Organization Members dengan role Owner](../../resources/images/langfuse-setup/langfuse-invite-members.png)
+![Halaman Invite Members menampilkan Organization Members dengan role Owner](../resources/images/langfuse-setup/langfuse-invite-members.png)
 
 **Langkah wizard 3 — Create Project**: buat satu **Project** baru (misalnya "NALA") di dalam organization yang baru dibuat, klik **Create**:
 
-![Form Create Project dengan input nama project](../../resources/images/langfuse-setup/langfuse-create-project.png)
+![Form Create Project dengan input nama project](../resources/images/langfuse-setup/langfuse-create-project.png)
 
 **Langkah wizard 4 — Setup Tracing**: setelah Project terbentuk, ambil API key-nya lewat menu **Settings → API Keys** di sidebar project (halaman **Project Settings**, bagian **General**, punya beberapa tab termasuk **API Keys**):
 
 Klik **"+ Create new API key"** — modal berikut muncul menampilkan **Secret Key** dan **Public Key** sekaligus:
 
-![Modal API Keys menampilkan Secret Key dan Public Key](../../resources/images/langfuse-setup/langfuse-api-keys.png)
+![Modal API Keys menampilkan Secret Key dan Public Key](../resources/images/langfuse-setup/langfuse-api-keys.png)
 
 Salin keduanya sekarang — **Secret Key cuma ditampilkan sekali** di modal ini, simpan baik-baik sebelum menutupnya (kalau lupa, buat key baru — tidak bisa melihat ulang Secret Key yang lama).
 
