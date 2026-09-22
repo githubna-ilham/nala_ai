@@ -55,7 +55,7 @@ flowchart LR
 
 **Catatan jujur soal "Recall"**: recall yang sesungguhnya (definisi standar information retrieval) adalah *(jumlah chunk relevan yang ditemukan) / (jumlah total chunk relevan yang ada di seluruh index)* — untuk menghitungnya secara benar, dibutuhkan anotasi manual yang mendaftar **semua** chunk relevan untuk tiap pertanyaan, bukan cuma satu. Test set kecil di module ini (Bagian 4) tidak melakukan anotasi selengkap itu — sebagai gantinya, dipakai **Hit Rate@k** sebagai proxy yang lebih sederhana: "apakah minimal satu chunk yang relevan berhasil ditemukan di top-k", tanpa mengklaim menghitung total populasi chunk relevan. Ini keterbatasan yang disengaja demi kepraktisan test set kecil — bukan diam-diam disamakan dengan recall yang sesungguhnya.
 
-**Poin penting yang membedakan sebelum/sesudah reranking**: karena reranking (Module 18) **menyortir ulang** kandidat yang sama (top-20 dari `search_hybrid()`), bukan mengganti kandidatnya, maka **Hit Rate@20 akan selalu identik** sebelum dan sesudah reranking — himpunan 20 kandidatnya sama persis, cuma urutannya beda. Kalau tabel hasil di Bagian 6 menunjukkan Hit Rate@20 berubah antara sebelum/sesudah, itu tanda ada kesalahan di harness evaluasi, bukan efek nyata dari reranking. Yang **seharusnya** berubah oleh reranking adalah metrik pada potongan yang lebih kecil dan lebih sensitif urutan — **Precision@3**, **Hit Rate@3**, dan terutama **MRR** — karena ketiganya bergantung pada *urutan* dalam kandidat, bukan cuma keanggotaan di dalamnya.
+**Poin penting yang membedakan sebelum/sesudah reranking**: karena reranking (Module 18) **menyortir ulang** kandidat yang sama (top-20 dari `search_hybrid()`), bukan mengganti kandidatnya, maka **Hit Rate@20 akan selalu identik** sebelum dan sesudah reranking — himpunan 20 kandidatnya sama persis, cuma urutannya beda. Kalau tabel hasil di Bagian 9 menunjukkan Hit Rate@20 berubah antara sebelum/sesudah, itu tanda ada kesalahan di harness evaluasi, bukan efek nyata dari reranking. Yang **seharusnya** berubah oleh reranking adalah metrik pada potongan yang lebih kecil dan lebih sensitif urutan — **Precision@3**, **Hit Rate@3**, dan terutama **MRR** — karena ketiganya bergantung pada *urutan* dalam kandidat, bukan cuma keanggotaan di dalamnya.
 
 ## 3. Relevansi Berbasis Kata Kunci: Proxy, Bukan Anotasi Manual
 
@@ -73,7 +73,7 @@ def is_relevant(chunk_text: str, must_contain: list[str]) -> bool:
 
 ## 4. Test Set Berlabel: 10 Pertanyaan dari `sop-pengajuan-kredit.md`
 
-Knowledge base yang tersedia saat ini di `resources/sample-knowledge-base/` berisi `sop-pengajuan-kredit.md` (dan satu file kecil hasil upload `catatan-cabang-bandung.md`) — cukup kaya (5 bagian: syarat, tahapan proses, kontak, catatan) untuk membangun test set awal yang berarti. Kalau di deployment nyata knowledge base bertambah dokumen, format test set ini dirancang supaya tinggal ditambah entri baru, bukan ditulis ulang.
+Knowledge base yang tersedia saat ini di `resources/sample-knowledge-base/` berisi 4 dokumen: dua SOP markdown (`sop-pengajuan-kredit.md`, `sop-klaim-asuransi.md`), satu SOP dalam bentuk PDF (`sop-pembukaan-rekening-tabungan.pdf`) — ketiganya di-seed sejak Module 10 — plus satu file catatan singkat hasil upload demo di Module 15 (`catatan-cabang-bandung.md`). Test set berikut fokus ke `sop-pengajuan-kredit.md`, yang cukup kaya (5 bagian: tujuan dan ruang lingkup, syarat, tahapan proses, kontak, catatan) untuk membangun test set awal yang berarti. Kalau di deployment nyata knowledge base bertambah dokumen, format test set ini dirancang supaya tinggal ditambah entri baru, bukan ditulis ulang.
 
 ```python
 # app/eval_testset.py
@@ -323,7 +323,7 @@ docker compose up --build api
 docker compose exec api python -m app.run_evaluation
 ```
 
-✅ **Indikator sukses**: skrip mencetak tiga baris metrik untuk "SEBELUM Reranking" dan tiga baris untuk "SESUDAH Reranking", diikuti tabel perbandingan dengan delta (`+`/`-`). Untuk test set 10 pertanyaan ini, wajar melihat `MRR` dan `Precision@3` **sesudah** reranking sama atau lebih tinggi dari **sebelum** — kalau angkanya identik persis, kemungkinan besar knowledge base terlalu kecil untuk kandidat top-20 punya variasi urutan yang berarti (index saat ini cuma berisi 2 dokumen, lihat Bagian 7).
+✅ **Indikator sukses**: skrip mencetak tiga baris metrik untuk "SEBELUM Reranking" dan tiga baris untuk "SESUDAH Reranking", diikuti tabel perbandingan dengan delta (`+`/`-`). Untuk test set 10 pertanyaan ini, wajar melihat `MRR` dan `Precision@3` **sesudah** reranking sama atau lebih tinggi dari **sebelum** — kalau angkanya identik persis, kemungkinan besar knowledge base terlalu kecil untuk kandidat top-20 punya variasi urutan yang berarti (index saat ini cuma berisi 4 dokumen, lihat Bagian 7).
 
 **Troubleshooting**: kalau `docker compose exec api python -m app.run_evaluation` gagal dengan import error, pastikan `app/evaluation.py` (Langkah 1), `app/eval_testset.py` (Langkah 2), dan `app/run_evaluation.py` (Langkah 3) sudah dibuat semua, dan `docker compose up --build api` sudah dijalankan ulang setelah menambah file baru.
 
@@ -408,7 +408,7 @@ def judge_answer(judge_client: OllamaClient, context: str, question: str, answer
     }
 ```
 
-- Memakai ulang `OllamaClient.generate()` yang sudah ada sejak Module 2 — tidak butuh client baru, cuma system prompt yang berbeda.
+- Memakai ulang `OllamaClient.generate()` yang sudah ada sejak Module 6 — tidak butuh client baru, cuma system prompt yang berbeda.
 - `re.search()` mengekstrak angka dari output model — dijaga dengan `if ... else None` karena model 3B **tidak selalu** patuh 100% pada format yang diminta; kalau parsing gagal, `None` menandakan hasil evaluasi untuk item itu tidak bisa dipakai, bukan mengasumsikan skor tertentu.
 - Panggil `judge_client` dengan temperature serendah mungkin kalau `OllamaClient`/`generate()` mendukungnya (di luar cakupan perubahan module ini — `generate()` saat ini tidak mengekspos parameter `temperature`, jadi berjalan dengan default Ollama) — idealnya `temperature=0` untuk hasil judge yang lebih konsisten antar-run; dicatat sebagai potensi perbaikan, bukan diklaim sudah diterapkan.
 
@@ -463,7 +463,7 @@ GOAL:
 
 CONTEXT:
 - Pakai ulang app/ollama_client.py (OllamaClient, sudah ada sejak
-  Module 2) — jangan buat client HTTP baru.
+  Module 6) — jangan buat client HTTP baru.
 - Model judge (`llama3.2:3b`) tidak selalu patuh 100% pada format
   yang diminta, karena itu regex-nya HARUS dijaga dengan
   `if match else None`, bukan diasumsikan selalu berhasil parse.
@@ -483,7 +483,7 @@ GUARDRAIL:
 
 - **Test set 10 pertanyaan itu kecil.** Cukup untuk mendemonstrasikan mekanisme dan menangkap sinyal awal, tapi angka rata-rata dari 10 titik data tidak cukup kuat secara statistik untuk klaim "reranking meningkatkan precision sebesar X%" secara umum — satu-dua pertanyaan yang kebetulan berubah hasilnya bisa menggeser rata-rata secara signifikan.
 - **Relevansi berbasis kata kunci (Bagian 3) adalah proxy, bukan anotasi manusia.** Cocok untuk membandingkan dua sistem pada test set yang sama, kurang cocok dijadikan angka absolut "sistem ini X% akurat".
-- **Knowledge base saat ini kecil** (`sop-pengajuan-kredit.md` + satu file upload kecil) — efek reranking baru benar-benar terlihat jelas ketika jumlah kandidat/dokumen cukup besar sehingga urutan top-20 punya variasi nyata untuk disortir ulang. Dengan index sekecil ini, ada kemungkinan hasil sebelum/sesudah reranking terlihat mirip bukan karena reranking tidak berguna, tapi karena kandidatnya sendiri sudah sedikit.
+- **Knowledge base saat ini masih kecil** (4 dokumen: 2 SOP markdown, 1 PDF, 1 file catatan singkat) — efek reranking baru benar-benar terlihat jelas ketika jumlah kandidat/dokumen cukup besar sehingga urutan top-20 punya variasi nyata untuk disortir ulang. Dengan index sekecil ini, ada kemungkinan hasil sebelum/sesudah reranking terlihat mirip bukan karena reranking tidak berguna, tapi karena kandidatnya sendiri sudah sedikit.
 - **LLM-as-judge dengan model 3B noisy** (Bagian 6) — dipakai sebagai sinyal tambahan, bukan pengganti precision/recall/MRR yang berbasis retrieval, apalagi pengganti review manusia untuk kasus penting.
 
 Framework ini dirancang untuk **bertumbuh** — test set bertambah seiring dokumen SOP baru masuk, dan skrip `run_evaluation.py` bisa dijalankan ulang kapan saja (misalnya tiap kali ada perubahan pada `search_hybrid()` atau `Reranker`) sebagai regression check, bukan sekali jalan lalu dilupakan.
@@ -499,7 +499,7 @@ Langkah eksekusi lengkap ada di Bagian 5 (Langkah 1-3) dan Bagian 6 (Langkah 4) 
 
 ## 9. Hasil Uji Nyata: Klaim Module 17-18 Terbukti dengan Angka
 
-Menjalankan `python -m app.run_evaluation` terhadap 10 pertanyaan test set di knowledge base yang sedang berjalan (`sop-pengajuan-kredit.md` + satu file kecil hasil upload) memberi hasil berikut:
+Menjalankan `python -m app.run_evaluation` terhadap 10 pertanyaan test set di knowledge base yang sedang berjalan (4 dokumen: `sop-pengajuan-kredit.md`, `sop-klaim-asuransi.md`, `sop-pembukaan-rekening-tabungan.pdf`, dan `catatan-cabang-bandung.md`) memberi hasil berikut:
 
 | Metrik | Sebelum Reranking | Sesudah Reranking | Delta |
 |---|---|---|---|
