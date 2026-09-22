@@ -17,6 +17,7 @@ flowchart LR
 ## Hasil Akhir yang Diharapkan
 
 - OpenSearch berjalan sehat (`docker compose logs opensearch` menunjukkan cluster health `green`/`yellow`)
+- `http://localhost:5601` (OpenSearch Dashboards) bisa dibuka di browser untuk menjelajahi isi OpenSearch secara visual
 - Kita paham apa itu OpenSearch secara umum (asal-usulnya, konsep index/document, akses lewat REST API) — bukan cuma tahu cara memakainya
 - Kita paham kenapa NALA akhirnya memilih OpenSearch dibanding alternatif lain
 - `/chat/stream` (Module 7) tetap berfungsi seperti sebelumnya
@@ -85,7 +86,9 @@ Vector database di luar OpenSearch bisa dikelompokkan jadi tiga kategori besar (
 
 Tidak ada satu kategori yang "paling benar" secara universal — pilihannya tergantung kebutuhan. NALA jatuh ke kategori (c) karena alasan-alasan di atas. Perbandingan lengkap ketiga kategori — termasuk analogi toko buku dan tabel trade-off — ada di **Module 13 Bagian 1**.
 
-## 4. Struktur yang Ditambahkan: Service `opensearch` di `docker-compose.yml`
+## 4. Struktur yang Ditambahkan: Service `opensearch` dan `opensearch-dashboards`
+
+**Langkah 1 — Service `opensearch`**
 
 ```yaml
 # docker-compose.yml
@@ -134,8 +137,6 @@ volumes:
 - **`DISABLE_INSTALL_DEMO_CONFIG=true`**: mencegah OpenSearch **menginstall konfigurasi keamanan demo** saat pertama kali start — normalnya (tanpa flag ini), OpenSearch otomatis membuat sertifikat TLS demo dan user default (`admin`/`admin`, password bawaan yang sudah dikenal publik) sebagai bagian dari setup awal plugin security. Flag ini relevan meski `plugins.security.disabled=true` sudah mematikan plugin-nya, karena dua alasan: (1) *belt-and-suspenders* — proses instalasi demo config bisa saja tetap berjalan duluan sebelum plugin itu benar-benar nonaktif, flag ini mencegah langkah instalasinya sama sekali, bukan cuma menonaktifkan hasilnya; (2) startup lebih cepat dan bersih — generate sertifikat + setup user demo butuh waktu dan menghasilkan log tambahan setiap kali container start, overhead yang tidak perlu untuk training lokal yang memang tidak butuh autentikasi sama sekali. Tidak relevan untuk production (yang justru harus mengaktifkan security sungguhan, bukan mematikannya).
 - **`OPENSEARCH_BASE_URL=http://opensearch:9200`** di service `api`: env var baru, disiapkan untuk dibaca `VectorStore` yang baru dibangun di Module 13 — belum ada kode yang memakainya di module ini.
 
-> **📝 Catatan opsional — UI untuk melihat isi OpenSearch**: **OpenSearch Dashboards** (setara Kibana) bisa ditambahkan sebagai service tambahan kalau mau tampilan visual (Dev Tools untuk query, Discover untuk lihat data per baris) — **tidak wajib** untuk Module 7-17, murni kenyamanan development, dan menambah ~512MB-1GB RAM. Setup detailnya di luar cakupan training ini.
-
 **▶️ Jalankan & lihat hasilnya**
 
 > **Prasyarat RAM**: pastikan alokasi RAM Docker Desktop sudah dinaikkan ke 16GB+ (lihat Module 7, bagian setup — catatan RAM) sebelum menyalakan OpenSearch di langkah ini. OpenSearch cukup berat untuk RAM Docker yang mepet.
@@ -171,7 +172,7 @@ docker compose up --build -d api
 - **Port sudah dipakai (8000/9200/11434)**: ubah mapping port di `docker-compose.yml` untuk service yang bentrok.
 
 <details>
-<summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Bagian 4</strong></summary>
+<summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 1</strong></summary>
 
 ```
 Tambah service opensearch di docker-compose.yml NALA (Module 12) —
@@ -203,14 +204,80 @@ GUARDRAIL:
 
 </details>
 
+**Langkah 2 — Service `opensearch-dashboards` (UI visual untuk OpenSearch)**
+
+Sejauh ini, satu-satunya cara "melihat" isi OpenSearch adalah lewat `curl`/Postman — cukup untuk verifikasi cepat, tapi tidak praktis untuk menjelajahi data atau menulis query lebih rumit. **OpenSearch Dashboards** (setara Kibana) memberi tampilan web visual: **Dev Tools** untuk menulis & menjalankan query langsung dari browser, dan **Discover** untuk menelusuri isi index per baris tanpa perlu mengetik query sama sekali. Tambahkan sebagai service baru di `docker-compose.yml`, sejajar dengan `opensearch`:
+
+```yaml
+  opensearch-dashboards:
+    image: opensearchproject/opensearch-dashboards:2.11.0
+    environment:
+      - 'OPENSEARCH_HOSTS=["http://opensearch:9200"]'
+      - DISABLE_SECURITY_DASHBOARDS_PLUGIN=true
+    ports:
+      - '5601:5601'
+    depends_on:
+      - opensearch
+```
+
+- **`OPENSEARCH_HOSTS`**: memberi tahu Dashboards di mana OpenSearch-nya — pakai hostname `opensearch` (nama service di Docker Compose network), bukan `localhost`, karena Dashboards mengaksesnya dari **dalam** container lain, bukan dari laptop Anda.
+- **`DISABLE_SECURITY_DASHBOARDS_PLUGIN=true`**: pasangan dari `plugins.security.disabled=true` di service `opensearch` — Dashboards juga punya plugin security sendiri yang harus dimatikan senada, supaya tidak minta login padahal OpenSearch di baliknya sudah tanpa autentikasi sama sekali.
+- **`depends_on: opensearch`**: Dashboards tidak ada gunanya kalau OpenSearch-nya sendiri belum menyala — urutan start dijamin, walau (seperti biasa) `depends_on` tanpa `condition` cuma menjamin urutan *start*, bukan urutan *siap* (dibahas lebih detail nanti di Module 27).
+- **Tambahan RAM**: ~512MB-1GB di atas kebutuhan `opensearch` sendiri — total alokasi RAM Docker Desktop 16GB+ (Module 7) sudah memperhitungkan ini.
+
+**▶️ Jalankan & lihat hasilnya**
+
+```bash
+docker compose up -d --build opensearch-dashboards
+```
+
+Tunggu sampai siap (biasanya lebih cepat dari `opensearch` sendiri):
+
+```bash
+docker compose logs -f opensearch-dashboards
+```
+
+Tunggu sampai muncul log semacam `Server running at http://0.0.0.0:5601`, lalu `Ctrl+C`. Buka `http://localhost:5601` di browser — halaman OpenSearch Dashboards akan muncul (skip langkah "create tenant"/login kalau muncul, karena security plugin sudah dimatikan).
+
+✅ **Indikator sukses**: `http://localhost:5601` terbuka di browser tanpa error, dan lewat menu **Dev Tools** Anda bisa menjalankan `GET nala-docs/_count` (setelah index `nala-docs` dibuat di Module 13) dan melihat hasilnya langsung di layar, tanpa terminal.
+
+<details>
+<summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 2</strong></summary>
+
+```
+Tambah service opensearch-dashboards di docker-compose.yml NALA
+(Module 12, Langkah 2) — BELUM membuat kode Python apa pun.
+
+GOAL:
+- Di Nala/docker-compose.yml: tambah service baru
+  `opensearch-dashboards` (image
+  opensearchproject/opensearch-dashboards:2.11.0, environment
+  OPENSEARCH_HOSTS=["http://opensearch:9200"] dan
+  DISABLE_SECURITY_DASHBOARDS_PLUGIN=true, port 5601:5601,
+  depends_on: opensearch).
+
+CONTEXT:
+- Service opensearch sudah ada dari Langkah 1 — opensearch-dashboards
+  cuma UI visual tambahan untuk melihat isinya, tidak dipanggil oleh
+  kode Python NALA sama sekali.
+
+GUARDRAIL:
+- JANGAN ubah service opensearch, api, atau ollama.
+- JANGAN tambah volume baru — opensearch-dashboards tidak menyimpan
+  data sendiri, semua datanya ada di opensearch.
+```
+
+</details>
+
 ## 5. Checkpoint Praktik
 
 Yang perlu dipastikan sebelum lanjut ke Module 13:
 
 - [ ] `docker compose logs opensearch` menunjukkan cluster health `green`/`yellow`, bukan `red`
+- [ ] `http://localhost:5601` (OpenSearch Dashboards) terbuka di browser tanpa error
 - [ ] Kita paham OpenSearch pada dasarnya adalah full-text search engine (fork open-source Elasticsearch) yang belakangan ditambahi kemampuan vector search — bukan produk yang dari awal dibangun cuma untuk vektor
 - [ ] Kita bisa menjelaskan konsep index dan document di OpenSearch, dan kenapa NALA mengaksesnya lewat REST API HTTP biasa (`httpx`), bukan library client khusus
 - [ ] Kita paham alasan utama NALA memilih OpenSearch dibanding vector database khusus atau pgvector
 - [ ] `/chat/stream` (Module 7) masih berfungsi seperti sebelumnya
 
-Begitu kelima hal ini terverifikasi, lanjut ke Module 13 — membangun **semantic search** sungguhan di atas OpenSearch yang sudah menyala ini: memahami metrik kemiripan (cosine similarity, L2, dot product) dan membangun class `VectorStore` yang menyambungkan embedding (Module 11) ke OpenSearch (module ini).
+Begitu keenam hal ini terverifikasi, lanjut ke Module 13 — membangun **semantic search** sungguhan di atas OpenSearch yang sudah menyala ini: memahami metrik kemiripan (cosine similarity, L2, dot product) dan membangun class `VectorStore` yang menyambungkan embedding (Module 11) ke OpenSearch (module ini).
