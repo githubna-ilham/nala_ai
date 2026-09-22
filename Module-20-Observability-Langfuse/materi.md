@@ -384,8 +384,9 @@ def chat_stream(request: ChatStreamRequest) -> StreamingResponse:
         rerank_span = trace.span(name="rerank", input={"candidate_count": len(candidates)})
         results = reranker.rerank(last_user_message, candidates, top_k=3) if reranker else candidates[:3]
         rerank_span.end(output={"top_chunks": [r["text"][:100] for r in results]})
-    except httpx.HTTPError:
+    except httpx.HTTPError as exc:
         results = []
+        trace.update(output={"error": f"retrieval_failed: {exc}"}, level="ERROR")
 
     if results:
         context = "\n\n".join(r["text"] for r in results)
