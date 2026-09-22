@@ -174,12 +174,14 @@ Lalu di `app/main.py`, tambah import dan setup baru — di baris atas:
 
 ```python
 # app/main.py
+import httpx
+
 from app.embeddings import embed_text
 from app.system_prompt import NALA_SYSTEM_PROMPT, NALA_SYSTEM_PROMPT_NO_CONTEXT
 from app.vector_store import VectorStore
 ```
 
-`from app.system_prompt import NALA_SYSTEM_PROMPT` (yang sudah ada sejak Module 7) diganti jadi baris di atas.
+`from app.system_prompt import NALA_SYSTEM_PROMPT` (yang sudah ada sejak Module 7) diganti jadi baris di atas. `import httpx` juga baru — sejauh ini `httpx` cuma dipakai di dalam `app/ollama_client.py`, `app/embeddings.py`, dan `app/vector_store.py`, belum pernah diimpor langsung di `app/main.py`. Langkah 3 di bawah menangkap `httpx.HTTPError` langsung di `main.py`, jadi importnya wajib ada di sini — kalau terlewat, blok `except` itu akan gagal dengan `NameError` begitu benar-benar dieksekusi.
 
 Lalu tambah konstanta dan instance `VectorStore` baru, di dekat `KNOWLEDGE_BASE_PATH`:
 
@@ -216,6 +218,9 @@ GOAL:
   jawab berdasarkan pengetahuan umum saja dan sebutkan bahwa jawaban
   akan lebih akurat setelah dokumen SOP diunggah."
 - Di Nala/app/main.py:
+  - Tambah `import httpx` di baris import paling atas (belum pernah
+    diimpor langsung di main.py sebelumnya — cuma dipakai di dalam
+    ollama_client.py, embeddings.py, vector_store.py).
   - Ganti `from app.system_prompt import NALA_SYSTEM_PROMPT` jadi
     `from app.system_prompt import NALA_SYSTEM_PROMPT,
     NALA_SYSTEM_PROMPT_NO_CONTEXT`.
@@ -304,6 +309,10 @@ Ubah endpoint POST /chat/stream supaya retrieval-augmented (Module 13,
 Langkah 3).
 
 GOAL:
+- Di Nala/app/main.py, PASTIKAN `import httpx` sudah ada di baris
+  import paling atas (harusnya sudah ditambahkan di Langkah 2 — kalau
+  belum ada, tambahkan sekarang; blok except di bawah butuh ini,
+  kalau tidak ada NameError saat except itu dieksekusi).
 - Di Nala/app/main.py, di dalam fungsi
   chat_stream() (endpoint POST /chat/stream), SETELAH baris
   `recent = request.messages[-HISTORY_WINDOW:]` yang sudah ada,
