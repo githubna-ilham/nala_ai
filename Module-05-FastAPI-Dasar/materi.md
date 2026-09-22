@@ -432,36 +432,6 @@ uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 | **Untuk NALA (Module 1-4)** | FastAPI app yang menerima request user di `/chat`, kirim ke Ollama, return jawaban |
 | **Untuk NALA (Module 19+)** | FastAPI app juga integrate dengan PostgreSQL, LangGraph Agent, OpenSearch (hybrid search) untuk full-featured RAG + agentic system |
 
-### 1.4 Contoh Endpoint NALA yang Akan Dibangun
-
-Selama training, Anda akan implement endpoint seperti:
-
-```python
-# Module 1-4
-@app.post("/chat", response_model=ChatResponse)
-def chat(request: ChatRequest) -> ChatResponse:
-    """Simple Q&A endpoint"""
-    reply = ollama_client.generate(system_prompt=NALA_SYSTEM_PROMPT, user_message=request.message)
-    return ChatResponse(reply=reply)
-
-# Module 11+
-@app.post("/rag/ask")
-async def rag_ask(query: str):
-    """RAG: retrieve relevant docs (dari OpenSearch) + generate answer"""
-    retrieved_docs = opensearch.search(query)
-    context = "\n".join([doc for doc in retrieved_docs])
-    prompt = f"Context: {context}\n\nQuestion: {query}"
-    answer = ollama_inference(prompt)
-    return {"query": query, "answer": answer, "sources": retrieved_docs}
-
-# Module 19+
-@app.post("/agent/ask")
-async def agent_ask(query: str):
-    """Agentic: LangGraph agent decides which tools to use"""
-    state = agent.invoke({"query": query})
-    return {"query": query, "answer": state["answer"], "tools_used": state["tools"]}
-```
-
 ---
 
 ## Ringkasan & Next Steps
