@@ -1,12 +1,12 @@
-# Module 24: Routing — Menggabungkan RAG + SQL Tool dalam Satu Agent
+# Module 25: Routing — Menggabungkan RAG + SQL Tool dalam Satu Agent
 
 ## Tujuan
 
-Memahami dan menguji bagaimana agent NALA memilih antara tool RAG (Module 22) dan tool SQL (Module 23) — termasuk kasus yang butuh keduanya secara berurutan dan kasus ambigu yang salah pilih — lalu menambahkan pengaman batas putaran tool supaya kegagalan routing tidak berujung loop tanpa henti.
+Memahami dan menguji bagaimana agent NALA memilih antara tool RAG (Module 23) dan tool SQL (Module 24) — termasuk kasus yang butuh keduanya secara berurutan dan kasus ambigu yang salah pilih — lalu menambahkan pengaman batas putaran tool supaya kegagalan routing tidak berujung loop tanpa henti.
 
 ## Definisi
 
-**Routing**, di sini, bukan komponen kode terpisah yang ditulis khusus — ia adalah nama untuk keputusan yang sudah diam-diam terjadi setiap kali node `call_model` dipanggil (Module 22): LLM membaca pertanyaan dan `description` tiap tool, lalu memutuskan mau pakai tool RAG (`cari_dokumen_sop`), tool SQL (`query_data_operasional`), keduanya secara berurutan, atau tidak sama sekali. Secara umum, tool RAG cocok untuk pertanyaan tentang **aturan/prosedur** yang jawabannya statis dan tertulis di dokumen, sementara tool SQL cocok untuk pertanyaan tentang **status/jumlah/data transaksi** yang berubah setiap hari dan tidak pernah ditulis di dokumen mana pun — dua sumber jawaban yang saling melengkapi, bukan saling menggantikan.
+**Routing**, di sini, bukan komponen kode terpisah yang ditulis khusus — ia adalah nama untuk keputusan yang sudah diam-diam terjadi setiap kali node `call_model` dipanggil (Module 23): LLM membaca pertanyaan dan `description` tiap tool, lalu memutuskan mau pakai tool RAG (`cari_dokumen_sop`), tool SQL (`query_data_operasional`), keduanya secara berurutan, atau tidak sama sekali. Secara umum, tool RAG cocok untuk pertanyaan tentang **aturan/prosedur** yang jawabannya statis dan tertulis di dokumen, sementara tool SQL cocok untuk pertanyaan tentang **status/jumlah/data transaksi** yang berubah setiap hari dan tidak pernah ditulis di dokumen mana pun — dua sumber jawaban yang saling melengkapi, bukan saling menggantikan.
 
 Karena keputusan ini sepenuhnya bergantung pada kemampuan model membaca maksud pertanyaan (bukan aturan `if/else` yang pasti benar), routing bisa **salah** — model kecil seperti `llama3.2:3b` kadang memilih tool yang tidak tepat untuk pertanyaan ambigu. Module ini juga menambahkan pengaman **batas putaran tool** (`MAX_TOOL_ROUNDS`): kalau model terus-menerus meminta tool tanpa pernah berhenti, agent dipaksa menjawab dengan apa yang sudah ada lewat node `force_answer`, supaya kegagalan routing paling buruk sekalipun tidak berujung request yang menggantung tanpa batas.
 
@@ -27,11 +27,11 @@ flowchart TD
 - Kita paham bahwa routing sepenuhnya keputusan LLM berdasarkan `description` skema tool, bukan aturan `if/else` yang ditulis manual — dan bahwa model kecil (`llama3.2:3b`) bisa salah pilih, ini keterbatasan yang jujur diakui, bukan bug
 - Agent punya pengaman `MAX_TOOL_ROUNDS` + node `force_answer`: kalau model terus meminta tool melebihi batas putaran, agent dipaksa menjawab dengan apa yang sudah ada, bukan berjalan tanpa batas
 - Pengaman ini sudah dicoba dipicu dengan `MAX_TOOL_ROUNDS` diturunkan sementara ke `1` — dan kita paham bahwa memicunya secara organik dengan `llama3.2:3b` ternyata sulit (lihat Bagian 6.b), sehingga verifikasi logikanya dilakukan juga langsung di level kode, bukan cuma lewat pengamatan end-to-end
-- Tidak ada regresi pada pertanyaan sederhana satu-tool dari Module 22-23
+- Tidak ada regresi pada pertanyaan sederhana satu-tool dari Module 23-24
 
 ## 1. Kenapa "Routing" Bukan Fitur Baru yang Perlu Dibangun dari Nol
 
-Ini kemungkinan module paling ringan dari sisi kode baru di rangkaian Module 21-25, dan itu disengaja: graph LangGraph yang dibangun di Module 22 (`call_model` → `should_continue` → `call_tool`/`END`, dengan `call_tool` selalu kembali ke `call_model`) **sudah** mendukung dua tool tanpa perubahan struktural sejak Module 23 mendaftarkan `SQL_TOOL_SCHEMA` di samping `RAG_TOOL_SCHEMA`. "Routing" di sini bukan komponen kode terpisah yang harus ditulis — ia adalah **keputusan yang diambil model** setiap kali `call_model` dipanggil, berdasarkan `description` di skema tiap tool (Module 22 Bagian 4 Tahap B, Module 23 Bagian 3 Tahap A) dan isi percakapan sejauh itu.
+Ini kemungkinan module paling ringan dari sisi kode baru di rangkaian Module 22-26, dan itu disengaja: graph LangGraph yang dibangun di Module 23 (`call_model` → `should_continue` → `call_tool`/`END`, dengan `call_tool` selalu kembali ke `call_model`) **sudah** mendukung dua tool tanpa perubahan struktural sejak Module 24 mendaftarkan `SQL_TOOL_SCHEMA` di samping `RAG_TOOL_SCHEMA`. "Routing" di sini bukan komponen kode terpisah yang harus ditulis — ia adalah **keputusan yang diambil model** setiap kali `call_model` dipanggil, berdasarkan `description` di skema tiap tool (Module 23 Bagian 4 Tahap B, Module 24 Bagian 3 Tahap A) dan isi percakapan sejauh itu.
 
 Yang dibangun di module ini bukan mekanisme routing baru, tapi tiga hal yang justru lebih penting untuk sistem produksi: **memahami** bagaimana keputusan itu diambil, **menguji** dengan pertanyaan yang mewakili tiap skenario (termasuk yang seharusnya butuh dua tool sekaligus), dan **menambahkan pengaman** untuk kasus ketika keputusan itu meleset atau berulang tanpa henti.
 
@@ -49,20 +49,20 @@ flowchart TD
 
 ## 2. Contoh Pertanyaan per Skenario
 
-Tabel ini dipakai sebagai bahan uji coba di Langkah 1 — bukan aturan `if/else` yang ditulis di kode mana pun, murni prediksi berdasarkan `description` tiap tool (lihat kembali isi `RAG_TOOL_SCHEMA`/`SQL_TOOL_SCHEMA` di Module 22-23 untuk melihat kenapa model "seharusnya" memilih begini):
+Tabel ini dipakai sebagai bahan uji coba di Langkah 1 — bukan aturan `if/else` yang ditulis di kode mana pun, murni prediksi berdasarkan `description` tiap tool (lihat kembali isi `RAG_TOOL_SCHEMA`/`SQL_TOOL_SCHEMA` di Module 23-24 untuk melihat kenapa model "seharusnya" memilih begini):
 
 | Pertanyaan | Ekspektasi tool | Kenapa |
 |---|---|---|
 | "Apa saja syarat pengajuan kredit untuk nasabah perorangan?" | `cari_dokumen_sop` saja | Menanyakan **aturan/prosedur** — persis yang disebut `description` RAG tool |
 | "Berapa banyak pengajuan kredit yang statusnya pending minggu ini?" | `query_data_operasional` saja | Menanyakan **jumlah/status transaksi** — persis yang disebut `description` SQL tool |
 | "Bagaimana status klaim asuransi nasabah N-00087?" | `query_data_operasional` saja | Data spesifik satu nasabah, bukan prosedur umum |
-| "Kenapa pengajuan kredit nasabah N-00305 ditolak?" | **Keduanya** — `query_data_operasional` (ambil `alasan_penolakan`, lihat data seed Module 23) lalu bisa jadi `cari_dokumen_sop` (kalau user lanjut bertanya "apa syarat supaya bisa diterima") | Butuh data transaksi spesifik dulu, baru (kalau perlu) konteks kebijakan |
+| "Kenapa pengajuan kredit nasabah N-00305 ditolak?" | **Keduanya** — `query_data_operasional` (ambil `alasan_penolakan`, lihat data seed Module 24) lalu bisa jadi `cari_dokumen_sop` (kalau user lanjut bertanya "apa syarat supaya bisa diterima") | Butuh data transaksi spesifik dulu, baru (kalau perlu) konteks kebijakan |
 | "Halo, kamu siapa?" | Tidak ada tool | Sapaan, tidak menyentuh dokumen atau data operasional |
-| "Apa itu bunga majemuk?" | Tidak ada tool (idealnya) — atau NALA menjawab bahwa ini di luar cakupan | Di luar domain SOP/data operasional PT Nusantara Finance — lihat `NALA_SYSTEM_PROMPT_AGENT` (Module 22 Bagian 4 Langkah 4) yang membatasi topik |
+| "Apa itu bunga majemuk?" | Tidak ada tool (idealnya) — atau NALA menjawab bahwa ini di luar cakupan | Di luar domain SOP/data operasional PT Nusantara Finance — lihat `NALA_SYSTEM_PROMPT_AGENT` (Module 23 Bagian 4 Langkah 4) yang membatasi topik |
 
 **Langkah 1 — Jalankan keenam skenario lewat `/chat`, verifikasi lawan database**
 
-Prasyarat: Module 23 selesai — `/chat` sudah bisa menjawab pertanyaan RAG maupun SQL secara terpisah, tanpa regresi. Jalankan **keenam** baris tabel di atas satu per satu lewat `curl`. Jangan cuma baca jawabannya sekilas — cocokkan isinya langsung dengan data asli:
+Prasyarat: Module 24 selesai — `/chat` sudah bisa menjawab pertanyaan RAG maupun SQL secara terpisah, tanpa regresi. Jalankan **keenam** baris tabel di atas satu per satu lewat `curl`. Jangan cuma baca jawabannya sekilas — cocokkan isinya langsung dengan data asli:
 
 ```bash
 curl -X POST http://localhost:8000/chat -H "Content-Type: application/json" \
@@ -94,17 +94,17 @@ docker exec nala-postgres-1 psql -U nala_admin -d nala_operasional \
   -c "SELECT nasabah_id, status, alasan_penolakan FROM pengajuan_kredit WHERE nasabah_id='N-00305';"
 ```
 
-✅ **Indikator untuk dicatat**: keenam baris tabel routing sudah dicoba **dan** jawabannya dicocokkan manual dengan data asli — bukan cuma "tool yang benar terpanggil". Hasil pengujian nyata (Bagian 6.a di bawah): tool yang dipanggil hampir selalu tepat, tapi jawaban akhir bisa mengarang detail yang tidak sesuai data (mis. alasan penolakan kredit) meski tool sudah mengembalikan data yang benar — sama seperti temuan Module 23 Bagian 6. Jalankan tabel ini lebih dari sekali kalau memungkinkan: hasil bisa berbeda antar-run untuk pertanyaan yang identik (lihat catatan non-determinisme di Bagian 6.a), jadi satu kali percobaan tidak cukup untuk klaim "sudah benar" atau "gagal".
+✅ **Indikator untuk dicatat**: keenam baris tabel routing sudah dicoba **dan** jawabannya dicocokkan manual dengan data asli — bukan cuma "tool yang benar terpanggil". Hasil pengujian nyata (Bagian 6.a di bawah): tool yang dipanggil hampir selalu tepat, tapi jawaban akhir bisa mengarang detail yang tidak sesuai data (mis. alasan penolakan kredit) meski tool sudah mengembalikan data yang benar — sama seperti temuan Module 24 Bagian 6. Jalankan tabel ini lebih dari sekali kalau memungkinkan: hasil bisa berbeda antar-run untuk pertanyaan yang identik (lihat catatan non-determinisme di Bagian 6.a), jadi satu kali percobaan tidak cukup untuk klaim "sudah benar" atau "gagal".
 
 ## 3. Skenario "Butuh Dua Tool": Kenapa Graph yang Sudah Ada Cukup
 
 Ambil baris keempat tabel di atas — "Kenapa pengajuan kredit nasabah N-00305 ditolak?" — sebagai contoh konkret alur multi-tool:
 
-1. `call_model` menerima pertanyaan, memutuskan perlu `query_data_operasional(tabel="pengajuan_kredit", mode="detail_nasabah", nasabah_id="N-00305")` untuk tahu **status dan alasan penolakan** (ada di kolom `alasan_penolakan`, data seed Module 23: *"Skor kredit di bawah ambang batas minimum"*).
-2. `call_tool` menjalankan tool itu, hasilnya (termasuk `alasan_penolakan`) masuk ke state sebagai pesan `role: "tool"`, lalu **kembali ke `call_model`** (edge `call_tool → call_model` dari Module 22 — inilah yang membuat alur multi-langkah mungkin tanpa kode tambahan).
+1. `call_model` menerima pertanyaan, memutuskan perlu `query_data_operasional(tabel="pengajuan_kredit", mode="detail_nasabah", nasabah_id="N-00305")` untuk tahu **status dan alasan penolakan** (ada di kolom `alasan_penolakan`, data seed Module 24: *"Skor kredit di bawah ambang batas minimum"*).
+2. `call_tool` menjalankan tool itu, hasilnya (termasuk `alasan_penolakan`) masuk ke state sebagai pesan `role: "tool"`, lalu **kembali ke `call_model`** (edge `call_tool → call_model` dari Module 23 — inilah yang membuat alur multi-langkah mungkin tanpa kode tambahan).
 3. `call_model` dipanggil lagi, sekarang dengan hasil tool sudah ada di riwayat. Kalau modelnya cukup baik, ia langsung merangkai jawaban dari data itu ("ditolak karena skor kredit di bawah ambang batas"). Kalau user lanjut bertanya "skor kredit minimum berapa?", model **bisa** memutuskan memanggil `cari_dokumen_sop` di putaran berikutnya untuk mencari angka itu di SOP — dua tool dipakai berurutan, dalam dua putaran graph yang terpisah, bukan satu pemanggilan simultan.
 
-Tidak ada baris kode baru yang wajib ditambahkan untuk skenario ini — inilah nilai dari desain edge kondisional Module 22: `call_model` bisa dipanggil berkali-kali, tiap kali dengan riwayat yang makin lengkap, sampai ia memutuskan `should_continue` mengembalikan `END`.
+Tidak ada baris kode baru yang wajib ditambahkan untuk skenario ini — inilah nilai dari desain edge kondisional Module 23: `call_model` bisa dipanggil berkali-kali, tiap kali dengan riwayat yang makin lengkap, sampai ia memutuskan `should_continue` mengembalikan `END`.
 
 ## 4. Kejujuran: Routing Bisa Salah, dan Itu Bukan Bug
 
@@ -126,13 +126,13 @@ Pertanyaan ini secara sengaja tidak jelas: "kredit saya gimana" bisa berarti "ap
 - Model memilih `cari_dokumen_sop` dan menjawab dari SOP umum, mengabaikan bahwa user kemungkinan menanyakan status pribadi.
 - Model tidak memanggil tool sama sekali dan minta klarifikasi langsung — sebenarnya respons paling aman, tapi tidak dijamin terjadi.
 
-✅ **Indikator untuk dicatat** (bukan "sukses"/"gagal" tunggal — tujuannya observasi): catat tool mana (kalau ada) yang dipanggil, apakah error tool tertangani dengan baik, apakah jawaban akhirnya membantu atau menyesatkan. Ini bahan diskusi kelas, bukan sesuatu yang "harus diperbaiki sampai selalu benar" — beberapa ambiguitas memang tidak bisa diselesaikan tanpa informasi tambahan dari user (di sinilah RBAC/audit Module 25 juga relevan: idealnya `nasabah_id` datang dari sesi login yang terautentikasi, bukan ditanyakan ke LLM lewat teks bebas — lihat Module 25 Bagian 2).
+✅ **Indikator untuk dicatat** (bukan "sukses"/"gagal" tunggal — tujuannya observasi): catat tool mana (kalau ada) yang dipanggil, apakah error tool tertangani dengan baik, apakah jawaban akhirnya membantu atau menyesatkan. Ini bahan diskusi kelas, bukan sesuatu yang "harus diperbaiki sampai selalu benar" — beberapa ambiguitas memang tidak bisa diselesaikan tanpa informasi tambahan dari user (di sinilah RBAC/audit Module 26 juga relevan: idealnya `nasabah_id` datang dari sesi login yang terautentikasi, bukan ditanyakan ke LLM lewat teks bebas — lihat Module 26 Bagian 2).
 
 ### b. Mitigasi yang bisa dilakukan (dan batasnya)
 
 **Langkah 3 — Perbaiki `description` tool supaya sinyal lebih tajam**
 
-Kalau routing salah tampak sering terjadi ke arah yang bisa diprediksi, salah satu langkah termurah adalah memperjelas `description` di `RAG_TOOL_SCHEMA`/`SQL_TOOL_SCHEMA` (lihat kembali Module 22-23) — description **adalah** sinyal utama yang dipakai model untuk membedakan tool, jadi kalimat yang lebih spesifik biasanya membantu. Contoh perbaikan kecil di `SQL_TOOL_SCHEMA`:
+Kalau routing salah tampak sering terjadi ke arah yang bisa diprediksi, salah satu langkah termurah adalah memperjelas `description` di `RAG_TOOL_SCHEMA`/`SQL_TOOL_SCHEMA` (lihat kembali Module 23-24) — description **adalah** sinyal utama yang dipakai model untuk membedakan tool, jadi kalimat yang lebih spesifik biasanya membantu. Contoh perbaikan kecil di `SQL_TOOL_SCHEMA`:
 
 ```python
 # app/tools/sql_tool.py — perbaikan description, opsional
@@ -157,7 +157,7 @@ Terapkan perbaikan ini ke `app/tools/sql_tool.py`, lalu `docker compose up --bui
 
 ```
 Pertajam description SQL_TOOL_SCHEMA supaya sinyal routing ke tool SQL
-lebih jelas dibanding tool RAG (Module 24, Langkah 3).
+lebih jelas dibanding tool RAG (Module 25, Langkah 3).
 
 GOAL:
 - Di Nala/app/tools/sql_tool.py, ganti field "description" di
@@ -171,8 +171,8 @@ GOAL:
 
 CONTEXT:
 - Tujuan: description tool adalah satu-satunya sinyal yang dibaca LLM
-  untuk memilih antara tool RAG dan tool SQL (Module 22 Bagian 4 Tahap
-  B, Module 23 Bagian 3 Tahap A) — kalimat yang lebih spesifik
+  untuk memilih antara tool RAG dan tool SQL (Module 23 Bagian 4 Tahap
+  B, Module 24 Bagian 3 Tahap A) — kalimat yang lebih spesifik
   (termasuk kata "WAJIB"/"JANGAN") biasanya membantu model kecil
   memilih lebih tepat, meski bukan jaminan mutlak.
 - Struktur skema tool (nama parameter, tipe) TIDAK berubah, hanya teks
@@ -194,13 +194,13 @@ Sesuai catatan di README utama bagian "Rekomendasi Model LLM": `llama3.2:3b` dip
 docker compose exec ollama ollama pull qwen2.5:7b
 ```
 
-Lalu ganti env var `OLLAMA_MODEL` di `docker-compose.yml` (service `api`) dari `llama3.2:3b` ke `qwen2.5:7b`, `docker compose up --build api` ulang. Ini **bukan** default — hanya catatan tambahan kalau spesifikasi laptop kita memungkinkan, persis seperti yang digariskan README utama. Model yang lebih besar umumnya lebih baik membaca maksud pertanyaan ambigu, tapi trade-off RAM-nya nyata: sebaiknya jangan dipakai kalau laptop kita masih pas-pasan di 16GB, terutama kalau Module 26-29 nanti menyalakan seluruh stack production sekaligus.
+Lalu ganti env var `OLLAMA_MODEL` di `docker-compose.yml` (service `api`) dari `llama3.2:3b` ke `qwen2.5:7b`, `docker compose up --build api` ulang. Ini **bukan** default — hanya catatan tambahan kalau spesifikasi laptop kita memungkinkan, persis seperti yang digariskan README utama. Model yang lebih besar umumnya lebih baik membaca maksud pertanyaan ambigu, tapi trade-off RAM-nya nyata: sebaiknya jangan dipakai kalau laptop kita masih pas-pasan di 16GB, terutama kalau Module 27-30 nanti menyalakan seluruh stack production sekaligus.
 
 ⚠️ **Kalau routing tetap terasa buruk terus-menerus meski sudah memperbaiki `description` (Langkah 3)**: pertimbangkan opsi `qwen2.5:7b` di atas **hanya** kalau laptop punya RAM 32GB+ — jangan dipaksakan di laptop 16GB yang sudah menjalankan Ollama + OpenSearch + Airflow + PostgreSQL bersamaan, risiko container ter-*kill* karena kehabisan memory jauh lebih mengganggu daripada akurasi routing yang belum sempurna.
 
 ## 5. Pengaman: Batas Putaran Tool (Mencegah Loop Tanpa Henti)
 
-Ada satu risiko teknis yang belum dibahas dari graph Module 22-23: `call_tool` selalu kembali ke `call_model`, dan tidak ada yang mencegah model meminta tool **berkali-kali tanpa henti** (mis. karena tool mengembalikan hasil yang menurut model kurang meyakinkan, ia mencoba lagi dengan argumen sedikit berbeda, berulang). Ini nyata bisa terjadi pada model kecil yang kurang percaya diri pada satu hasil tool. Tambahkan pengaman sederhana:
+Ada satu risiko teknis yang belum dibahas dari graph Module 23-24: `call_tool` selalu kembali ke `call_model`, dan tidak ada yang mencegah model meminta tool **berkali-kali tanpa henti** (mis. karena tool mengembalikan hasil yang menurut model kurang meyakinkan, ia mencoba lagi dengan argumen sedikit berbeda, berulang). Ini nyata bisa terjadi pada model kecil yang kurang percaya diri pada satu hasil tool. Tambahkan pengaman sederhana:
 
 **Langkah 5 — Tambah batas putaran tool di `app/agent.py`**
 
@@ -261,14 +261,14 @@ curl -X POST http://localhost:8000/chat \
   -d '{"message": "Berapa banyak pengajuan kredit yang statusnya pending?"}'
 ```
 
-✅ **Indikator sukses**: jawaban tetap benar seperti Module 23 (pertanyaan ini normalnya cuma butuh 1 putaran tool, jauh di bawah `MAX_TOOL_ROUNDS=3`, jadi `force_answer` seharusnya tidak pernah terpanggil di kasus ini — buktikan tidak ada regresi).
+✅ **Indikator sukses**: jawaban tetap benar seperti Module 24 (pertanyaan ini normalnya cuma butuh 1 putaran tool, jauh di bawah `MAX_TOOL_ROUNDS=3`, jadi `force_answer` seharusnya tidak pernah terpanggil di kasus ini — buktikan tidak ada regresi).
 
 <details>
 <summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 5</strong></summary>
 
 ```
 Tambah pengaman batas putaran tool ke agent supaya tidak berpotensi
-loop tak berhenti (Module 24, Langkah 5).
+loop tak berhenti (Module 25, Langkah 5).
 
 GOAL:
 - Di Nala/app/agent.py:
@@ -346,9 +346,9 @@ docker stop nala-api-force-test
 docker compose up -d api
 ```
 
-⚠️ **Kalau agent tampak "menggantung" lama (timeout) untuk pertanyaan yang butuh dua tool**: wajar sampai batas tertentu — setiap putaran tool berarti minimal satu panggilan tambahan ke `llama3.2:3b` (Bagian 1), jadi pertanyaan yang butuh dua tool berurutan otomatis lebih lambat dari pertanyaan satu-tool. Kalau benar-benar tidak pernah selesai (bukan cuma lambat), pastikan `MAX_TOOL_ROUNDS`/`force_answer` (Langkah 5 di atas) sudah terpasang dengan benar. Untuk error umum lain (`no configuration file provided`, `failed to read dockerfile`, port sudah dipakai, dsb.) yang tidak spesifik ke rangkaian Module 21-25, lihat bagian troubleshooting di materi Module 7-16.
+⚠️ **Kalau agent tampak "menggantung" lama (timeout) untuk pertanyaan yang butuh dua tool**: wajar sampai batas tertentu — setiap putaran tool berarti minimal satu panggilan tambahan ke `llama3.2:3b` (Bagian 1), jadi pertanyaan yang butuh dua tool berurutan otomatis lebih lambat dari pertanyaan satu-tool. Kalau benar-benar tidak pernah selesai (bukan cuma lambat), pastikan `MAX_TOOL_ROUNDS`/`force_answer` (Langkah 5 di atas) sudah terpasang dengan benar. Untuk error umum lain (`no configuration file provided`, `failed to read dockerfile`, port sudah dipakai, dsb.) yang tidak spesifik ke rangkaian Module 22-26, lihat bagian troubleshooting di materi Module 7-17.
 
-**📄 Kode lengkap Module 24** (`app/agent.py` versi lengkap dengan node `force_answer` — potongan relevan sudah ditampilkan utuh di Langkah 5 di atas; digabungkan dengan `app/agent.py` dari Module 22-23, tidak ada file lain yang berubah).
+**📄 Kode lengkap Module 25** (`app/agent.py` versi lengkap dengan node `force_answer` — potongan relevan sudah ditampilkan utuh di Langkah 5 di atas; digabungkan dengan `app/agent.py` dari Module 23-24, tidak ada file lain yang berubah).
 
 ## 6. Hasil Uji Nyata
 
@@ -367,9 +367,9 @@ Keenam pertanyaan di Bagian 2 dijalankan langsung ke endpoint agent (`llama3.2:3
 | Halo, kamu siapa? | Tidak ada | ✅ Sesuai — perkenalan singkat, tidak halusinasi | — |
 | Apa itu bunga majemuk? | Tidak ada | ❌ **Melanggar batasan domain** — menjawab panjang lebar soal bunga majemuk alih-alih menolak/mengarahkan kembali ke topik PT Nusantara Finance, walau `NALA_SYSTEM_PROMPT_AGENT` tidak eksplisit menyuruh menolak topik di luar domain (hanya menyuruh pakai tool untuk hal terkait SOP/data) | Dibandingkan dengan ekspektasi tabel Bagian 2 |
 
-**4/6 sesuai ekspektasi, 2/6 gagal.** Catatan penting: pada percobaan sebelumnya (sesi lain, model & kode identik), pertanyaan pertama ("syarat perorangan") justru **gagal** — RAG mengambil bagian dokumen syarat badan usaha, bukan perorangan. Pada percobaan ini pertanyaan yang sama **berhasil**. Ini bukan kontradiksi — ini bukti langsung bahwa kegagalan routing/retrieval pada model sekecil ini **tidak konsisten antar-run untuk pertanyaan yang identik**, sejalan dengan temuan konsistensi sintesis jawaban di Module 23 Bagian 6. Jangan menjalankan tabel ini sekali lalu menyimpulkan "sudah beres" — jalankan berkali-kali kalau ingin klaim yang bisa dipercaya.
+**4/6 sesuai ekspektasi, 2/6 gagal.** Catatan penting: pada percobaan sebelumnya (sesi lain, model & kode identik), pertanyaan pertama ("syarat perorangan") justru **gagal** — RAG mengambil bagian dokumen syarat badan usaha, bukan perorangan. Pada percobaan ini pertanyaan yang sama **berhasil**. Ini bukan kontradiksi — ini bukti langsung bahwa kegagalan routing/retrieval pada model sekecil ini **tidak konsisten antar-run untuk pertanyaan yang identik**, sejalan dengan temuan konsistensi sintesis jawaban di Module 24 Bagian 6. Jangan menjalankan tabel ini sekali lalu menyimpulkan "sudah beres" — jalankan berkali-kali kalau ingin klaim yang bisa dipercaya.
 
-Kegagalan Q4 ("mengarang alasan penolakan") sangat mirip pola yang sudah didokumentasikan Module 23 Bagian 6: tool mengembalikan data yang benar (dibuktikan lewat `alasan_penolakan` di database), tapi model tidak memakainya saat menyusun jawaban akhir — ini bukan masalah routing (tool yang benar dipanggil), murni masalah sintesis.
+Kegagalan Q4 ("mengarang alasan penolakan") sangat mirip pola yang sudah didokumentasikan Module 24 Bagian 6: tool mengembalikan data yang benar (dibuktikan lewat `alasan_penolakan` di database), tapi model tidak memakainya saat menyusun jawaban akhir — ini bukan masalah routing (tool yang benar dipanggil), murni masalah sintesis.
 
 ### b. Pengaman `MAX_TOOL_ROUNDS`/`force_answer`: logikanya benar, tapi susah dipicu organik
 
@@ -396,26 +396,26 @@ messages_after_1_round = [
 # → should_continue(...) mengembalikan "force_answer" — TERKONFIRMASI
 ```
 
-**Kesimpulan jujur soal bagian ini**: kode pengaman `MAX_TOOL_ROUNDS`/`force_answer` **benar secara logika** (dibuktikan langsung, bukan diasumsikan), tapi kondisi yang memicunya di dunia nyata — model meminta tool secara berurutan sampai melewati batas — **jarang atau tidak pernah terjadi secara organik** dengan `llama3.2:3b` pada skenario yang dicoba. Pola kegagalan model kecil ini justru kebalikan dari yang diantisipasi Langkah 5: bukan meminta tool **terlalu banyak** (risiko yang coba dicegah `force_answer`), tapi berhenti **terlalu cepat** dan mengarang jawaban begitu ada 1 hasil tool di riwayat — bahkan ketika diperintah eksplisit untuk memanggil tool lagi. `force_answer` tetap berguna sebagai pengaman defensif untuk model lain (mis. `qwen2.5:7b` yang mungkin lebih "gigih" minta tool berulang), tapi untuk `llama3.2:3b` spesifik, risiko yang lebih mendesak untuk ditangani sebenarnya adalah halusinasi saat berhenti dini — sesuatu yang di luar cakupan pengaman ini dan belum ada mitigasinya di rangkaian Module 21-25.
+**Kesimpulan jujur soal bagian ini**: kode pengaman `MAX_TOOL_ROUNDS`/`force_answer` **benar secara logika** (dibuktikan langsung, bukan diasumsikan), tapi kondisi yang memicunya di dunia nyata — model meminta tool secara berurutan sampai melewati batas — **jarang atau tidak pernah terjadi secara organik** dengan `llama3.2:3b` pada skenario yang dicoba. Pola kegagalan model kecil ini justru kebalikan dari yang diantisipasi Langkah 5: bukan meminta tool **terlalu banyak** (risiko yang coba dicegah `force_answer`), tapi berhenti **terlalu cepat** dan mengarang jawaban begitu ada 1 hasil tool di riwayat — bahkan ketika diperintah eksplisit untuk memanggil tool lagi. `force_answer` tetap berguna sebagai pengaman defensif untuk model lain (mis. `qwen2.5:7b` yang mungkin lebih "gigih" minta tool berulang), tapi untuk `llama3.2:3b` spesifik, risiko yang lebih mendesak untuk ditangani sebenarnya adalah halusinasi saat berhenti dini — sesuatu yang di luar cakupan pengaman ini dan belum ada mitigasinya di rangkaian Module 22-26.
 
 ## 7. Apa yang TIDAK Ada di Module Ini
 
-- Pembatasan siapa yang boleh memicu tool SQL — Module 25 (RBAC).
-- Pencatatan tool mana yang dipanggil untuk keperluan audit — Module 25 (sengaja belum dicatat permanen di sini, walau secara teknis bisa dilihat manual dari log kalau `print()` debug Module 22 masih ada).
-- Perubahan pada `/chat/stream` — masih sama seperti Module 22 Bagian 4 Tahap C, tetap di luar cakupan rangkaian Module 21-25.
+- Pembatasan siapa yang boleh memicu tool SQL — Module 26 (RBAC).
+- Pencatatan tool mana yang dipanggil untuk keperluan audit — Module 26 (sengaja belum dicatat permanen di sini, walau secara teknis bisa dilihat manual dari log kalau `print()` debug Module 23 masih ada).
+- Perubahan pada `/chat/stream` — masih sama seperti Module 23 Bagian 4 Tahap C, tetap di luar cakupan rangkaian Module 22-26.
 
 ## 8. Checkpoint Praktik
 
-Langkah eksekusi lengkap ada di Langkah 1-5 di bagian-bagian sebelumnya (Bagian 2, 4, 5). Yang perlu dipastikan sebelum lanjut ke Module 25:
+Langkah eksekusi lengkap ada di Langkah 1-5 di bagian-bagian sebelumnya (Bagian 2, 4, 5). Yang perlu dipastikan sebelum lanjut ke Module 26:
 
 - [ ] Keenam baris tabel Bagian 2 sudah dicoba **lebih dari sekali**, hasil routing dan kebenaran jawabannya dicatat (tool mana yang dipanggil, jawaban dicocokkan manual dengan isi database/dokumen — lihat Bagian 6.a) — jangan simpulkan dari satu kali percobaan, hasilnya bisa beda antar-run untuk pertanyaan yang sama
 - [ ] Kasus ambigu Bagian 4.a sudah dicoba minimal sekali, hasilnya didiskusikan (bukan harus "benar", cukup dipahami kenapa)
 - [ ] Logika `should_continue`/`force_answer` sudah diverifikasi benar (baik lewat percobaan `MAX_TOOL_ROUNDS=1` maupun lewat pengujian langsung di level kode seperti Bagian 6.b) — kita paham bahwa memicunya secara organik dengan `llama3.2:3b` bisa jadi sulit, dan itu sendiri temuan yang sah untuk dicatat, bukan kegagalan pengujian
-- [ ] Tidak ada regresi pada pertanyaan sederhana satu-tool dari Module 22-23
+- [ ] Tidak ada regresi pada pertanyaan sederhana satu-tool dari Module 23-24
 
 ## Kesimpulan
 
-Module ini tidak menambah tool baru — ia menunjukkan bahwa desain graph dari Module 22 (edge kondisional + loop-back) sudah cukup fleksibel untuk menangani routing dua-tool, termasuk kasus yang butuh keduanya secara berurutan, tanpa perubahan struktural. Yang ditambahkan justru kejujuran teknis: routing berbasis LLM kecil **akan** kadang salah, itu bukan cacat implementasi tapi batas kemampuan model — mitigasinya (description tool yang lebih tajam, opsi upgrade ke `qwen2.5:7b` untuk laptop yang mampu) mengurangi tapi tidak menghilangkan masalah ini, dan pengaman `MAX_TOOL_ROUNDS`/`force_answer` memastikan kegagalan routing paling buruk sekalipun (loop tak berhenti) tidak membuat sistem macet — **meski pengujian nyata (Bagian 6.b) menunjukkan mode kegagalan `llama3.2:3b` yang lebih sering justru berhenti terlalu cepat dan mengarang, bukan meminta tool berlebihan**, jadi pengaman ini lebih relevan sebagai jaring pengaman defensif untuk model lain daripada risiko yang paling sering muncul di kurikulum ini. Module 25 menutup rangkaian Module 21-25 dengan lapisan yang sengaja belum disentuh di sini: siapa boleh memicu tool mana, dan jejak audit atas semua keputusan ini.
+Module ini tidak menambah tool baru — ia menunjukkan bahwa desain graph dari Module 23 (edge kondisional + loop-back) sudah cukup fleksibel untuk menangani routing dua-tool, termasuk kasus yang butuh keduanya secara berurutan, tanpa perubahan struktural. Yang ditambahkan justru kejujuran teknis: routing berbasis LLM kecil **akan** kadang salah, itu bukan cacat implementasi tapi batas kemampuan model — mitigasinya (description tool yang lebih tajam, opsi upgrade ke `qwen2.5:7b` untuk laptop yang mampu) mengurangi tapi tidak menghilangkan masalah ini, dan pengaman `MAX_TOOL_ROUNDS`/`force_answer` memastikan kegagalan routing paling buruk sekalipun (loop tak berhenti) tidak membuat sistem macet — **meski pengujian nyata (Bagian 6.b) menunjukkan mode kegagalan `llama3.2:3b` yang lebih sering justru berhenti terlalu cepat dan mengarang, bukan meminta tool berlebihan**, jadi pengaman ini lebih relevan sebagai jaring pengaman defensif untuk model lain daripada risiko yang paling sering muncul di kurikulum ini. Module 26 menutup rangkaian Module 22-26 dengan lapisan yang sengaja belum disentuh di sini: siapa boleh memicu tool mana, dan jejak audit atas semua keputusan ini.
 
 ---
 
