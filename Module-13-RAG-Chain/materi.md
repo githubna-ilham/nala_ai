@@ -31,6 +31,8 @@ flowchart LR
 
 ## 1. Menyatukan Tiga Potongan: `ingest_documents()` v1
 
+**Prasyarat**: sudah menyelesaikan **Module 12** (Vector Store & Semantic Search) — `opensearch` sudah menyala dan sehat.
+
 Module 10-12 membangun tiga alat terpisah: `extract_text()` (Module 10), `embed_text()` (Module 11), dan `VectorStore` (Module 12). Sekarang saatnya menyatukan ketiganya jadi satu fungsi — `ingest_documents()`, yang menerima path folder dan mengembalikan jumlah dokumen yang ter-index.
 
 ⚠️ **Belum ada chunking di versi ini**: tiap dokumen dibaca `extract_text()` **secara utuh**, langsung di-embed **secara utuh** jadi satu vektor, lalu disimpan sebagai **satu entri** di OpenSearch (`doc_id` = nama file apa adanya, bukan `filename-0`, `filename-1`, dst). Ini sengaja — versi pertama RAG dibuat sesederhana mungkin supaya cepat terbukti bekerja. Bagian 7 di bawah akan menunjukkan keterbatasan nyata dari pendekatan ini, yang jadi alasan konkret Module 14 menambahkan chunking.
@@ -91,7 +93,15 @@ docker compose up --build api
 docker compose exec api python -c "from app.ingest import ingest_documents; print(ingest_documents('/app/knowledge-base'))"
 ```
 
-✅ **Indikator sukses**: mengembalikan angka sesuai jumlah dokumen `.md`/`.txt`/`.pdf` di `resources/sample-knowledge-base/` (lihat Module 10 Bagian 2) — kalau ada 2 SOP contoh plus beberapa PDF latihan, angkanya sejumlah itu. Verifikasi lewat OpenSearch langsung: `curl "http://localhost:9200/nala-docs/_count"` harus menunjukkan angka yang sama.
+✅ **Indikator sukses**: mengembalikan angka sesuai jumlah dokumen `.md`/`.txt`/`.pdf` di `resources/sample-knowledge-base/` (lihat Module 10 Bagian 2) — kalau ada 2 SOP contoh plus beberapa PDF latihan, angkanya sejumlah itu. Verifikasi lewat OpenSearch langsung:
+
+```bash
+curl "http://localhost:9200/nala-docs/_count"
+```
+
+harus menunjukkan angka yang sama.
+
+> 🔧 **Troubleshooting — chat menjawab generik / bilang belum ada dokumen internal padahal sudah ingest**: `/chat/stream` (Bagian 2) otomatis jatuh ke mode tanpa-konteks saat index OpenSearch masih kosong (atau belum menyala) — itu normal, bukan error, tapi tandanya ingest belum berhasil. Cek lagi `curl http://localhost:9200/nala-docs/_count` — kalau `count` bernilai 0, index memang kosong, jalankan ulang Langkah 1 ini.
 
 > **📝 Catatan — beda dengan Module 14 nanti**: angka yang dikembalikan di sini adalah jumlah **dokumen**, bukan jumlah chunk — karena belum ada chunking. Setelah Module 14 meng-upgrade `ingest_documents()` untuk memecah tiap dokumen jadi beberapa chunk dulu sebelum di-embed, angka yang sama akan jauh lebih besar (satu dokumen bisa jadi 8-13 chunk, tergantung strategi chunking-nya) — perbandingan langsung ini jadi bukti konkret kenapa chunking penting, bukan cuma teori.
 
@@ -381,6 +391,8 @@ Sejauh ini, data seed (Bagian 1) diisi lewat pemanggilan `ingest_documents()` se
 
 Skenario konkret untuk memverifikasi Bagian 3 — pakai pertanyaan yang jawabannya cukup jelas ada di salah satu dari dua dokumen SOP, supaya hasilnya bisa diprediksi. Karena retrieval di module ini masih level-dokumen (Bagian 7), pertanyaan yang **sangat spesifik** ke sub-bagian dokumen (misal "syarat nasabah perorangan") tetap terjawab — seluruh dokumen ikut jadi konteks — tapi jawabannya bisa terasa kurang fokus dibanding setelah Module 14 menambahkan chunking.
 
+Contoh konkret: coba tanyakan "Apa saja syarat pengajuan kredit untuk nasabah perorangan?" — jawabannya mungkin terasa kurang fokus (seluruh dokumen ikut jadi konteks, bukan cuma bagian yang relevan). Ini **bukan bug** — lihat Bagian 7 untuk penjelasan kenapa ini terjadi dan kenapa itu jadi motivasi Module 14 (chunking).
+
 ## 7. Catatan: Keterbatasan Retrieval Level-Dokumen (Preview Module 14)
 
 RAG sudah bekerja (Bagian 3) — tapi retrieval-nya masih sangat kasar: **satu dokumen SOP yang panjang di-embed jadi satu vektor tunggal**, lalu **seluruh isinya** (bisa ribuan karakter) dikirim utuh sebagai konteks ke LLM, walau pertanyaan user cuma butuh satu-dua kalimat spesifik di dalamnya.
@@ -407,44 +419,3 @@ Begitu kelima hal ini terverifikasi, lanjut ke Module 14 — menambahkan chunkin
 ---
 
 > 📌 **Catatan untuk fasilitator**: setelah Module 14 (Chunking), Module 15 (Upload), dan Module 16 (Airflow) selesai dibangun, kembali ke module ini untuk verifikasi tambahan — pastikan dokumen yang diupload lewat form web atau di-trigger lewat Airflow **langsung bisa ditanyakan** ke `/chat/stream` tanpa mengubah satu baris pun kode di module ini. Ini bukti nyata desain "retrieval generik terhadap sumber data" yang dijelaskan Bagian 5.
-
-## Panduan Praktik
-
-### Prasyarat
-- Sudah menyelesaikan **Module 12** (Vector Store & Semantic Search) — `opensearch` sudah menyala dan sehat
-
-### Langkah 1: `ingest_documents()` v1 — RAG mulai hidup
-
-Sekarang tiga potongan (`extract_text()`, `embed_text()`, `VectorStore`) disatukan jadi `ingest_documents()`. **Belum ada chunking di versi ini** — tiap dokumen di-embed **utuh** jadi satu vektor:
-
-```bash
-docker compose exec api python -c "from app.ingest import ingest_documents; print(ingest_documents('/app/knowledge-base'))"
-```
-
-Outputnya adalah jumlah **dokumen** (bukan chunk — belum ada chunking) yang ter-index dari `resources/sample-knowledge-base/`. Pastikan angkanya lebih dari 0. Verifikasi lewat OpenSearch langsung:
-
-```bash
-curl "http://localhost:9200/nala-docs/_count"
-```
-
-Sekarang kembali ke `http://localhost:8000` — halaman yang sama sejak Module 7-8, tidak ada yang berubah dari sisi frontend. Bedanya sekarang index OpenSearch sudah terisi, jadi `/chat/stream` akan menemukan konteks yang relevan dan menjawab berdasarkan dokumen, bukan lagi generik. Coba tanyakan:
-
-> "Berapa lama proses pengajuan kredit sampai pencairan dana?"
-
-NALA seharusnya menjawab dengan angka dari dokumen, bukan estimasi generik — **ini pertama kalinya sepanjang Module 7-16, NALA benar-benar menjawab dari dokumen sungguhan.**
-
-```bash
-curl -N -X POST http://localhost:8000/chat/stream \
-  -H "Content-Type: application/json" \
-  -d '{"messages": [{"role": "user", "content": "Berapa lama proses pengajuan kredit sampai pencairan dana?"}]}'
-```
-
-Coba juga pertanyaan yang **sangat spesifik** ke sub-bagian dokumen, misalnya "Apa saja syarat pengajuan kredit untuk nasabah perorangan?" — jawabannya mungkin terasa kurang fokus (seluruh dokumen ikut jadi konteks, bukan cuma bagian yang relevan). Ini **bukan bug** — lihat Bagian 7 di atas untuk penjelasan kenapa ini terjadi dan kenapa itu jadi motivasi Module 14 (chunking).
-
-### Troubleshooting
-
-- **Chat menjawab generik / bilang belum ada dokumen internal padahal sudah ingest**: `/chat/stream` otomatis jatuh ke mode tanpa-konteks saat index OpenSearch masih kosong (atau belum menyala) — itu normal, bukan error, tapi tandanya ingest belum berhasil. Cek jumlah dokumen di index dengan:
-  ```bash
-  curl http://localhost:9200/nala-docs/_count
-  ```
-  Kalau `count` bernilai 0, index memang kosong — jalankan ulang Langkah 1.
