@@ -40,6 +40,8 @@ flowchart LR
 
 ## 2. Data Dasar Awal: Dua Dokumen SOP Contoh
 
+**Prasyarat**: sudah menyelesaikan Module 9 (Konsep RAG), dan container `ollama`+`api` dari `Nala/` masih berjalan (kalau tidak, ulangi Module 7 Langkah 2) — module ini belum butuh `opensearch`/`airflow`.
+
 Sepanjang Module 7-16, kita memakai **dua dokumen SOP contoh** sebagai knowledge base untuk mendemonstrasikan sistem RAG:
 
 ### a. SOP Pengajuan Kredit (`sop-pengajuan-kredit.md`)
@@ -117,7 +119,19 @@ print(f'Panjang total: {len(text)} karakter')
 "
 ```
 
-✅ **Indikator sukses**: mengembalikan potongan teks awal `sop-pengajuan-kredit.md`, contohnya `'# SOP Pengajuan Kredit - PT Nusantara Finance\n\n## 1. Tujuan '`, dengan panjang total dokumen (bukan potongan) tercetak. Cabang `.pdf` baru bisa dites setelah ada file PDF sungguhan di `knowledge-base/` (sudah ada, lihat Bagian 2).
+✅ **Indikator sukses**: mengembalikan potongan teks awal `sop-pengajuan-kredit.md`, contohnya `'# SOP Pengajuan Kredit - PT Nusantara Finance\n\n## 1. Tujuan '`, dengan panjang total dokumen (bukan potongan) tercetak.
+
+Cabang `.pdf` juga bisa langsung dites karena beberapa file PDF latihan sudah ada di `knowledge-base/` (lihat Bagian 2):
+
+```bash
+docker compose exec api python -c "
+from app.ingest import extract_text
+import os
+pdf_files = [f for f in os.listdir('/app/knowledge-base') if f.endswith('.pdf')]
+print(pdf_files)
+print(repr(extract_text(f'/app/knowledge-base/{pdf_files[0]}')[:60]))
+"
+```
 
 <details>
 <summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 2</strong></summary>
@@ -161,44 +175,3 @@ Yang perlu dipastikan sebelum lanjut ke Module 11:
 - [ ] `/chat/stream` (Module 7, 7) masih berfungsi seperti sebelumnya
 
 Begitu keempat hal ini terverifikasi, lanjut ke Module 11 — mengubah isi dokumen ini jadi vektor numerik (embedding).
-
-## Panduan Praktik
-
-### Prasyarat
-- Sudah menyelesaikan **Module 9** (Konsep RAG)
-- Container `ollama`+`api` dari `Nala/` masih berjalan (kalau tidak, ulangi Module 7 Langkah 2) — module ini belum butuh `opensearch`/`airflow`
-
-### Langkah 1: Verifikasi data seed dan `extract_text()`
-
-Pastikan folder data seed sudah ada dan berisi dokumen SOP contoh:
-
-```bash
-ls resources/sample-knowledge-base/
-```
-
-`sop-pengajuan-kredit.md`, `sop-klaim-asuransi.md`, dan beberapa file PDF latihan harus muncul di listing.
-
-Sekarang coba `extract_text()` — fungsi ini **membaca isi dokumen apa adanya, utuh**, belum ada chunking sama sekali di titik ini (chunking baru ditambahkan Module 14):
-
-```bash
-docker compose exec api python -c "
-from app.ingest import extract_text
-text = extract_text('/app/knowledge-base/sop-pengajuan-kredit.md')
-print(repr(text[:60]))
-print(f'Panjang total: {len(text)} karakter')
-"
-```
-
-Harus menampilkan potongan awal isi file plus panjang total dokumen (bukan potongan). Cabang `.pdf` juga bisa dites kalau sudah ada file PDF di `resources/sample-knowledge-base/`:
-
-```bash
-docker compose exec api python -c "
-from app.ingest import extract_text
-import os
-pdf_files = [f for f in os.listdir('/app/knowledge-base') if f.endswith('.pdf')]
-print(pdf_files)
-print(repr(extract_text(f'/app/knowledge-base/{pdf_files[0]}')[:60]))
-"
-```
-
-Lihat Bagian 3 di atas untuk penjelasan lengkap logika ekstraksi PDF-nya.
