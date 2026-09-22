@@ -46,11 +46,14 @@ Ketiganya tetap dalam batasan desain yang sudah dipegang sejak awal: **server-re
 
 ## 2. Struktur Kode yang Ditambahkan
 
-Tiga penambahan di `app/templates/chat.html` dan `app/static/style.css`, dibangun bertahap:
+**Prasyarat sebelum mulai**: Module 26 (full-stack deployment) dan Module 27 (status page + checklist keamanan) sudah selesai — stack lengkap sudah jalan di `Nala/`.
+
+Tiga penambahan di `app/templates/chat.html` dan `app/static/style.css`, dibangun bertahap. Setiap kali salah satu dari ketiganya mengubah `app/main.py`, `app/templates/chat.html`, atau `app/static/style.css`, cukup rebuild service `api` saja — bukan seluruh stack (`ollama`, `opensearch`, dsb tidak perlu ikut di-rebuild):
 
 1. **Tahap A — Loading indicator**, murni CSS + sedikit JS, tidak bergantung pada perubahan backend apa pun.
 2. **Tahap B — Tool-used badge**, bergantung pada metadata dari endpoint agentic Module 21-25 (lihat asumsi di Bagian 1).
 3. **Tahap C — Cek & perbaiki responsif**, murni CSS.
+4. **Tahap D — Dress rehearsal end-to-end**, murni verifikasi manual lewat browser, tidak ada perubahan kode.
 
 ### Tahap A — Loading/Typing Indicator
 
@@ -107,6 +110,38 @@ Tiga penambahan di `app/templates/chat.html` dan `app/static/style.css`, dibangu
 
 Perubahan dibanding Module 8: `replyEl` dibuat berisi `<span class="typing-indicator">` (tiga titik animasi CSS, lihat Langkah 2) **alih-alih** kosong. Begitu chunk pertama diterima (`decoder.decode` pertama kali menghasilkan isi), `replyEl.innerHTML` langsung ditimpa dengan `escapeHtml(fullReply)` — otomatis menghapus indikator karena elemen di-render ulang seluruhnya. `escapeHtml()` tetap dipertahankan persis seperti Module 8 — indikator ini **tidak** mengubah cara token ditampilkan setelah mulai muncul, cuma mengisi jeda sebelum token pertama.
 
+<details>
+<summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 1</strong></summary>
+
+```
+Tambah elemen typing indicator di replyEl sebelum token pertama
+muncul (Module 28, Tahap A, Langkah 1).
+
+GOAL:
+Di app/templates/chat.html, ubah bagian pembuatan replyEl di handler
+submit form: innerHTML awal replyEl diisi '<b>NALA:</b>
+<span class="typing-indicator"><span></span><span></span>
+<span></span></span>' (bukan kosong seperti Module 8), lalu tetap
+ditimpa penuh dengan escapeHtml(fullReply) begitu chunk pertama
+diterima dari stream (logika loop while(true) TIDAK berubah, cuma
+isi awal replyEl).
+
+CONTEXT:
+- File ini versi Module 8 Tahap C (fetch ke /chat/stream, baca
+  reader.getReader(), escapeHtml() di setiap update).
+- CSS untuk class .typing-indicator belum ada — itu Langkah 2,
+  dikerjakan terpisah setelah ini.
+
+GUARDRAIL:
+- JANGAN ubah endpoint /chat/stream atau logic fetch/reader — murni
+  perubahan tampilan sisi client.
+- JANGAN hapus escapeHtml() — WAJIB tetap dipakai di setiap render
+  fullReply.
+- JANGAN tambah library JS eksternal — CSS + vanilla JS saja.
+```
+
+</details>
+
 **Langkah 2 — CSS animasi titik**
 
 ```css
@@ -135,6 +170,30 @@ Perubahan dibanding Module 8: `replyEl` dibuat berisi `<span class="typing-indic
 }
 ```
 
+<details>
+<summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 2</strong></summary>
+
+```
+Tambah CSS animasi typing indicator (Module 28, Tahap A, Langkah 2).
+
+GOAL:
+Di app/static/style.css, tambah class .typing-indicator (3 titik
+inline-flex, animasi CSS keyframes bounce dengan delay bertahap per
+titik) persis seperti kode di materi.md Bagian 2 Tahap A Langkah 2.
+
+CONTEXT:
+- app/templates/chat.html (Langkah 1) sudah merender
+  <span class="typing-indicator"><span></span><span></span>
+  <span></span></span> — class ini baru berefek visual setelah CSS
+  ini ditambahkan.
+
+GUARDRAIL:
+- JANGAN ubah HTML/JS di chat.html — itu sudah selesai di Langkah 1.
+- JANGAN ubah style CSS lain yang sudah ada — cuma tambah class baru.
+```
+
+</details>
+
 **▶️ Jalankan & lihat hasilnya**
 
 ```bash
@@ -145,38 +204,9 @@ Buka `http://localhost:8000`, kirim pertanyaan yang butuh retrieval (misalnya so
 
 ✅ **Indikator sukses**: indikator titik muncul di jeda sebelum token pertama, hilang otomatis (bukan manual) begitu ada isi, dan jawaban tetap streaming bertahap seperti Module 8 setelahnya.
 
-<details>
-<summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 1-2</strong></summary>
+**Troubleshooting**
 
-```
-Tambah typing indicator di chat.html sebelum token pertama muncul
-(Module 28, Tahap A).
-
-GOAL:
-1. Di app/templates/chat.html, ubah bagian pembuatan replyEl di
-   handler submit form: innerHTML awal replyEl diisi
-   '<b>NALA:</b> <span class="typing-indicator"><span></span>
-   <span></span><span></span></span>' (bukan kosong seperti Module 8),
-   lalu tetap ditimpa penuh dengan escapeHtml(fullReply) begitu chunk
-   pertama diterima dari stream (logika loop while(true) TIDAK
-   berubah, cuma isi awal replyEl).
-2. Di app/static/style.css, tambah class .typing-indicator (3 titik
-   inline-flex, animasi CSS keyframes bounce dengan delay bertahap
-   per titik).
-
-CONTEXT:
-- File ini versi Module 8 Tahap C (fetch ke /chat/stream, baca
-  reader.getReader(), escapeHtml() di setiap update).
-
-GUARDRAIL:
-- JANGAN ubah endpoint /chat/stream atau logic fetch/reader — murni
-  perubahan tampilan sisi client.
-- JANGAN hapus escapeHtml() — WAJIB tetap dipakai di setiap render
-  fullReply.
-- JANGAN tambah library JS eksternal — CSS + vanilla JS saja.
-```
-
-</details>
+- **Typing indicator tidak hilang otomatis / macet di tiga titik animasi**: cek `replyEl.innerHTML` benar-benar ditimpa penuh begitu chunk pertama diterima dari stream (bukan di-append) — lihat kode Langkah 1 di atas.
 
 ### Tahap B — Badge Tool yang Dipakai Agent (RAG vs SQL)
 
@@ -249,32 +279,13 @@ function toolBadgeHtml(tool) {
 
 Mode biasa (`/chat/stream`, checkbox "Pakai Agent" tidak dicentang) **tidak pernah** menampilkan badge — sesuai kenyataan bahwa jalur ini murni RAG tanpa pilihan tool sama sekali, tidak ada yang perlu ditandai.
 
-**▶️ Jalankan & lihat hasilnya**
-
-```bash
-docker compose up -d --build api
-```
-
-Centang "Pakai Agent", kirim satu pertanyaan yang jawabannya jelas dari dokumen SOP, lalu satu pertanyaan yang jelas butuh data operasional (role `staff_finance`/`supervisor`, bukan `staff_umum` — lihat Module 25 RBAC). Amati badge yang muncul di atas tiap balasan.
-
-**Hasil uji nyata** — diverifikasi langsung lewat `/chat`:
-
-| Pertanyaan | `tool_used` |
-|---|---|
-| "Apa saja syarat pengajuan kredit untuk nasabah perorangan?" | `rag` ✅ |
-| "Berapa banyak pengajuan kredit yang statusnya pending?" | `sql` ✅ |
-| "Halo, kamu siapa?" | `rag` (bukan `none`) |
-
-Baris terakhir **bukan bug badge** — itu cerminan akurat dari perilaku model kecil yang sudah didokumentasikan di Module 24 Bagian 6: `llama3.2:3b` kadang memanggil `cari_dokumen_sop` untuk sapaan sederhana alih-alih menjawab langsung. Badge menampilkan tool yang **benar-benar** dipanggil — kalau routing-nya keliru, itu tetap ditampilkan apa adanya, bukan disembunyikan. Ini konsisten dengan filosofi kejujuran kurikulum ini: badge bukan alat untuk membuat NALA "terlihat" selalu benar, tapi alat untuk membuat perilaku sebenarnya (termasuk yang keliru) terlihat jelas saat demo.
-
-✅ **Indikator sukses**: badge "Dokumen SOP (RAG)" dan "Data Operasional (SQL)" muncul dengan warna berbeda, sesuai tool yang sebenarnya dipakai agent — dicocokkan lewat `data.tool_used` di response JSON, bukan tebakan visual (verifikasi silang dengan trace Langfuse, Module 27 Bagian 2.a, kalau ragu).
-
 <details>
 <summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 3</strong></summary>
 
 ```
 Tambah badge tool yang dipakai agent (RAG vs SQL) — lewat field JSON
-di response /chat, BUKAN parsing stream (Module 28, Tahap B).
+di response /chat, BUKAN parsing stream (Module 28, Tahap B,
+Langkah 3).
 
 GOAL:
 1. Di app/main.py: tambah field tool_used: str = "none" ke
@@ -307,6 +318,30 @@ GUARDRAIL:
 
 </details>
 
+**▶️ Jalankan & lihat hasilnya**
+
+```bash
+docker compose up -d --build api
+```
+
+Centang "Pakai Agent", kirim satu pertanyaan yang jawabannya jelas dari dokumen SOP, lalu satu pertanyaan yang jelas butuh data operasional (role `staff_finance`/`supervisor`, bukan `staff_umum` — lihat Module 25 RBAC). Amati badge yang muncul di atas tiap balasan.
+
+**Hasil uji nyata** — diverifikasi langsung lewat `/chat`:
+
+| Pertanyaan | `tool_used` |
+|---|---|
+| "Apa saja syarat pengajuan kredit untuk nasabah perorangan?" | `rag` ✅ |
+| "Berapa banyak pengajuan kredit yang statusnya pending?" | `sql` ✅ |
+| "Halo, kamu siapa?" | `rag` (bukan `none`) |
+
+Baris terakhir **bukan bug badge** — itu cerminan akurat dari perilaku model kecil yang sudah didokumentasikan di Module 24 Bagian 6: `llama3.2:3b` kadang memanggil `cari_dokumen_sop` untuk sapaan sederhana alih-alih menjawab langsung. Badge menampilkan tool yang **benar-benar** dipanggil — kalau routing-nya keliru, itu tetap ditampilkan apa adanya, bukan disembunyikan. Ini konsisten dengan filosofi kejujuran kurikulum ini: badge bukan alat untuk membuat NALA "terlihat" selalu benar, tapi alat untuk membuat perilaku sebenarnya (termasuk yang keliru) terlihat jelas saat demo.
+
+✅ **Indikator sukses**: badge "Dokumen SOP (RAG)" dan "Data Operasional (SQL)" muncul dengan warna berbeda, sesuai tool yang sebenarnya dipakai agent — dicocokkan lewat `data.tool_used` di response JSON, bukan tebakan visual (verifikasi silang dengan trace Langfuse, Module 27 Bagian 2.a, kalau ragu).
+
+**Troubleshooting**
+
+- **Badge tool tidak pernah muncul / selalu kosong**: badge dibaca dari field `tool_used` di response JSON `/chat` (mode Agent, non-streaming) — bukan dari parsing stream. Cek dulu response mentah lewat `curl -X POST http://localhost:8000/chat ...` dan pastikan `tool_used` benar-benar ada di JSON-nya; kalau tidak, cek `called_tools`/`diizinkan` di `app/main.py` (Langkah 3 di atas) sesuai implementasi Module 25 Anda.
+
 ### Tahap C — Cek Layout Responsif
 
 **Langkah 4 — Verifikasi dan perbaiki lebar minimum**
@@ -338,18 +373,12 @@ GUARDRAIL:
 
 Ini **bukan** desain mobile-first baru — cuma memastikan elemen yang sebelumnya diasumsikan cukup lebar (form chat dengan input+tombol sejajar, `.chat-meta` dari Module 8 Langkah 6) tidak terpotong atau bertumpuk aneh di layar sempit.
 
-**▶️ Jalankan & lihat hasilnya**
-
-Buka `http://localhost:8000` di browser, gunakan DevTools (mode responsif, `Ctrl+Shift+M`/`Cmd+Shift+M` di Chrome) untuk mensimulasikan lebar layar 375px (ukuran HP umum) dan 768px (tablet). Kirim beberapa pesan, buka juga `/upload` dan `/status/view` (Module 27).
-
-✅ **Indikator sukses**: tidak ada elemen terpotong atau overflow horizontal di 375px, tombol dan input tetap bisa diklik/diketik dengan wajar, teks tidak keluar dari batas layar.
-
 <details>
 <summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 4</strong></summary>
 
 ```
 Tambah media query responsif untuk layar sempit di style.css
-(Module 28, Tahap C).
+(Module 28, Tahap C, Langkah 4).
 
 GOAL:
 - Di app/static/style.css, tambah @media (max-width: 480px) yang:
@@ -370,6 +399,29 @@ GUARDRAIL:
 
 </details>
 
+**▶️ Jalankan & lihat hasilnya**
+
+Buka `http://localhost:8000` di browser, gunakan DevTools (mode responsif, `Ctrl+Shift+M`/`Cmd+Shift+M` di Chrome) untuk mensimulasikan lebar layar 375px (ukuran HP umum) dan 768px (tablet). Kirim beberapa pesan, buka juga `/upload` dan `/status/view` (Module 27).
+
+✅ **Indikator sukses**: tidak ada elemen terpotong atau overflow horizontal di 375px, tombol dan input tetap bisa diklik/diketik dengan wajar, teks tidak keluar dari batas layar.
+
+### Tahap D — Uji Coba Menyeluruh via UI (Dress Rehearsal)
+
+**Langkah 5 — Uji coba menyeluruh via browser**
+
+Setelah Tahap A-C selesai (dan Module 26-27 sudah lebih dulu selesai), verifikasi semuanya langsung lewat browser (bukan cuma `curl`) — ini juga bentuk gladi bersih sebelum demo capstone, menyatukan hasil Module 26-28 sekaligus:
+
+- [ ] **Typing indicator** (Tahap A) — buka `http://localhost:8000`, kirim pertanyaan apa saja di mode biasa maupun mode Agent. Tiga titik animasi harus muncul sebentar sebelum jawaban tampil, lalu hilang otomatis begitu token/jawaban pertama tiba.
+- [ ] **Tool badge** (Tahap B) — centang "Pakai Agent", pilih role `staff_finance`. Tanya soal SOP (mis. *"Apa saja syarat pengajuan kredit untuk nasabah perorangan?"*) → badge biru "Dokumen SOP (RAG)" muncul. Tanya soal data (mis. *"Berapa banyak pengajuan kredit yang statusnya pending?"*) → badge oranye "Data Operasional (SQL)". Coba juga role `staff_umum` dengan pertanyaan data — amati apakah badge muncul (lihat gap RBAC, Module 24 Bagian 6, sebelum menyimpulkan ini "salah").
+- [ ] **Layout responsif** (Tahap C) — buka DevTools (`Cmd+Shift+M`/`Ctrl+Shift+M`), set lebar 375px lalu 768px. Cek halaman Chat, `/status/view`, dan `/data-operasional` — tidak ada elemen terpotong/overflow horizontal.
+- [ ] **Status page** (Module 27) — `http://localhost:8000/status/view`, pastikan auto-refresh (tunggu 15 detik, perhatikan halaman reload sendiri) dan semua service `ok`/hijau.
+- [ ] **Adminer** (Module 25) — `http://localhost:8081`, login `nala_admin` + password dari `.env` (`POSTGRES_ADMIN_PASSWORD`, atau `changeme_dev_only` kalau belum pernah diganti/di-`ALTER USER`). Cek tabel `audit_log` menampilkan baris-baris dari pengujian di atas.
+- [ ] **Langfuse** (`http://localhost:3000`) — cek trace dari percakapan barusan, termasuk field `tool_used` yang ikut tercatat di `trace.update()` (Module 28).
+
+Kalau ada satu poin yang hasilnya tidak sesuai, cek dulu apakah itu memang gap/keterbatasan yang sudah didokumentasikan (Module 26 Bagian 4a, Module 24 Bagian 6, Module 25 Bagian 4) sebelum menganggapnya bug baru.
+
+Setelah semua poin di atas terpenuhi, lanjutkan ke **Module 29** (`../Module-29-Ethics-Governance/materi.md`) untuk diskusi etika & governance dan persiapan capstone.
+
 ## 3. Apa yang TIDAK Ada di Module Ini
 
 - Tidak ada redesign visual (warna, font, layout dasar) — itu keputusan desain yang sudah dipegang sejak Module 7, bukan sesuatu yang diubah di modul-modul akhir.
@@ -382,48 +434,6 @@ GUARDRAIL:
 - [ ] Badge tool (RAG/SQL) muncul di mode Agent sesuai `tool_used` dari response `/chat` — dan mencerminkan tool yang **benar-benar** dipakai, termasuk saat routing model keliru (lihat hasil uji Bagian 2 Tahap B), bukan disesuaikan supaya "terlihat benar"
 - [ ] Halaman chat, upload, dan status tetap terlihat wajar di lebar layar 375px dan 768px
 - [ ] `escapeHtml()` tetap dipertahankan di semua render teks baru — tidak ada regresi keamanan XSS dari polish ini (lihat Module 27 Bagian 3 soal pentingnya sanitasi input/output)
-
-## Panduan Praktik
-
-> Catatan penomoran: bagian ini punya urutan **Langkah 1-2** sendiri (langkah eksekusi praktik), terpisah dari Langkah 1-4 yang sudah muncul di Bagian 2 Tahap A-C di atas (langkah penjelasan konsep/kode). Nomor di bawah ini merujuk ke urutan eksekusi panduan praktik, bukan ke Bagian 2.
-
-### Prasyarat
-
-- Module 26 (full-stack deployment) dan Module 27 (status page + checklist keamanan) sudah selesai — stack lengkap sudah jalan di `Nala/`.
-
-### Langkah 1: Implementasikan Module 28 (Polish Frontend)
-
-Ikuti Langkah-langkah di Bagian 2 di atas:
-
-- **Tahap A** — tambah typing indicator.
-- **Tahap B** — tambah tool-used badge (RAG vs SQL).
-- **Tahap C** — cek dan perbaiki layout responsif.
-
-Setiap kali mengubah `app/main.py`, `app/templates/chat.html`, atau `app/static/style.css`, rebuild `api` saja (bukan seluruh stack):
-
-```bash
-docker compose up -d --build api
-```
-
-### Langkah 2: Uji Coba Menyeluruh via UI
-
-Setelah Module 26-28 selesai, verifikasi semuanya langsung lewat browser (bukan cuma `curl`) — ini juga bentuk gladi bersih sebelum demo capstone, dan sekaligus dress rehearsal yang menyatukan hasil ketiga module tersebut:
-
-- [ ] **Typing indicator** (Module 28 Tahap A) — buka `http://localhost:8000`, kirim pertanyaan apa saja di mode biasa maupun mode Agent. Tiga titik animasi harus muncul sebentar sebelum jawaban tampil, lalu hilang otomatis begitu token/jawaban pertama tiba.
-- [ ] **Tool badge** (Module 28 Tahap B) — centang "Pakai Agent", pilih role `staff_finance`. Tanya soal SOP (mis. *"Apa saja syarat pengajuan kredit untuk nasabah perorangan?"*) → badge biru "Dokumen SOP (RAG)" muncul. Tanya soal data (mis. *"Berapa banyak pengajuan kredit yang statusnya pending?"*) → badge oranye "Data Operasional (SQL)". Coba juga role `staff_umum` dengan pertanyaan data — amati apakah badge muncul (lihat gap RBAC, Module 24 Bagian 6, sebelum menyimpulkan ini "salah").
-- [ ] **Layout responsif** (Module 28 Tahap C) — buka DevTools (`Cmd+Shift+M`/`Ctrl+Shift+M`), set lebar 375px lalu 768px. Cek halaman Chat, `/status/view`, dan `/data-operasional` — tidak ada elemen terpotong/overflow horizontal.
-- [ ] **Status page** (Module 27) — `http://localhost:8000/status/view`, pastikan auto-refresh (tunggu 15 detik, perhatikan halaman reload sendiri) dan semua service `ok`/hijau.
-- [ ] **Adminer** (Module 25) — `http://localhost:8081`, login `nala_admin` + password dari `.env` (`POSTGRES_ADMIN_PASSWORD`, atau `changeme_dev_only` kalau belum pernah diganti/di-`ALTER USER`). Cek tabel `audit_log` menampilkan baris-baris dari pengujian di atas.
-- [ ] **Langfuse** (`http://localhost:3000`) — cek trace dari percakapan barusan, termasuk field `tool_used` yang ikut tercatat di `trace.update()` (Module 28).
-
-Kalau ada satu poin yang hasilnya tidak sesuai, cek dulu apakah itu memang gap/keterbatasan yang sudah didokumentasikan (Module 26 Bagian 4a, Module 24 Bagian 6, Module 25 Bagian 4) sebelum menganggapnya bug baru.
-
-Setelah semua poin di atas terpenuhi, lanjutkan ke **Module 29 materi.md, bagian Panduan Praktik** (`../Module-29-Ethics-Governance/materi.md`) untuk diskusi etika & governance dan persiapan capstone.
-
-### Troubleshooting
-
-- **Badge tool tidak pernah muncul / selalu kosong**: badge dibaca dari field `tool_used` di response JSON `/chat` (mode Agent, non-streaming) — bukan dari parsing stream. Cek dulu response mentah lewat `curl -X POST http://localhost:8000/chat ...` dan pastikan `tool_used` benar-benar ada di JSON-nya; kalau tidak, cek `called_tools`/`diizinkan` di `app/main.py` (Bagian 2 Tahap B) sesuai implementasi Module 25 Anda.
-- **Typing indicator tidak hilang otomatis / macet di tiga titik animasi**: cek `replyEl.innerHTML` benar-benar ditimpa penuh begitu chunk pertama diterima dari stream (bukan di-append) — lihat kode Langkah 1 Tahap A di Bagian 2 di atas.
 
 ## Kesimpulan
 
