@@ -125,7 +125,9 @@ Sepuluh pertanyaan ini **kecil secara sengaja** — cukup untuk mendemonstrasika
 
 ## 5. Struktur Kode yang Ditambahkan
 
-Satu Tahap, tiga Langkah: fungsi metrik (`app/evaluation.py`), test set (`app/eval_testset.py`, sudah ditulis di Bagian 4), lalu skrip yang menjalankan keduanya dan mencetak tabel perbandingan.
+Satu Tahap, empat Langkah: fungsi metrik (`app/evaluation.py`), test set (`app/eval_testset.py`, sudah ditulis di Bagian 4), skrip yang menjalankan keduanya dan mencetak tabel perbandingan, lalu LLM-as-judge lokal (Bagian 6).
+
+**Prasyarat**: Module 18 sudah selesai — `Nala/` sudah punya reranking bekerja dan terhubung ke `/chat/stream`. Tidak ada service Docker baru di module ini; alokasi RAM yang sama seperti Module 18 sudah cukup.
 
 **Langkah 1 — Fungsi metrik di `app/evaluation.py`**
 
@@ -158,8 +160,8 @@ def reciprocal_rank(retrieved: list[dict], must_contain: list[str]) -> float:
 ```
 
 - `precision_at_k`: proporsi chunk relevan di antara `k` chunk teratas — dipanggil dengan `k=3` untuk meniru persis apa yang benar-benar dikirim ke LLM (`/chat/stream` mengirim top-3, lihat Module 17-18).
-- `hit_rate_at_k`: biner (0 atau 1) per pertanyaan — dirata-rata di Bagian 6 untuk semua pertanyaan di test set jadi persentase keberhasilan.
-- `reciprocal_rank`: mengembalikan `1/posisi` chunk relevan **pertama** — kalau chunk relevan ada di posisi #1, nilainya `1.0`; posisi #2 → `0.5`; tidak ditemukan sama sekali → `0.0`. Rata-rata dari semua pertanyaan di test set (dihitung di Bagian 6) menghasilkan MRR.
+- `hit_rate_at_k`: biner (0 atau 1) per pertanyaan — dirata-rata di Langkah 3 (`app/run_evaluation.py`) untuk semua pertanyaan di test set jadi persentase keberhasilan.
+- `reciprocal_rank`: mengembalikan `1/posisi` chunk relevan **pertama** — kalau chunk relevan ada di posisi #1, nilainya `1.0`; posisi #2 → `0.5`; tidak ditemukan sama sekali → `0.0`. Rata-rata dari semua pertanyaan di test set (dihitung di Langkah 3) menghasilkan MRR.
 
 **▶️ Jalankan & lihat hasilnya**
 
@@ -229,6 +231,32 @@ GUARDRAIL:
 
 Isi file ini persis seperti kode `QA_TESTSET` di Bagian 4 di atas — sepuluh dict `{"question": ..., "must_contain": [...]}`, disimpan sebagai satu konstanta list supaya mudah di-*import* dan ditambah entri baru ke depannya.
 
+<details>
+<summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 2</strong></summary>
+
+```
+Buat app/eval_testset.py (test set QA berlabel) — Module 19, Langkah 2.
+
+GOAL:
+- Buat Nala/app/eval_testset.py berisi satu konstanta QA_TESTSET: list
+  of dict {"question": str, "must_contain": list[str]} — isi persis
+  seperti yang tertulis di materi Module 19 Bagian 4 (10 pertanyaan
+  tentang sop-pengajuan-kredit.md).
+
+CONTEXT:
+- File ini murni data test set (tidak ada logic), diimpor oleh
+  app/run_evaluation.py (Langkah 3) lewat `from app.eval_testset
+  import QA_TESTSET`.
+
+GUARDRAIL:
+- JANGAN ubah app/evaluation.py atau file lain.
+- JANGAN memparafrase isi must_contain — salin persis dari Bagian 4
+  (kata kunci diambil langsung dari dokumen SOP asli, bukan ditulis
+  ulang dengan kata lain).
+```
+
+</details>
+
 **Langkah 3 — Skrip perbandingan sebelum/sesudah reranking**
 
 ```python
@@ -297,42 +325,40 @@ docker compose exec api python -m app.run_evaluation
 
 ✅ **Indikator sukses**: skrip mencetak tiga baris metrik untuk "SEBELUM Reranking" dan tiga baris untuk "SESUDAH Reranking", diikuti tabel perbandingan dengan delta (`+`/`-`). Untuk test set 10 pertanyaan ini, wajar melihat `MRR` dan `Precision@3` **sesudah** reranking sama atau lebih tinggi dari **sebelum** — kalau angkanya identik persis, kemungkinan besar knowledge base terlalu kecil untuk kandidat top-20 punya variasi urutan yang berarti (index saat ini cuma berisi 2 dokumen, lihat Bagian 7).
 
+**Troubleshooting**: kalau `docker compose exec api python -m app.run_evaluation` gagal dengan import error, pastikan `app/evaluation.py` (Langkah 1), `app/eval_testset.py` (Langkah 2), dan `app/run_evaluation.py` (Langkah 3) sudah dibuat semua, dan `docker compose up --build api` sudah dijalankan ulang setelah menambah file baru.
+
 <details>
-<summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 2-3</strong></summary>
+<summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 3</strong></summary>
 
 ```
-Buat app/eval_testset.py (test set QA) dan app/run_evaluation.py
-(skrip perbandingan sebelum/sesudah reranking) — Module 19, Langkah
-2-3.
+Buat app/run_evaluation.py (skrip perbandingan sebelum/sesudah
+reranking) — Module 19, Langkah 3.
 
 GOAL:
-1. Buat Nala/app/eval_testset.py berisi
-   satu konstanta QA_TESTSET: list of dict {"question": str,
-   "must_contain": list[str]} — isi persis seperti yang tertulis di
-   materi Module 19 Bagian 4 (10 pertanyaan tentang sop-pengajuan-kredit.md).
-2. Buat Nala/app/run_evaluation.py:
-   - Import QA_TESTSET, hit_rate_at_k/precision_at_k/reciprocal_rank
-     dari app.evaluation, VectorStore, Reranker, embed_text.
-   - Fungsi evaluate(retrieved_fn, label): loop QA_TESTSET, panggil
-     retrieved_fn(item["question"]) untuk dapat hasil retrieval,
-     hitung precision_at_k/hit_rate_at_k/reciprocal_rank(k=3) per
-     item, cetak rata-rata ketiganya dengan label, return dict berisi
-     ketiga rata-rata.
-   - Di __main__: definisikan before_rerank() (search_hybrid top_k=3)
-     dan after_rerank() (search_hybrid top_k=20 lalu reranker.rerank
-     top_k=3), keduanya pakai candidate_pool=20. Jalankan evaluate()
-     untuk keduanya, lalu cetak tabel delta antara before dan after
-     untuk precision@3, hit_rate@3, mrr.
+- Buat Nala/app/run_evaluation.py:
+  - Import QA_TESTSET, hit_rate_at_k/precision_at_k/reciprocal_rank
+    dari app.evaluation, VectorStore, Reranker, embed_text.
+  - Fungsi evaluate(retrieved_fn, label): loop QA_TESTSET, panggil
+    retrieved_fn(item["question"]) untuk dapat hasil retrieval,
+    hitung precision_at_k/hit_rate_at_k/reciprocal_rank(k=3) per
+    item, cetak rata-rata ketiganya dengan label, return dict berisi
+    ketiga rata-rata.
+  - Di __main__: definisikan before_rerank() (search_hybrid top_k=3)
+    dan after_rerank() (search_hybrid top_k=20 lalu reranker.rerank
+    top_k=3), keduanya pakai candidate_pool=20. Jalankan evaluate()
+    untuk keduanya, lalu cetak tabel delta antara before dan after
+    untuk precision@3, hit_rate@3, mrr.
 
 CONTEXT:
-- app/evaluation.py (Langkah 1), app/vector_store.py (Module 17),
-  app/reranker.py (Module 18) sudah ada.
+- app/evaluation.py (Langkah 1) dan app/eval_testset.py (Langkah 2)
+  sudah ada. app/vector_store.py (Module 17), app/reranker.py
+  (Module 18) sudah ada.
 - Skrip ini dijalankan manual lewat `docker compose exec api python
   -m app.run_evaluation`, bukan endpoint FastAPI.
 
 GUARDRAIL:
 - JANGAN ubah app/main.py, app/vector_store.py, app/reranker.py,
-  app/evaluation.py di langkah ini.
+  app/evaluation.py, app/eval_testset.py di langkah ini.
 - before_rerank dan after_rerank WAJIB memakai candidate_pool yang
   sama (20) — perbedaan hasil harus murni dari reranking, bukan dari
   jumlah kandidat yang berbeda.
@@ -348,6 +374,8 @@ Precision/Hit Rate/MRR mengukur kualitas **retrieval** (apakah chunk yang tepat 
 - **Relevance**: apakah jawaban benar-benar menjawab pertanyaan yang diajukan, bukan melenceng ke topik lain?
 
 Karena NALA offline/private-first, evaluasi ini **tidak** memakai API judge cloud (GPT-4, Claude API, dst) — dijalankan lokal memakai `llama3.2:3b` yang sama, sebagai *judge*, dengan prompt yang sempit dan terstruktur:
+
+**Langkah 4 — LLM-as-judge lokal di `app/llm_judge.py`**
 
 ```python
 # app/llm_judge.py
@@ -384,6 +412,71 @@ def judge_answer(judge_client: OllamaClient, context: str, question: str, answer
 - `re.search()` mengekstrak angka dari output model — dijaga dengan `if ... else None` karena model 3B **tidak selalu** patuh 100% pada format yang diminta; kalau parsing gagal, `None` menandakan hasil evaluasi untuk item itu tidak bisa dipakai, bukan mengasumsikan skor tertentu.
 - Panggil `judge_client` dengan temperature serendah mungkin kalau `OllamaClient`/`generate()` mendukungnya (di luar cakupan perubahan module ini — `generate()` saat ini tidak mengekspos parameter `temperature`, jadi berjalan dengan default Ollama) — idealnya `temperature=0` untuk hasil judge yang lebih konsisten antar-run; dicatat sebagai potensi perbaikan, bukan diklaim sudah diterapkan.
 
+**▶️ Jalankan & lihat hasilnya**
+
+```bash
+docker compose exec api python -c "
+from app.llm_judge import judge_answer
+from app.ollama_client import OllamaClient
+import os
+
+judge_client = OllamaClient(base_url='http://ollama:11434', model=os.environ.get('OLLAMA_MODEL', 'llama3.2:3b'))
+
+context = 'Fotokopi KTP yang masih berlaku, Fotokopi Kartu Keluarga, Slip gaji 3 bulan terakhir'
+question = 'Apa saja syarat pengajuan kredit untuk nasabah perorangan?'
+answer = 'Syaratnya adalah fotokopi KTP, Kartu Keluarga, dan slip gaji 3 bulan terakhir.'
+
+result = judge_answer(judge_client, context, question, answer)
+print(result)
+"
+```
+
+✅ **Indikator sukses**: output berisi `faithfulness` dan `relevance` bernilai 1-5 (bukan `None` — kalau `None`, model tidak mengikuti format yang diminta). Baca manual apakah skornya masuk akal untuk contoh ini — idealnya faithfulness dan relevance tinggi (4-5), karena `answer` memang murni berasal dari `context`.
+
+**Troubleshooting**: kalau `judge_answer()` selalu mengembalikan `None` untuk `faithfulness`/`relevance`, `llama3.2:3b` kadang tidak mengikuti format output yang diminta secara persis — cek `result['raw']` untuk melihat apa yang sebenarnya dikembalikan model, dan coba jalankan ulang (model kecil tidak selalu konsisten di percobaan pertama).
+
+<details>
+<summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 4</strong></summary>
+
+```
+Buat app/llm_judge.py (LLM-as-judge lokal untuk faithfulness dan
+relevance) — Module 19, Langkah 4.
+
+GOAL:
+- Buat Nala/app/llm_judge.py berisi:
+  1. Konstanta JUDGE_SYSTEM_PROMPT (string) — system prompt yang
+     meminta model menilai FAITHFULNESS dan RELEVANCE masing-masing
+     dengan skor 1-5, dan menjawab HANYA dalam format persis
+     "FAITHFULNESS: <angka>" lalu baris "RELEVANCE: <angka>", tanpa
+     penjelasan lain. Teks lengkap persis seperti di materi Module 19
+     Bagian 6.
+  2. Fungsi judge_answer(judge_client: OllamaClient, context: str,
+     question: str, answer: str) -> dict:
+     - Susun user prompt "KONTEKS:\n{context}\n\nPERTANYAAN:\n
+       {question}\n\nJAWABAN:\n{answer}".
+     - Panggil judge_client.generate(system_prompt=JUDGE_SYSTEM_PROMPT,
+       user_message=prompt) untuk dapat `raw`.
+     - Pakai re.search(r"FAITHFULNESS:\s*(\d)", raw) dan
+       re.search(r"RELEVANCE:\s*(\d)", raw) untuk ekstrak angka.
+     - Return dict {"faithfulness": int(...) if match else None,
+       "relevance": int(...) if match else None, "raw": raw}.
+
+CONTEXT:
+- Pakai ulang app/ollama_client.py (OllamaClient, sudah ada sejak
+  Module 2) — jangan buat client HTTP baru.
+- Model judge (`llama3.2:3b`) tidak selalu patuh 100% pada format
+  yang diminta, karena itu regex-nya HARUS dijaga dengan
+  `if match else None`, bukan diasumsikan selalu berhasil parse.
+
+GUARDRAIL:
+- JANGAN ubah app/ollama_client.py, app/evaluation.py,
+  app/run_evaluation.py, app/eval_testset.py di langkah ini.
+- JANGAN tambah parameter temperature ke generate() — di luar cakupan
+  langkah ini (generate() saat ini tidak mengekspos parameter itu).
+```
+
+</details>
+
 **Kejujuran soal keandalan LLM-as-judge dengan model 3B**: `llama3.2:3b` adalah model kecil — sebagai *judge*, skornya jauh lebih **noisy** (tidak konsisten antar-run untuk kasus yang mirip) dibanding model besar yang biasa dipakai sebagai judge di riset (GPT-4, Claude). Skor dari Bagian 6 ini sebaiknya diperlakukan sebagai **sinyal indikatif** untuk menangkap kasus yang jelas-jelas buruk (jawaban yang jelas mengarang, atau sama sekali tidak nyambung) — bukan sebagai angka otoritatif yang dipakai sendirian untuk keputusan penting. Spot-check manual oleh manusia (baca beberapa jawaban dan skornya, apakah masuk akal) tetap diperlukan, terutama sebelum dipakai sebagai metrik keputusan bisnis.
 
 ## 7. Keterbatasan Framework Evaluasi Ini — Jangan Overclaim
@@ -397,7 +490,7 @@ Framework ini dirancang untuk **bertumbuh** — test set bertambah seiring dokum
 
 ## 8. Checkpoint Praktik
 
-Langkah eksekusi lengkap ada di bagian **Panduan Praktik** di bawah, Langkah 1-2. Yang perlu dipastikan sebelum lanjut ke Module 20:
+Langkah eksekusi lengkap ada di Bagian 5 (Langkah 1-3) dan Bagian 6 (Langkah 4) di atas. Yang perlu dipastikan sebelum lanjut ke Module 20:
 
 - [ ] `app/evaluation.py` lulus uji dummy (Bagian 5 Langkah 1) dengan angka yang sesuai perhitungan manual
 - [ ] `python -m app.run_evaluation` berjalan tanpa error dan mencetak tabel perbandingan sebelum/sesudah reranking
@@ -424,53 +517,3 @@ Module ini mengubah klaim "hybrid search dan reranking membuat NALA lebih baik" 
 
 Yang jujur belum terselesaikan: framework ini kecil dan proxy-based (Bagian 7), bukan pengganti evaluasi produksi skala penuh. Tapi ia sudah cukup untuk hal yang paling penting di titik ini — mendeteksi kalau sebuah perubahan (mis. mengganti model reranker, mengubah `chunk_size`, atau menambah dokumen baru) membuat retrieval **membaik** atau **memburuk**, diukur dengan angka yang sama setiap kali, bukan tebak-tebakan. Module 20 melangkah dari "mengukur kualitas retrieval secara batch" ke "mengamati setiap request individual secara real-time" — observability dengan Langfuse, untuk kasus ketika satu jawaban tertentu terlihat buruk dan perlu ditelusuri persis di tahap mana masalahnya muncul (retrieval, reranking, atau generation).
 
-## Panduan Praktik
-
-> **Catatan penomoran**: "Langkah N" di bagian Panduan Praktik ini adalah urutan eksekusi tersendiri (langkah demi langkah menjalankan perintah), terpisah dari "Langkah N" yang sudah dipakai di bagian kode/struktur di atas (langkah menulis kode). Keduanya kebetulan memakai nomor yang sama tapi menghitung hal yang berbeda — jangan disamakan urutannya.
-
-### Prasyarat
-- Sudah menyelesaikan **Module 18** — `Nala/` sudah punya reranking bekerja dan terhubung ke `/chat/stream`
-- Tidak ada service Docker baru di module ini — alokasi RAM yang sama seperti Module 18 sudah cukup
-
-### Langkah 1: Bangun `app/evaluation.py`, test set, dan skrip perbandingan
-
-Ikuti Module 19 Bagian 5 Langkah 1-3: `app/evaluation.py` (fungsi metrik), `app/eval_testset.py` (10 pertanyaan berlabel), `app/run_evaluation.py` (skrip perbandingan).
-
-```bash
-cd Nala
-docker compose up --build api
-```
-
-Tes dulu fungsi metrik dengan data dummy (lihat Module 19 Bagian 5 Langkah 1 untuk perintah lengkap), lalu jalankan evaluasi penuh:
-
-```bash
-docker compose exec api python -m app.run_evaluation
-```
-
-✅ **Indikator sukses**: tabel perbandingan "SEBELUM Reranking" vs "SESUDAH Reranking" tercetak dengan Precision@3, Hit Rate@3, dan MRR untuk masing-masing, diikuti delta. Lihat Module 19 Bagian 7 untuk kenapa index kecil (2 dokumen) bisa membuat hasilnya terlihat kurang dramatis — ini keterbatasan yang jujur, bukan bug.
-
-### Langkah 2: Coba LLM-as-judge lokal
-
-```bash
-docker compose exec api python -c "
-from app.llm_judge import judge_answer
-from app.ollama_client import OllamaClient
-import os
-
-judge_client = OllamaClient(base_url='http://ollama:11434', model=os.environ.get('OLLAMA_MODEL', 'llama3.2:3b'))
-
-context = 'Fotokopi KTP yang masih berlaku, Fotokopi Kartu Keluarga, Slip gaji 3 bulan terakhir'
-question = 'Apa saja syarat pengajuan kredit untuk nasabah perorangan?'
-answer = 'Syaratnya adalah fotokopi KTP, Kartu Keluarga, dan slip gaji 3 bulan terakhir.'
-
-result = judge_answer(judge_client, context, question, answer)
-print(result)
-"
-```
-
-✅ **Indikator sukses**: output berisi `faithfulness` dan `relevance` bernilai 1-5 (bukan `None` — kalau `None`, model tidak mengikuti format yang diminta, coba lagi atau baca `result['raw']` untuk melihat output mentahnya). Baca manual apakah skornya masuk akal untuk contoh ini — idealnya faithfulness dan relevance tinggi (4-5), karena `answer` memang murni berasal dari `context`.
-
-### Troubleshooting
-
-- **`docker compose exec api python -m app.run_evaluation` gagal dengan import error**: pastikan `app/evaluation.py`, `app/eval_testset.py`, dan `app/run_evaluation.py` sudah dibuat sesuai Langkah 1, dan `docker compose up --build api` sudah dijalankan ulang setelah menambah file baru.
-- **`judge_answer()` selalu mengembalikan `None` untuk `faithfulness`/`relevance`**: `llama3.2:3b` kadang tidak mengikuti format output yang diminta secara persis — cek `result['raw']` untuk melihat apa yang sebenarnya dikembalikan model, dan coba jalankan ulang (model kecil tidak selalu konsisten di percobaan pertama).
