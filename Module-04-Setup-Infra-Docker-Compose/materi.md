@@ -298,6 +298,76 @@ Bagian 3.4 tadi sudah memanggil satu endpoint Ollama lewat `curl` (`/api/tags`) 
 | `GET /api/tags` | Daftar model yang sudah ter-*pull* (setara `ollama list`) | Dipakai untuk verifikasi manual di Bagian 3.4 di atas (`curl http://localhost:11434/api/tags`) |
 | `POST /api/show` | Detail satu model (parameter, template, system prompt bawaan) | Belum dipakai langsung dari kode NALA, tapi berguna untuk debugging manual |
 
+**Contoh penggunaan tiap endpoint** (jalankan sambil `ollama` container dari Bagian 3.4 masih aktif):
+
+**`POST /api/generate`** — kirim satu prompt, `stream: false` supaya jawabannya diterima utuh sekaligus (bukan token demi token):
+
+```bash
+curl http://localhost:11434/api/generate -d '{
+  "model": "llama3.2:3b",
+  "prompt": "Sebutkan 3 kegunaan AI di industri keuangan",
+  "stream": false
+}'
+```
+
+Response (dipotong):
+```json
+{
+  "model": "llama3.2:3b",
+  "response": "1. Deteksi fraud...\n2. Credit scoring...\n3. Chatbot layanan nasabah...",
+  "done": true
+}
+```
+
+Field `response` inilah yang diambil `OllamaClient.generate()` lewat `response.json()["response"]` (Module 6) — persis satu baris kode yang membungkus request `curl` ini.
+
+**`POST /api/chat`** — kirim riwayat percakapan sebagai array `messages`, bukan satu `prompt` string:
+
+```bash
+curl http://localhost:11434/api/chat -d '{
+  "model": "llama3.2:3b",
+  "messages": [
+    {"role": "system", "content": "Kamu adalah asisten yang menjawab singkat."},
+    {"role": "user", "content": "Apa itu suku bunga acuan?"},
+    {"role": "assistant", "content": "Suku bunga yang ditetapkan bank sentral sebagai acuan."},
+    {"role": "user", "content": "Siapa yang menetapkannya di Indonesia?"}
+  ],
+  "stream": false
+}'
+```
+
+Perhatikan pertanyaan terakhir ("Siapa yang menetapkannya?") cuma masuk akal **karena** ada riwayat sebelumnya dalam `messages[]` — beda dengan `/api/generate` yang cuma menerima satu `prompt` berdiri sendiri tanpa konteks percakapan.
+
+**`GET /api/tags`** — tidak butuh body, cukup GET biasa:
+
+```bash
+curl http://localhost:11434/api/tags
+```
+
+Response (dipotong):
+```json
+{
+  "models": [
+    {"name": "llama3.2:3b", "size": 2019393189, "modified_at": "..."}
+  ]
+}
+```
+
+**`POST /api/show`** — minta detail satu model spesifik:
+
+```bash
+curl http://localhost:11434/api/show -d '{"model": "llama3.2:3b"}'
+```
+
+Response (dipotong) menunjukkan `parameters` (default seperti `temperature`, `num_ctx` — dibahas lengkap di Module 3 Bagian 8) dan `template` (format prompt internal model itu):
+```json
+{
+  "parameters": "stop \"<|eot_id|>\"",
+  "template": "{{ if .System }}...",
+  "details": {"family": "llama", "parameter_size": "3.2B"}
+}
+```
+
 ### 4.2 Endpoint Lain yang Tersedia (Belum Dipakai NALA)
 
 | Endpoint | Fungsi |
