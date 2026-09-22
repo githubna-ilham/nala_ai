@@ -22,7 +22,7 @@ flowchart LR
 - DAG `ingest_documents` bisa di-trigger dari Airflow UI dan berstatus `success`
 - `curl http://localhost:9200/nala-docs/_count` menunjukkan jumlah dokumen yang sesuai dengan hasil ingest lewat Airflow
 - Kita paham kapan pakai upload (Module 16) vs Airflow — bukan dua sistem yang bersaing, cuma beda pemicu dan jaminan yang didapat
-- `/chat/stream` (Module 14) tetap menjawab dari dokumen seperti sebelumnya, tanpa perubahan kode apa pun
+- `/chat/stream` (Module 7) tetap menjawab dari dokumen seperti sebelumnya, tanpa perubahan kode apa pun
 
 ## 1. Apa itu Apache Airflow
 
@@ -431,7 +431,7 @@ Yang perlu dipastikan sebelum Module 17 dianggap selesai:
 - [ ] `curl http://localhost:9200/nala-docs/_count` menunjukkan jumlah dokumen yang sesuai
 - [ ] Kita paham kapan pakai upload (Module 16) vs Airflow (module ini) — bukan dua sistem yang bersaing
 - [ ] Dokumen yang di-ingest lewat Airflow langsung bisa ditanyakan ke `/chat/stream` tanpa perubahan kode apa pun di Module 14
-- [ ] `/chat/stream` (Module 14) masih menjawab dari dokumen seperti sebelumnya
+- [ ] `/chat/stream` (Module 7) masih menjawab dari dokumen seperti sebelumnya
 - [ ] Keempat service (`ollama`, `opensearch`, `airflow`, `api`) berjalan bersamaan tanpa container ter-*kill*
 
 Begitu semua hal ini terverifikasi, Module 17 selesai — NALA sudah punya RAG chain lengkap dari dokumen mentah sampai jawaban ber-konteks, dengan **tiga** cara data bisa masuk (seed manual, upload web, Airflow), semuanya bermuara ke fungsi `ingest_documents()` yang sama.
