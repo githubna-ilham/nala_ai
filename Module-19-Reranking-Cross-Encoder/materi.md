@@ -1,8 +1,8 @@
-# Module 18: Reranking dengan Cross-Encoder
+# Module 19: Reranking dengan Cross-Encoder
 
 ## Tujuan
 
-Menambahkan cross-encoder reranking di atas kandidat top-20 hasil hybrid search Module 17, supaya urutan akhir yang dikirim ke LLM ditentukan oleh penilaian relevansi query-dokumen langsung, bukan cuma heuristik rank RRF.
+Menambahkan cross-encoder reranking di atas kandidat top-20 hasil hybrid search Module 18, supaya urutan akhir yang dikirim ke LLM ditentukan oleh penilaian relevansi query-dokumen langsung, bukan cuma heuristik rank RRF.
 
 ## Definisi
 
@@ -28,40 +28,40 @@ sequenceDiagram
 - `app/reranker.py` (class `Reranker`, method `rerank()`) berjalan lokal offline lewat `sentence-transformers`/`cross-encoder/ms-marco-MiniLM-L-6-v2`, model di-*pre-pull* dan tersimpan di volume `hf_cache`
 - `/chat/stream` (satu-satunya endpoint chat NALA sejak Module 8) memanggil `search_hybrid(top_k=20)` lalu `reranker.rerank(top_k=3)`, dengan `RERANK_ENABLED` sebagai katup pengaman yang bisa dimatikan lewat env var
 - Bug infrastruktur nyata sudah diperbaiki: `torch` dipin ke build CPU-only (`+cpu`) supaya image `api` ~1.6GB, bukan ~9.6GB akibat varian CUDA default
-- Dibuktikan dengan uji nyata: kasus keras Module 17 Bagian 8 (chunk `### 2.1` di posisi #7-8) terselesaikan — jawaban `/chat/stream` jadi akurat 100% dan lengkap 8 item setelah reranking aktif
+- Dibuktikan dengan uji nyata: kasus keras Module 18 Bagian 8 (chunk `### 2.1` di posisi #7-8) terselesaikan — jawaban `/chat/stream` jadi akurat 100% dan lengkap 8 item setelah reranking aktif
 - Trade-off latensi tercatat jujur dengan angka (~39 detik dengan reranking vs ~18 detik tanpa), dan temuan bahwa tanpa reranking `llama3.2:3b` tidak konsisten — kadang jujur "tidak ditemukan", kadang mengarang jawaban dari konteks yang kurang tepat
 
 ## 1. Kenapa Hybrid Search Saja Belum Cukup
 
-Module 17 memperbaiki *recall* — chunk yang benar sekarang punya peluang jauh lebih besar masuk ke dalam kandidat teratas, berkat kombinasi BM25 (kata kunci eksak) dan vector search (makna). Tapi RRF (Reciprocal Rank Fusion) yang menggabungkan keduanya adalah **heuristik peringkat**, bukan penilaian relevansi yang sesungguhnya membaca isi query dan dokumen bersamaan. RRF hanya tahu "dokumen X ada di peringkat ke-2 versi BM25 dan peringkat ke-5 versi vector" — ia tidak pernah benar-benar "membaca" apakah isi dokumen X memang menjawab pertanyaannya.
+Module 18 memperbaiki *recall* — chunk yang benar sekarang punya peluang jauh lebih besar masuk ke dalam kandidat teratas, berkat kombinasi BM25 (kata kunci eksak) dan vector search (makna). Tapi RRF (Reciprocal Rank Fusion) yang menggabungkan keduanya adalah **heuristik peringkat**, bukan penilaian relevansi yang sesungguhnya membaca isi query dan dokumen bersamaan. RRF hanya tahu "dokumen X ada di peringkat ke-2 versi BM25 dan peringkat ke-5 versi vector" — ia tidak pernah benar-benar "membaca" apakah isi dokumen X memang menjawab pertanyaannya.
 
 Ini bedanya **bi-encoder** (dipakai vector search) dan **cross-encoder** (dipakai reranking):
 
 ```mermaid
 flowchart TB
-    subgraph "Bi-Encoder (vector search, Module 17)"
+    subgraph "Bi-Encoder (vector search, Module 18)"
         Q1["Query"] --> EQ["Encode terpisah"]
         D1["Dokumen"] --> ED["Encode terpisah"]
         EQ --> S1["Bandingkan 2 vektor<br/>(cosine/dot product)"]
         ED --> S1
     end
-    subgraph "Cross-Encoder (reranking, Module 18)"
+    subgraph "Cross-Encoder (reranking, Module 19)"
         Q2["Query"] --> C["Encode BERSAMA<br/>(query, dokumen) sebagai satu input"]
         D2["Dokumen"] --> C
         C --> S2["Satu skor relevansi"]
     end
 ```
 
-- **Bi-encoder** (`nomic-embed-text`, dipakai `embed_text()` sejak Module 11) meng-encode query dan setiap dokumen **secara terpisah** menjadi vektor, lalu membandingkan jaraknya. Ini yang membuatnya cepat — vektor dokumen bisa dihitung sekali di awal (saat ingest) dan disimpan; saat query datang, cuma query yang perlu di-encode, lalu dibandingkan matematis (cosine similarity) dengan vektor-vektor yang sudah ada. Konsekuensinya: model tidak pernah "melihat" query dan dokumen bersamaan — ini yang menyebabkan kasus Bagian 1 Module 17 (chunk heading pendek "menang" secara vektor walau isinya tidak menjawab pertanyaan).
+- **Bi-encoder** (`nomic-embed-text`, dipakai `embed_text()` sejak Module 11) meng-encode query dan setiap dokumen **secara terpisah** menjadi vektor, lalu membandingkan jaraknya. Ini yang membuatnya cepat — vektor dokumen bisa dihitung sekali di awal (saat ingest) dan disimpan; saat query datang, cuma query yang perlu di-encode, lalu dibandingkan matematis (cosine similarity) dengan vektor-vektor yang sudah ada. Konsekuensinya: model tidak pernah "melihat" query dan dokumen bersamaan — ini yang menyebabkan kasus Bagian 1 Module 18 (chunk heading pendek "menang" secara vektor walau isinya tidak menjawab pertanyaan).
 - **Cross-encoder** meng-encode **pasangan** (query, dokumen) sebagai **satu input tunggal** ke model, menghasilkan satu skor relevansi langsung. Karena model melihat query dan dokumen bersamaan (bukan dibandingkan setelah encode terpisah), skornya jauh lebih akurat untuk menilai "apakah dokumen ini benar-benar menjawab query ini" — tapi harus dihitung ulang untuk **setiap pasangan** setiap kali ada query baru; tidak bisa dihitung sekali lalu disimpan seperti bi-encoder.
 
-Inilah kenapa cross-encoder tidak dipakai untuk mencari dari seluruh index (terlalu lambat kalau harus dijalankan ke ribuan dokumen), tapi sangat cocok untuk **menyortir ulang kandidat yang jumlahnya sudah kecil** — persis yang disiapkan Module 17: `search_hybrid()` sudah bisa dipanggil dengan `top_k=20` untuk mengambil kandidat lebih besar, cukup kecil untuk di-cross-encode satu-satu dalam hitungan detik, tapi cukup besar untuk kemungkinan besar sudah mencakup dokumen yang benar-benar relevan.
+Inilah kenapa cross-encoder tidak dipakai untuk mencari dari seluruh index (terlalu lambat kalau harus dijalankan ke ribuan dokumen), tapi sangat cocok untuk **menyortir ulang kandidat yang jumlahnya sudah kecil** — persis yang disiapkan Module 18: `search_hybrid()` sudah bisa dipanggil dengan `top_k=20` untuk mengambil kandidat lebih besar, cukup kecil untuk di-cross-encode satu-satu dalam hitungan detik, tapi cukup besar untuk kemungkinan besar sudah mencakup dokumen yang benar-benar relevan.
 
 ## 2. Alur: Retrieve Top-20, Rerank ke Top-K
 
 ```mermaid
 flowchart LR
-    Q["Pertanyaan user"] --> H["search_hybrid(top_k=20)<br/>Module 17"]
+    Q["Pertanyaan user"] --> H["search_hybrid(top_k=20)<br/>Module 18"]
     H --> C["20 kandidat"]
     C --> R["Cross-Encoder<br/>rerank(query, kandidat)"]
     R --> T["Top-3 hasil akhir<br/>dikirim ke llama3.2:3b"]
@@ -80,7 +80,7 @@ Karena NALA offline/private-first, reranking **tidak** memakai API cloud apa pun
 | Kecepatan CPU | Cepat — cocok untuk laptop training 16GB | Lebih lambat, model jauh lebih besar |
 | Kualitas untuk teks SOP Indonesia | Cukup baik untuk kecocokan istilah/struktur, tapi tidak dilatih memahami nuansa Bahasa Indonesia | Lebih baik memahami makna dalam Bahasa Indonesia, karena memang dilatih multilingual |
 
-Sama seperti keputusan `llama3.2:3b` vs `qwen2.5:7b` di README utama pelatihan ini, module ini memakai **`cross-encoder/ms-marco-MiniLM-L-6-v2` sebagai default** — bukan karena kualitasnya untuk Bahasa Indonesia sempurna, tapi karena ukurannya kecil dan cepat di CPU, penting mengingat prasyarat komputer pelatihan ini hanya menjamin **16GB RAM** untuk seluruh stack (Ollama + OpenSearch + Airflow + FastAPI + reranker + Langfuse di Module 20 nanti). Model ini tetap bekerja cukup baik di sini karena banyak istilah kunci di dokumen SOP NALA berupa kata benda/singkatan yang mirip lintas bahasa (KTP, NPWP, kredit, approval) — kelemahannya baru terasa untuk query yang butuh pemahaman struktur kalimat Bahasa Indonesia yang lebih dalam.
+Sama seperti keputusan `llama3.2:3b` vs `qwen2.5:7b` di README utama pelatihan ini, module ini memakai **`cross-encoder/ms-marco-MiniLM-L-6-v2` sebagai default** — bukan karena kualitasnya untuk Bahasa Indonesia sempurna, tapi karena ukurannya kecil dan cepat di CPU, penting mengingat prasyarat komputer pelatihan ini hanya menjamin **16GB RAM** untuk seluruh stack (Ollama + OpenSearch + Airflow + FastAPI + reranker + Langfuse di Module 21 nanti). Model ini tetap bekerja cukup baik di sini karena banyak istilah kunci di dokumen SOP NALA berupa kata benda/singkatan yang mirip lintas bahasa (KTP, NPWP, kredit, approval) — kelemahannya baru terasa untuk query yang butuh pemahaman struktur kalimat Bahasa Indonesia yang lebih dalam.
 
 **Opsi upgrade** (khusus peserta dengan RAM 32GB+, sama seperti catatan `qwen2.5:7b` di README): ganti `model_name` jadi `BAAI/bge-reranker-base` untuk kualitas reranking Bahasa Indonesia yang lebih baik, dengan konsekuensi ukuran unduhan ~14x lebih besar dan waktu inferensi yang lebih lama per kandidat.
 
@@ -96,7 +96,7 @@ Sebelum menulis kode, dua hal ini **wajib** disiapkan supaya module ini benar-be
 Dua Tahap: **Tahap A** membuat file baru `app/reranker.py`, berdiri sendiri, belum dipakai siapa pun. **Tahap B** mengubah `/chat/stream` (satu-satunya endpoint chat NALA) supaya memanggil `search_hybrid(top_k=20)` lalu `reranker.rerank(..., top_k=3)`.
 
 **Prasyarat sebelum mulai:**
-- Sudah menyelesaikan **Module 17** — `Nala/` sudah punya `search_hybrid()` bekerja dan terhubung ke `/chat/stream`.
+- Sudah menyelesaikan **Module 18** — `Nala/` sudah punya `search_hybrid()` bekerja dan terhubung ke `/chat/stream`.
 - Naikkan alokasi RAM Docker Desktop untuk menampung reranker:
 
 | Setting | Minimal | Direkomendasikan | Alasan |
@@ -124,7 +124,7 @@ sentence-transformers==3.2.1
 
 ```
 Tambah dependency reranker (torch CPU-only + sentence-transformers) ke
-requirements.txt (Module 18, Langkah 1).
+requirements.txt (Module 19, Langkah 1).
 
 GOAL:
 Di Nala/requirements.txt, tambah persis 3 baris baru (jangan ubah
@@ -190,7 +190,7 @@ print('Model reranker berhasil diunduh dan siap dipakai offline.')
 <summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 2</strong></summary>
 
 ```
-Siapkan volume cache HuggingFace untuk reranker (Module 18, Langkah 2).
+Siapkan volume cache HuggingFace untuk reranker (Module 19, Langkah 2).
 
 GOAL:
 Di Nala/docker-compose.yml, service api:
@@ -257,7 +257,7 @@ class Reranker:
 
 ```
 Buat app/reranker.py dengan class Reranker berbasis CrossEncoder
-(Module 18, Langkah 3) — belum dipakai endpoint apa pun.
+(Module 19, Langkah 3) — belum dipakai endpoint apa pun.
 
 GOAL:
 Buat Nala/app/reranker.py:
@@ -279,7 +279,7 @@ CONTEXT:
 - Model akan di-pre-pull manual lewat docker compose exec (Langkah 2)
   sebelum dipakai, bukan bagian dari kode ini.
 - Kandidat yang dikirim ke rerank() nanti berasal dari
-  vector_store.search_hybrid(top_k=20) (Module 17) — setiap dict
+  vector_store.search_hybrid(top_k=20) (Module 18) — setiap dict
   kandidat sudah punya key _id, text, score, metadata, rrf_score.
 
 GUARDRAIL:
@@ -321,7 +321,7 @@ for r in reranked:
 "
 ```
 
-✅ **Indikator sukses**: tidak ada error, dan **urutan** hasil di dua bagian output kemungkinan besar berbeda — bukti cross-encoder menilai ulang relevansi, bukan sekadar mempertahankan urutan RRF. Perintah ini butuh waktu beberapa detik lebih lama dibanding `search_hybrid()` saja di Module 17 (20 pasangan query-dokumen dihitung satu per satu oleh cross-encoder) — ini normal, dibahas lebih lanjut di Bagian 6.
+✅ **Indikator sukses**: tidak ada error, dan **urutan** hasil di dua bagian output kemungkinan besar berbeda — bukti cross-encoder menilai ulang relevansi, bukan sekadar mempertahankan urutan RRF. Perintah ini butuh waktu beberapa detik lebih lama dibanding `search_hybrid()` saja di Module 18 (20 pasangan query-dokumen dihitung satu per satu oleh cross-encoder) — ini normal, dibahas lebih lanjut di Bagian 6.
 
 ### Tahap B — Wiring ke `/chat/stream`
 
@@ -336,14 +336,14 @@ RERANK_ENABLED = os.environ.get("RERANK_ENABLED", "true").lower() == "true"
 reranker = Reranker() if RERANK_ENABLED else None
 ```
 
-`RERANK_ENABLED` (default `"true"`) sengaja dibuat bisa dimatikan lewat environment variable — lihat Bagian 6 kenapa ini bukan sekadar fitur opsional kosmetik, tapi katup pengaman kalau alokasi RAM laptop peserta mulai mepet begitu Module 20 (Langfuse) menambah beban lagi di atas stack yang sudah ada.
+`RERANK_ENABLED` (default `"true"`) sengaja dibuat bisa dimatikan lewat environment variable — lihat Bagian 6 kenapa ini bukan sekadar fitur opsional kosmetik, tapi katup pengaman kalau alokasi RAM laptop peserta mulai mepet begitu Module 21 (Langfuse) menambah beban lagi di atas stack yang sudah ada.
 
 <details>
 <summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 4</strong></summary>
 
 ```
 Tambah instance Reranker dan flag RERANK_ENABLED di app/main.py
-(Module 18, Langkah 4).
+(Module 19, Langkah 4).
 
 GOAL:
 Di Nala/app/main.py:
@@ -372,7 +372,7 @@ GUARDRAIL:
 **Langkah 5 — Ubah alur retrieval di `/chat/stream`**
 
 ```python
-# app/main.py — di dalam chat_stream(), menggantikan pemanggilan search_hybrid(top_k=3) dari Module 17
+# app/main.py — di dalam chat_stream(), menggantikan pemanggilan search_hybrid(top_k=3) dari Module 18
 try:
     query_embedding = embed_text(last_user_message, base_url=OLLAMA_BASE_URL)
     candidates = vector_store.search_hybrid(
@@ -385,24 +385,24 @@ except httpx.HTTPError:
     results = []
 ```
 
-Perubahan intinya: `search_hybrid()` sekarang dipanggil dengan `top_k=20` (bukan `3`) untuk mengambil **kandidat**, bukan hasil final — hasil final baru didapat setelah `reranker.rerank(..., top_k=3)` memangkasnya. Kalau `RERANK_ENABLED=false` (`reranker is None`), sistem tetap berjalan dengan mengambil 3 kandidat teratas versi RRF langsung (`candidates[:3]`) — bukan error, cuma kembali ke perilaku Module 17 tanpa reranking.
+Perubahan intinya: `search_hybrid()` sekarang dipanggil dengan `top_k=20` (bukan `3`) untuk mengambil **kandidat**, bukan hasil final — hasil final baru didapat setelah `reranker.rerank(..., top_k=3)` memangkasnya. Kalau `RERANK_ENABLED=false` (`reranker is None`), sistem tetap berjalan dengan mengambil 3 kandidat teratas versi RRF langsung (`candidates[:3]`) — bukan error, cuma kembali ke perilaku Module 18 tanpa reranking.
 
 <details>
 <summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 5</strong></summary>
 
 ```
-Wiring Reranker ke /chat/stream (Module 18, Langkah 5).
+Wiring Reranker ke /chat/stream (Module 19, Langkah 5).
 
 GOAL:
 Di fungsi chat_stream() Nala/app/main.py: ganti pemanggilan
-vector_store.search_hybrid() yang top_k=3 (dari Module 17) jadi
+vector_store.search_hybrid() yang top_k=3 (dari Module 18) jadi
 top_k=20, simpan hasilnya ke variabel `candidates` (bukan `results`),
 lalu tambah baris `results = reranker.rerank(last_user_message,
 candidates, top_k=3) if reranker else candidates[:3]`.
 
 CONTEXT:
 - reranker dan RERANK_ENABLED sudah dibuat Langkah 4.
-- vector_store.search_hybrid() sudah ada sejak Module 17.
+- vector_store.search_hybrid() sudah ada sejak Module 18.
 - /chat/stream adalah satu-satunya endpoint chat NALA sejak Module 8
   — tidak ada endpoint /chat lain untuk diubah.
 - Blok try/except httpx.HTTPError di sekitar retrieval TIDAK berubah
@@ -410,7 +410,7 @@ CONTEXT:
 
 GUARDRAIL:
 - JANGAN ubah logika fallback NALA_SYSTEM_PROMPT_NO_CONTEXT (dipicu
-  kalau `results` kosong) — itu tetap sama persis dari Module 13.
+  kalau `results` kosong) — itu tetap sama persis dari Module 14.
 - JANGAN ubah top_k lain di luar retrieval (mis. HISTORY_WINDOW atau
   system prompt building).
 ```
@@ -429,12 +429,12 @@ curl -N -X POST http://localhost:8000/chat/stream \
   -d '{"messages": [{"role": "user", "content": "Apa saja syarat pengajuan kredit untuk nasabah perorangan?"}]}'
 ```
 
-✅ **Indikator sukses**: jawaban tetap akurat (menyebut item dari `### 2.1`) seperti Module 17, muncul bertahap seperti biasa (flag `-N`), dan **response time terasa lebih lama** — 20 kandidat sekarang di-cross-encode setiap request, dibanding Module 17 yang langsung memotong ke 3 lewat RRF saja. Perlambatan ini nyata dan diharapkan — dibahas jujur di Bagian 6 sebagai trade-off, bukan bug. Untuk membandingkan langsung dengan reranking dimatikan (`RERANK_ENABLED=false`) — termasuk contoh nyata hasilnya dan kenapa perilakunya tidak konsisten — lihat Bagian 8.
+✅ **Indikator sukses**: jawaban tetap akurat (menyebut item dari `### 2.1`) seperti Module 18, muncul bertahap seperti biasa (flag `-N`), dan **response time terasa lebih lama** — 20 kandidat sekarang di-cross-encode setiap request, dibanding Module 18 yang langsung memotong ke 3 lewat RRF saja. Perlambatan ini nyata dan diharapkan — dibahas jujur di Bagian 6 sebagai trade-off, bukan bug. Untuk membandingkan langsung dengan reranking dimatikan (`RERANK_ENABLED=false`) — termasuk contoh nyata hasilnya dan kenapa perilakunya tidak konsisten — lihat Bagian 8.
 
-**📄 Kode lengkap Tahap B** (bagian relevan `app/main.py` setelah Module 18):
+**📄 Kode lengkap Tahap B** (bagian relevan `app/main.py` setelah Module 19):
 
 ```python
-# app/main.py — bagian setup (tambahan dari Module 18)
+# app/main.py — bagian setup (tambahan dari Module 19)
 from app.reranker import Reranker
 
 # ...
@@ -494,28 +494,28 @@ def chat_stream(request: ChatStreamRequest) -> StreamingResponse:
 Reranking **selalu** menambah latensi dan beban CPU — ini bukan detail kecil, tapi konsekuensi langsung dari cara kerjanya (Bagian 1): cross-encoder harus dihitung ulang untuk setiap pasangan, setiap request, karena tidak bisa di-precompute seperti bi-encoder.
 
 **Yang didapat:**
-- Presisi di posisi teratas (top-3/5) yang dikirim ke LLM jauh lebih relevan — persis kasus Module 17 Bagian 1, cross-encoder yang benar-benar "membaca" query+dokumen bersamaan jauh lebih mungkin menaruh chunk `### 2.1` di posisi #1, bukan cuma "masuk 20 besar".
+- Presisi di posisi teratas (top-3/5) yang dikirim ke LLM jauh lebih relevan — persis kasus Module 18 Bagian 1, cross-encoder yang benar-benar "membaca" query+dokumen bersamaan jauh lebih mungkin menaruh chunk `### 2.1` di posisi #1, bukan cuma "masuk 20 besar".
 - Mengurangi risiko LLM "mengencerkan" jawabannya karena menerima chunk yang kurang relevan bersama chunk yang relevan.
 
 **Yang dibayar:**
 - **Latensi bertambah nyata** — 20 pasangan di-cross-encode setiap request, di atas latensi hybrid search (dua query OpenSearch) dan generation LLM yang sudah ada. Di GPU, tambahan ini biasanya cuma beberapa ratus milidetik. Tapi di CPU laptop training (tanpa GPU) — kondisi yang dipakai NALA — tambahannya jauh lebih besar: bisa beberapa detik hingga puluhan detik per request, tergantung ukuran model reranker dan jumlah kandidat yang di-cross-encode. Jangan berpatokan pada angka GPU di atas sebagai ekspektasi; lihat pengukuran nyata di CPU pada Bagian 8 (~39 detik untuk kasus uji di module ini) untuk gambaran konkret yang akan dialami saat mengikuti langkah-langkah module ini.
-- **Beban RAM/CPU tambahan** — model cross-encoder (`torch` + bobot model) tetap dimuat di memori sepanjang container `api` berjalan, di atas beban Ollama + OpenSearch + Airflow yang sudah ada sejak modul-modul sebelumnya. Ini alasan kenapa Bagian 5 Langkah 4 menyediakan `RERANK_ENABLED=false` sebagai katup pengaman — kalau alokasi RAM laptop peserta sudah mepet begitu Module 20 (Langfuse) menambah dua service lagi, mematikan reranking sementara adalah pilihan yang sah, bukan mengorbankan seluruh stack.
-- **Bukan solusi ajaib untuk kandidat yang memang tidak ada** — reranking cuma menyortir ulang kandidat yang *sudah* diambil `search_hybrid()`. Kalau dokumen yang benar tidak pernah masuk ke top-20 sejak awal (kasus ekstrem, jarang terjadi setelah Module 17, tapi mungkin untuk dokumen yang sangat panjang/beragam), reranking tidak bisa menemukannya — ia cuma bisa menyortir apa yang sudah ada di tangannya.
+- **Beban RAM/CPU tambahan** — model cross-encoder (`torch` + bobot model) tetap dimuat di memori sepanjang container `api` berjalan, di atas beban Ollama + OpenSearch + Airflow yang sudah ada sejak modul-modul sebelumnya. Ini alasan kenapa Bagian 5 Langkah 4 menyediakan `RERANK_ENABLED=false` sebagai katup pengaman — kalau alokasi RAM laptop peserta sudah mepet begitu Module 21 (Langfuse) menambah dua service lagi, mematikan reranking sementara adalah pilihan yang sah, bukan mengorbankan seluruh stack.
+- **Bukan solusi ajaib untuk kandidat yang memang tidak ada** — reranking cuma menyortir ulang kandidat yang *sudah* diambil `search_hybrid()`. Kalau dokumen yang benar tidak pernah masuk ke top-20 sejak awal (kasus ekstrem, jarang terjadi setelah Module 18, tapi mungkin untuk dokumen yang sangat panjang/beragam), reranking tidak bisa menemukannya — ia cuma bisa menyortir apa yang sudah ada di tangannya.
 
 Untuk NALA, trade-off ini diterima dengan kondisi: reranking aktif secara default (kualitas jawaban lebih penting untuk kasus SOP finance), tapi tersedia sebagai fitur yang bisa dimatikan (`RERANK_ENABLED=false`) tanpa mengubah kode, bukan sesuatu yang dipaksakan aktif di semua kondisi hardware.
 
 ## 7. Checkpoint Praktik
 
-Langkah eksekusi lengkap (termasuk pre-pull model) ada di Bagian 5, Langkah 1-5. Yang perlu dipastikan sebelum lanjut ke Module 19:
+Langkah eksekusi lengkap (termasuk pre-pull model) ada di Bagian 5, Langkah 1-5. Yang perlu dipastikan sebelum lanjut ke Module 20:
 
 - [ ] Model `cross-encoder/ms-marco-MiniLM-L-6-v2` sudah ter-*pre-pull* dan tersimpan di volume `hf_cache` (tidak diunduh ulang setiap `docker compose up --build`)
 - [ ] `reranker.rerank()` menghasilkan urutan yang bisa berbeda dari urutan RRF `search_hybrid()` untuk query yang sama
-- [ ] `/chat/stream` tetap menjawab akurat dengan reranking aktif, response time terasa lebih lama dibanding Module 17 (diharapkan, bukan bug)
+- [ ] `/chat/stream` tetap menjawab akurat dengan reranking aktif, response time terasa lebih lama dibanding Module 18 (diharapkan, bukan bug)
 - [ ] `RERANK_ENABLED=false` (di `docker-compose.yml` atau env var saat menjalankan) membuat sistem tetap berjalan tanpa reranking, bukan error
 
-## 8. Hasil Uji Nyata: Kasus Keras Module 17 Bagian 8 Terselesaikan
+## 8. Hasil Uji Nyata: Kasus Keras Module 18 Bagian 8 Terselesaikan
 
-Pertanyaan yang jadi kasus keras di Module 17 Bagian 8 — *"Apa saja syarat pengajuan kredit untuk nasabah perorangan?"* (chunk jawaban `### 2.1` cuma di posisi #7-8, tidak masuk `top_k=3` hybrid search) — diuji ulang lewat `/chat/stream` setelah reranking aktif:
+Pertanyaan yang jadi kasus keras di Module 18 Bagian 8 — *"Apa saja syarat pengajuan kredit untuk nasabah perorangan?"* (chunk jawaban `### 2.1` cuma di posisi #7-8, tidak masuk `top_k=3` hybrid search) — diuji ulang lewat `/chat/stream` setelah reranking aktif:
 
 ```bash
 curl -N -X POST http://localhost:8000/chat/stream \
@@ -538,19 +538,19 @@ Berdasarkan konteks yang diberikan, syarat pengajuan kredit untuk nasabah perora
 - Usia minimal 21 tahun, maksimal 60 tahun pada saat pengajuan
 ```
 
-Jawaban ini **akurat 100% dan lengkap** — kedelapan poin cocok persis dengan `### 2.1` di `sop-pengajuan-kredit.md`, termasuk detail "maksimal 60 tahun" yang sebelum ada grounding (Module 13) pernah dikarang jadi "65 tahun". Progres lengkap untuk pertanyaan yang sama, dari sebelum Module 17 sampai sini:
+Jawaban ini **akurat 100% dan lengkap** — kedelapan poin cocok persis dengan `### 2.1` di `sop-pengajuan-kredit.md`, termasuk detail "maksimal 60 tahun" yang sebelum ada grounding (Module 14) pernah dikarang jadi "65 tahun". Progres lengkap untuk pertanyaan yang sama, dari sebelum Module 18 sampai sini:
 
 | Tahap | Hasil |
 |---|---|
-| Sebelum Module 17 (vector search murni, tanpa grounding) | Halusinasi — "65 tahun" (salah), syarat pendidikan yang tidak ada di dokumen (dikarang) |
-| Module 17 (hybrid search) | Jujur "tidak ditemukan" — grounding bekerja, tapi chunk jawaban di posisi #7-8, tidak masuk top-3 |
-| Module 18 (+ reranking) | **Akurat 100%, lengkap 8 item, "60 tahun" benar** |
+| Sebelum Module 18 (vector search murni, tanpa grounding) | Halusinasi — "65 tahun" (salah), syarat pendidikan yang tidak ada di dokumen (dikarang) |
+| Module 18 (hybrid search) | Jujur "tidak ditemukan" — grounding bekerja, tapi chunk jawaban di posisi #7-8, tidak masuk top-3 |
+| Module 19 (+ reranking) | **Akurat 100%, lengkap 8 item, "60 tahun" benar** |
 
-**Trade-off latensi juga terbukti nyata, bukan cuma klaim teoretis**: request di atas makan waktu **~39 detik** end-to-end di CPU laptop training (20 kandidat di-cross-encode, ditambah waktu generasi `llama3.2:3b`) — jauh lebih lama dari Module 17 (hybrid search saja, tanpa reranking, biasanya di bawah beberapa detik). Ini persis peringatan Bagian 6: reranking bukan gratis, dan untuk kasus produksi nyata, latensi sebesar ini perlu dipertimbangkan matang — apakah pengguna bersedia menunggu ~40 detik demi jawaban yang akurat, atau perlu dioptimasi lebih lanjut (model reranker lebih kecil, kurangi `candidate_pool`, jalankan di background dengan indikator loading, dll — di luar cakupan module ini).
+**Trade-off latensi juga terbukti nyata, bukan cuma klaim teoretis**: request di atas makan waktu **~39 detik** end-to-end di CPU laptop training (20 kandidat di-cross-encode, ditambah waktu generasi `llama3.2:3b`) — jauh lebih lama dari Module 18 (hybrid search saja, tanpa reranking, biasanya di bawah beberapa detik). Ini persis peringatan Bagian 6: reranking bukan gratis, dan untuk kasus produksi nyata, latensi sebesar ini perlu dipertimbangkan matang — apakah pengguna bersedia menunggu ~40 detik demi jawaban yang akurat, atau perlu dioptimasi lebih lanjut (model reranker lebih kecil, kurangi `candidate_pool`, jalankan di background dengan indikator loading, dll — di luar cakupan module ini).
 
 ### Temuan Tambahan: Tanpa Reranking, Model Tidak "Jujur Tidak Tahu" — Ia Mengarang dari Konteks yang Salah
 
-Perbandingan langsung dengan `RERANK_ENABLED=false` (kembali ke perilaku Module 17: `top_k=3` langsung dari RRF, tanpa penyortiran ulang) untuk pertanyaan yang sama menghasilkan sesuatu yang **berbeda** dari yang mungkin diduga:
+Perbandingan langsung dengan `RERANK_ENABLED=false` (kembali ke perilaku Module 18: `top_k=3` langsung dari RRF, tanpa penyortiran ulang) untuk pertanyaan yang sama menghasilkan sesuatu yang **berbeda** dari yang mungkin diduga:
 
 ```bash
 # Jalankan instance kedua dengan reranking dimatikan, tanpa mengganggu container utama
@@ -580,7 +580,7 @@ Berdasarkan dokumen internal yang tersedia, syarat pengajuan kredit untuk nasaba
 Perlu diingat bahwa syarat-syarat tersebut dapat berubah sewaktu-waktu...
 ```
 
-**Tidak satu pun** dari lima poin ini cocok dengan `### 2.1` di dokumen asli ("proposal pengajuan kredit", "surat keterangan domisili", "SIM" — semuanya tidak ada di SOP). Ini beda dari Module 17 Bagian 8, yang justru menghasilkan jawaban jujur "tidak ditemukan" untuk pertanyaan yang sama.
+**Tidak satu pun** dari lima poin ini cocok dengan `### 2.1` di dokumen asli ("proposal pengajuan kredit", "surat keterangan domisili", "SIM" — semuanya tidak ada di SOP). Ini beda dari Module 18 Bagian 8, yang justru menghasilkan jawaban jujur "tidak ditemukan" untuk pertanyaan yang sama.
 
 **Penting — perilaku ini tidak konsisten antar-percobaan, bukan jaminan mutlak.** Mengulang persis eksperimen yang sama (`RERANK_ENABLED=false`, pertanyaan identik) pada kesempatan lain menghasilkan respons yang **berbeda**:
 
@@ -599,10 +599,10 @@ Ini persis konsekuensi dari cara kerja sampling LLM (`llama3.2:3b` tidak determi
 - **Tanpa reranking, kualitas jawaban tidak bisa diprediksi** — top-3 RRF memuat chunk yang "terasa berhubungan" (sama-sama bicara topik kredit) tapi bukan chunk `### 2.1` yang sebenarnya menjawab. Konteks yang "cukup dekat tapi tidak tepat" ini adalah situasi abu-abu bagi grounding: kadang model menyerah jujur, kadang model "mengisi celah" dengan detail generik yang terdengar masuk akal.
 - **Dengan reranking, hasilnya jauh lebih konsisten** — dua percobaan berturut-turut (Bagian 8 di atas dan pengulangan di awal bagian ini) sama-sama menghasilkan jawaban akurat 100% dengan 8 item yang identik secara substansi. Karena chunk `### 2.1` yang benar-benar relevan masuk ke posisi atas, model tidak perlu "menebak-nebak" dari konteks yang ambigu.
 
-**Implikasi jujur**: instruksi grounding di `NALA_SYSTEM_PROMPT` ("jawab HANYA dari konteks, jangan mengarang") **tidak sepenuhnya kebal** terhadap kasus "konteks ada tapi salah" — ia bekerja andal untuk kasus "konteks kosong/jelas tidak relevan" (Module 17 Bagian 8 selalu konsisten jujur "tidak ditemukan"), tapi untuk kasus abu-abu "konteks mirip tapi tidak tepat", perilaku model kecil (`llama3.2:3b`) jadi kurang bisa diprediksi. Reranking mengurangi peluang situasi abu-abu ini terjadi sama sekali — bukan cuma soal precision/urutan, tapi soal mengurangi ambiguitas yang jadi celah ketidakkonsistenan model.
+**Implikasi jujur**: instruksi grounding di `NALA_SYSTEM_PROMPT` ("jawab HANYA dari konteks, jangan mengarang") **tidak sepenuhnya kebal** terhadap kasus "konteks ada tapi salah" — ia bekerja andal untuk kasus "konteks kosong/jelas tidak relevan" (Module 18 Bagian 8 selalu konsisten jujur "tidak ditemukan"), tapi untuk kasus abu-abu "konteks mirip tapi tidak tepat", perilaku model kecil (`llama3.2:3b`) jadi kurang bisa diprediksi. Reranking mengurangi peluang situasi abu-abu ini terjadi sama sekali — bukan cuma soal precision/urutan, tapi soal mengurangi ambiguitas yang jadi celah ketidakkonsistenan model.
 
 ## Kesimpulan
 
-Module ini menambah satu tahap penyortiran ulang di atas fondasi hybrid search Module 17: alih-alih langsung mempercayai urutan RRF, sistem sekarang mengambil kandidat lebih besar (top-20) dan membiarkan model yang secara khusus dilatih menilai relevansi query-dokumen (cross-encoder) yang menentukan urutan akhir. Ini bukan penggantian hybrid search — keduanya bekerja berurutan: hybrid search memastikan dokumen yang benar **ada** di kandidat, reranking memastikan ia **naik ke posisi teratas**.
+Module ini menambah satu tahap penyortiran ulang di atas fondasi hybrid search Module 18: alih-alih langsung mempercayai urutan RRF, sistem sekarang mengambil kandidat lebih besar (top-20) dan membiarkan model yang secara khusus dilatih menilai relevansi query-dokumen (cross-encoder) yang menentukan urutan akhir. Ini bukan penggantian hybrid search — keduanya bekerja berurutan: hybrid search memastikan dokumen yang benar **ada** di kandidat, reranking memastikan ia **naik ke posisi teratas**.
 
-Sejauh ini, klaim "reranking membuat retrieval lebih baik" masih berdasarkan pengamatan kualitatif (baca jawaban, bandingkan manual) — belum ada angka. Module 19 membangun framework evaluasi untuk mengukur ini secara kuantitatif, membandingkan kualitas retrieval **sebelum** dan **sesudah** reranking dengan metrik precision, recall, dan MRR — supaya klaim "lebih baik" di module ini bisa dibuktikan, bukan sekadar dirasakan.
+Sejauh ini, klaim "reranking membuat retrieval lebih baik" masih berdasarkan pengamatan kualitatif (baca jawaban, bandingkan manual) — belum ada angka. Module 20 membangun framework evaluasi untuk mengukur ini secara kuantitatif, membandingkan kualitas retrieval **sebelum** dan **sesudah** reranking dengan metrik precision, recall, dan MRR — supaya klaim "lebih baik" di module ini bisa dibuktikan, bukan sekadar dirasakan.

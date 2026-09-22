@@ -1,14 +1,14 @@
-# Module 19: Framework Evaluasi RAG
+# Module 20: Framework Evaluasi RAG
 
 ## Tujuan
 
-Membangun framework evaluasi retrieval berbasis test set berlabel kecil dan metrik terukur (Precision@k, Hit Rate@k, MRR), plus LLM-as-judge lokal, supaya klaim "hybrid search dan reranking lebih baik" bisa diukur ulang secara objektif — bukan cuma dibandingkan manual per pertanyaan seperti Module 17-18.
+Membangun framework evaluasi retrieval berbasis test set berlabel kecil dan metrik terukur (Precision@k, Hit Rate@k, MRR), plus LLM-as-judge lokal, supaya klaim "hybrid search dan reranking lebih baik" bisa diukur ulang secara objektif — bukan cuma dibandingkan manual per pertanyaan seperti Module 18-19.
 
 ## Definisi
 
-**Test set berlabel** (juga disebut *golden set*) adalah kumpulan pertanyaan yang jawaban benarnya sudah diketahui lebih dulu, dipakai untuk menjalankan retrieval berulang kali dengan hasil yang bisa dibandingkan secara objektif — bukan sekali coba lalu dibaca manual seperti Module 17-18. Di module ini, tiap pertanyaan diberi daftar **`must_contain`**: kata/frasa kunci yang pasti muncul di jawaban yang benar, dipakai sebagai proxy murah untuk menilai relevansi chunk (Bagian 3) — pengganti *qrels* (anotasi relevansi manual oleh ahli) yang di luar cakupan waktu pelatihan ini.
+**Test set berlabel** (juga disebut *golden set*) adalah kumpulan pertanyaan yang jawaban benarnya sudah diketahui lebih dulu, dipakai untuk menjalankan retrieval berulang kali dengan hasil yang bisa dibandingkan secara objektif — bukan sekali coba lalu dibaca manual seperti Module 18-19. Di module ini, tiap pertanyaan diberi daftar **`must_contain`**: kata/frasa kunci yang pasti muncul di jawaban yang benar, dipakai sebagai proxy murah untuk menilai relevansi chunk (Bagian 3) — pengganti *qrels* (anotasi relevansi manual oleh ahli) yang di luar cakupan waktu pelatihan ini.
 
-Dari test set itu dihitung tiga metrik retrieval (Bagian 2): **Precision@k** mengukur seberapa "bersih" k chunk teratas — berapa persen yang benar-benar relevan; **Hit Rate@k**, dipakai di sini sebagai proxy yang lebih sederhana untuk *recall* sesungguhnya, menjawab pertanyaan biner "apakah minimal satu chunk relevan berhasil masuk top-k"; dan **MRR (Mean Reciprocal Rank)** menangkap *posisi* — seberapa cepat chunk relevan pertama muncul, sehingga sensitif terhadap urutan hasil reranking, bukan cuma keanggotaannya. Ketiganya dipilih karena reranking (Module 18) menyortir ulang kandidat yang sama tanpa mengubah himpunannya — jadi hanya metrik yang peka urutan yang bisa membuktikan reranking benar-benar membantu.
+Dari test set itu dihitung tiga metrik retrieval (Bagian 2): **Precision@k** mengukur seberapa "bersih" k chunk teratas — berapa persen yang benar-benar relevan; **Hit Rate@k**, dipakai di sini sebagai proxy yang lebih sederhana untuk *recall* sesungguhnya, menjawab pertanyaan biner "apakah minimal satu chunk relevan berhasil masuk top-k"; dan **MRR (Mean Reciprocal Rank)** menangkap *posisi* — seberapa cepat chunk relevan pertama muncul, sehingga sensitif terhadap urutan hasil reranking, bukan cuma keanggotaannya. Ketiganya dipilih karena reranking (Module 19) menyortir ulang kandidat yang sama tanpa mengubah himpunannya — jadi hanya metrik yang peka urutan yang bisa membuktikan reranking benar-benar membantu.
 
 Untuk menilai kualitas jawaban akhir (bukan cuma retrieval-nya), dipakai **LLM-as-judge**: model `llama3.2:3b` yang sama diberi prompt sempit untuk menskor **faithfulness** (apakah jawaban didukung penuh oleh konteks, atau modelnya berhalusinasi) dan **relevance** (apakah jawaban benar-benar menjawab pertanyaan yang diajukan) dengan skala 1-5. Karena judge-nya model kecil, skornya diperlakukan sebagai sinyal indikatif untuk menangkap kasus yang jelas buruk — bukan angka otoritatif untuk keputusan bisnis.
 
@@ -25,13 +25,13 @@ flowchart LR
 
 - `app/evaluation.py` berisi fungsi metrik murni (`is_relevant`, `precision_at_k`, `hit_rate_at_k`, `reciprocal_rank`), teruji lewat contoh dummy
 - `app/eval_testset.py` berisi 10 pertanyaan berlabel (`must_contain`) dari `sop-pengajuan-kredit.md`
-- `app/run_evaluation.py` bisa dijalankan (`python -m app.run_evaluation`) dan mencetak tabel perbandingan Precision@3/Hit Rate@3/MRR sebelum vs sesudah reranking, dengan delta — dibuktikan lewat uji nyata (Bagian 9): ketiga metrik naik setelah reranking (Precision@3 +0.067, Hit Rate@3 +0.200 hingga 100%, MRR +0.200), mengonfirmasi klaim kualitatif Module 17-18 dengan angka di seluruh 10 pertanyaan test set, bukan cuma satu contoh manual
+- `app/run_evaluation.py` bisa dijalankan (`python -m app.run_evaluation`) dan mencetak tabel perbandingan Precision@3/Hit Rate@3/MRR sebelum vs sesudah reranking, dengan delta — dibuktikan lewat uji nyata (Bagian 9): ketiga metrik naik setelah reranking (Precision@3 +0.067, Hit Rate@3 +0.200 hingga 100%, MRR +0.200), mengonfirmasi klaim kualitatif Module 18-19 dengan angka di seluruh 10 pertanyaan test set, bukan cuma satu contoh manual
 - `app/llm_judge.py` menilai faithfulness dan relevance jawaban lewat `llama3.2:3b` sebagai judge lokal (offline, tanpa API cloud)
 - Kita paham keterbatasan framework ini secara jujur: relevansi berbasis kata kunci adalah proxy (bukan anotasi manusia), test set 10 soal terlalu kecil untuk klaim statistik umum, dan skor LLM-judge model 3B bersifat indikatif/noisy, bukan otoritatif
 
 ## 1. Kenapa "Kelihatannya Lebih Baik" Tidak Cukup
 
-Module 17 dan 18 masing-masing diverifikasi dengan cara yang sama: kirim satu pertanyaan, baca jawabannya, bandingkan dengan sebelumnya secara manual. Ini cukup untuk membuktikan kode berjalan tanpa error — tapi tidak cukup untuk menjawab pertanyaan yang sebenarnya penting bagi PT Nusantara Finance: **apakah retrieval NALA, secara keseluruhan dan konsisten, benar-benar lebih baik setelah hybrid search dan reranking ditambahkan — atau cuma kebetulan lebih baik untuk satu-dua contoh pertanyaan yang dicoba?**
+Module 18 dan 19 masing-masing diverifikasi dengan cara yang sama: kirim satu pertanyaan, baca jawabannya, bandingkan dengan sebelumnya secara manual. Ini cukup untuk membuktikan kode berjalan tanpa error — tapi tidak cukup untuk menjawab pertanyaan yang sebenarnya penting bagi PT Nusantara Finance: **apakah retrieval NALA, secara keseluruhan dan konsisten, benar-benar lebih baik setelah hybrid search dan reranking ditambahkan — atau cuma kebetulan lebih baik untuk satu-dua contoh pertanyaan yang dicoba?**
 
 Satu pertanyaan yang dicoba manual tidak mewakili ratusan variasi pertanyaan yang akan diajukan staff sungguhan. Module ini membangun **test set berlabel kecil** (kumpulan pertanyaan dengan jawaban yang diketahui) dan **metrik terukur**, supaya perbandingan sebelum/sesudah reranking (dan evaluasi kualitas jawaban ke depannya) bisa dilakukan berulang, konsisten, dan objektif — bukan sekadar "kelihatannya lebih baik".
 
@@ -55,7 +55,7 @@ flowchart LR
 
 **Catatan jujur soal "Recall"**: recall yang sesungguhnya (definisi standar information retrieval) adalah *(jumlah chunk relevan yang ditemukan) / (jumlah total chunk relevan yang ada di seluruh index)* — untuk menghitungnya secara benar, dibutuhkan anotasi manual yang mendaftar **semua** chunk relevan untuk tiap pertanyaan, bukan cuma satu. Test set kecil di module ini (Bagian 4) tidak melakukan anotasi selengkap itu — sebagai gantinya, dipakai **Hit Rate@k** sebagai proxy yang lebih sederhana: "apakah minimal satu chunk yang relevan berhasil ditemukan di top-k", tanpa mengklaim menghitung total populasi chunk relevan. Ini keterbatasan yang disengaja demi kepraktisan test set kecil — bukan diam-diam disamakan dengan recall yang sesungguhnya.
 
-**Poin penting yang membedakan sebelum/sesudah reranking**: karena reranking (Module 18) **menyortir ulang** kandidat yang sama (top-20 dari `search_hybrid()`), bukan mengganti kandidatnya, maka **Hit Rate@20 akan selalu identik** sebelum dan sesudah reranking — himpunan 20 kandidatnya sama persis, cuma urutannya beda. Kalau tabel hasil di Bagian 9 menunjukkan Hit Rate@20 berubah antara sebelum/sesudah, itu tanda ada kesalahan di harness evaluasi, bukan efek nyata dari reranking. Yang **seharusnya** berubah oleh reranking adalah metrik pada potongan yang lebih kecil dan lebih sensitif urutan — **Precision@3**, **Hit Rate@3**, dan terutama **MRR** — karena ketiganya bergantung pada *urutan* dalam kandidat, bukan cuma keanggotaan di dalamnya.
+**Poin penting yang membedakan sebelum/sesudah reranking**: karena reranking (Module 19) **menyortir ulang** kandidat yang sama (top-20 dari `search_hybrid()`), bukan mengganti kandidatnya, maka **Hit Rate@20 akan selalu identik** sebelum dan sesudah reranking — himpunan 20 kandidatnya sama persis, cuma urutannya beda. Kalau tabel hasil di Bagian 9 menunjukkan Hit Rate@20 berubah antara sebelum/sesudah, itu tanda ada kesalahan di harness evaluasi, bukan efek nyata dari reranking. Yang **seharusnya** berubah oleh reranking adalah metrik pada potongan yang lebih kecil dan lebih sensitif urutan — **Precision@3**, **Hit Rate@3**, dan terutama **MRR** — karena ketiganya bergantung pada *urutan* dalam kandidat, bukan cuma keanggotaan di dalamnya.
 
 ## 3. Relevansi Berbasis Kata Kunci: Proxy, Bukan Anotasi Manual
 
@@ -73,7 +73,7 @@ def is_relevant(chunk_text: str, must_contain: list[str]) -> bool:
 
 ## 4. Test Set Berlabel: 10 Pertanyaan dari `sop-pengajuan-kredit.md`
 
-Knowledge base yang tersedia saat ini di `Nala/knowledge-base/` berisi 4 dokumen: dua SOP markdown (`sop-pengajuan-kredit.md`, `sop-klaim-asuransi.md`), satu SOP dalam bentuk PDF (`sop-pembukaan-rekening-tabungan.pdf`) — ketiganya di-seed sejak Module 10 — plus satu file catatan singkat hasil upload demo di Module 15 (`catatan-cabang-bandung.md`). Test set berikut fokus ke `sop-pengajuan-kredit.md`, yang cukup kaya (5 bagian: tujuan dan ruang lingkup, syarat, tahapan proses, kontak, catatan) untuk membangun test set awal yang berarti. Kalau di deployment nyata knowledge base bertambah dokumen, format test set ini dirancang supaya tinggal ditambah entri baru, bukan ditulis ulang.
+Knowledge base yang tersedia saat ini di `Nala/knowledge-base/` berisi 4 dokumen: dua SOP markdown (`sop-pengajuan-kredit.md`, `sop-klaim-asuransi.md`), satu SOP dalam bentuk PDF (`sop-pembukaan-rekening-tabungan.pdf`) — ketiganya di-seed sejak Module 10 — plus satu file catatan singkat hasil upload demo di Module 16 (`catatan-cabang-bandung.md`). Test set berikut fokus ke `sop-pengajuan-kredit.md`, yang cukup kaya (5 bagian: tujuan dan ruang lingkup, syarat, tahapan proses, kontak, catatan) untuk membangun test set awal yang berarti. Kalau di deployment nyata knowledge base bertambah dokumen, format test set ini dirancang supaya tinggal ditambah entri baru, bukan ditulis ulang.
 
 ```python
 # app/eval_testset.py
@@ -127,7 +127,7 @@ Sepuluh pertanyaan ini **kecil secara sengaja** — cukup untuk mendemonstrasika
 
 Satu Tahap, empat Langkah: fungsi metrik (`app/evaluation.py`), test set (`app/eval_testset.py`, sudah ditulis di Bagian 4), skrip yang menjalankan keduanya dan mencetak tabel perbandingan, lalu LLM-as-judge lokal (Bagian 6).
 
-**Prasyarat**: Module 18 sudah selesai — `Nala/` sudah punya reranking bekerja dan terhubung ke `/chat/stream`. Tidak ada service Docker baru di module ini; alokasi RAM yang sama seperti Module 18 sudah cukup.
+**Prasyarat**: Module 19 sudah selesai — `Nala/` sudah punya reranking bekerja dan terhubung ke `/chat/stream`. Tidak ada service Docker baru di module ini; alokasi RAM yang sama seperti Module 19 sudah cukup.
 
 **Langkah 1 — Fungsi metrik di `app/evaluation.py`**
 
@@ -159,7 +159,7 @@ def reciprocal_rank(retrieved: list[dict], must_contain: list[str]) -> float:
     return 0.0
 ```
 
-- `precision_at_k`: proporsi chunk relevan di antara `k` chunk teratas — dipanggil dengan `k=3` untuk meniru persis apa yang benar-benar dikirim ke LLM (`/chat/stream` mengirim top-3, lihat Module 17-18).
+- `precision_at_k`: proporsi chunk relevan di antara `k` chunk teratas — dipanggil dengan `k=3` untuk meniru persis apa yang benar-benar dikirim ke LLM (`/chat/stream` mengirim top-3, lihat Module 18-19).
 - `hit_rate_at_k`: biner (0 atau 1) per pertanyaan — dirata-rata di Langkah 3 (`app/run_evaluation.py`) untuk semua pertanyaan di test set jadi persentase keberhasilan.
 - `reciprocal_rank`: mengembalikan `1/posisi` chunk relevan **pertama** — kalau chunk relevan ada di posisi #1, nilainya `1.0`; posisi #2 → `0.5`; tidak ditemukan sama sekali → `0.0`. Rata-rata dari semua pertanyaan di test set (dihitung di Langkah 3) menghasilkan MRR.
 
@@ -193,7 +193,7 @@ print('Reciprocal Rank:', reciprocal_rank(dummy_results, must_contain))
 
 ```
 Buat app/evaluation.py dengan fungsi metrik precision/hit-rate/MRR
-(Module 19, Langkah 1) — belum dihubungkan ke retrieval sungguhan.
+(Module 20, Langkah 1) — belum dihubungkan ke retrieval sungguhan.
 
 GOAL:
 - Buat Nala/app/evaluation.py berisi 4
@@ -235,12 +235,12 @@ Isi file ini persis seperti kode `QA_TESTSET` di Bagian 4 di atas — sepuluh di
 <summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 2</strong></summary>
 
 ```
-Buat app/eval_testset.py (test set QA berlabel) — Module 19, Langkah 2.
+Buat app/eval_testset.py (test set QA berlabel) — Module 20, Langkah 2.
 
 GOAL:
 - Buat Nala/app/eval_testset.py berisi satu konstanta QA_TESTSET: list
   of dict {"question": str, "must_contain": list[str]} — isi persis
-  seperti yang tertulis di materi Module 19 Bagian 4 (10 pertanyaan
+  seperti yang tertulis di materi Module 20 Bagian 4 (10 pertanyaan
   tentang sop-pengajuan-kredit.md).
 
 CONTEXT:
@@ -309,8 +309,8 @@ if __name__ == "__main__":
         print(f"{metric}: {before[metric]:.3f} -> {after[metric]:.3f} ({delta:+.3f})")
 ```
 
-- **`before_rerank`**: memanggil `search_hybrid(..., top_k=3, ...)` langsung — persis alur Module 17 (tanpa reranking).
-- **`after_rerank`**: memanggil `search_hybrid(..., top_k=20, ...)` untuk kandidat, lalu `reranker.rerank(..., top_k=3)` — persis alur Module 18.
+- **`before_rerank`**: memanggil `search_hybrid(..., top_k=3, ...)` langsung — persis alur Module 18 (tanpa reranking).
+- **`after_rerank`**: memanggil `search_hybrid(..., top_k=20, ...)` untuk kandidat, lalu `reranker.rerank(..., top_k=3)` — persis alur Module 19.
 - Kedua fungsi mengambil kandidat dari `candidate_pool=20` yang **sama** — perbedaan hasil murni berasal dari ada/tidaknya langkah reranking, bukan dari perbedaan jumlah kandidat awal yang diperiksa.
 
 **▶️ Jalankan & lihat hasilnya**
@@ -332,7 +332,7 @@ docker compose exec api python -m app.run_evaluation
 
 ```
 Buat app/run_evaluation.py (skrip perbandingan sebelum/sesudah
-reranking) — Module 19, Langkah 3.
+reranking) — Module 20, Langkah 3.
 
 GOAL:
 - Buat Nala/app/run_evaluation.py:
@@ -351,8 +351,8 @@ GOAL:
 
 CONTEXT:
 - app/evaluation.py (Langkah 1) dan app/eval_testset.py (Langkah 2)
-  sudah ada. app/vector_store.py (Module 17), app/reranker.py
-  (Module 18) sudah ada.
+  sudah ada. app/vector_store.py (Module 18), app/reranker.py
+  (Module 19) sudah ada.
 - Skrip ini dijalankan manual lewat `docker compose exec api python
   -m app.run_evaluation`, bukan endpoint FastAPI.
 
@@ -440,7 +440,7 @@ print(result)
 
 ```
 Buat app/llm_judge.py (LLM-as-judge lokal untuk faithfulness dan
-relevance) — Module 19, Langkah 4.
+relevance) — Module 20, Langkah 4.
 
 GOAL:
 - Buat Nala/app/llm_judge.py berisi:
@@ -448,7 +448,7 @@ GOAL:
      meminta model menilai FAITHFULNESS dan RELEVANCE masing-masing
      dengan skor 1-5, dan menjawab HANYA dalam format persis
      "FAITHFULNESS: <angka>" lalu baris "RELEVANCE: <angka>", tanpa
-     penjelasan lain. Teks lengkap persis seperti di materi Module 19
+     penjelasan lain. Teks lengkap persis seperti di materi Module 20
      Bagian 6.
   2. Fungsi judge_answer(judge_client: OllamaClient, context: str,
      question: str, answer: str) -> dict:
@@ -490,14 +490,14 @@ Framework ini dirancang untuk **bertumbuh** — test set bertambah seiring dokum
 
 ## 8. Checkpoint Praktik
 
-Langkah eksekusi lengkap ada di Bagian 5 (Langkah 1-3) dan Bagian 6 (Langkah 4) di atas. Yang perlu dipastikan sebelum lanjut ke Module 20:
+Langkah eksekusi lengkap ada di Bagian 5 (Langkah 1-3) dan Bagian 6 (Langkah 4) di atas. Yang perlu dipastikan sebelum lanjut ke Module 21:
 
 - [ ] `app/evaluation.py` lulus uji dummy (Bagian 5 Langkah 1) dengan angka yang sesuai perhitungan manual
 - [ ] `python -m app.run_evaluation` berjalan tanpa error dan mencetak tabel perbandingan sebelum/sesudah reranking
 - [ ] Hit Rate@20 (kalau dihitung terpisah) identik sebelum/sesudah reranking — kalau berbeda, ada bug di harness (lihat Bagian 2)
 - [ ] Minimal satu contoh output `judge_answer()` sudah dibaca manual dan skornya masuk akal (spot-check, bukan dipercaya buta)
 
-## 9. Hasil Uji Nyata: Klaim Module 17-18 Terbukti dengan Angka
+## 9. Hasil Uji Nyata: Klaim Module 18-19 Terbukti dengan Angka
 
 Menjalankan `python -m app.run_evaluation` terhadap 10 pertanyaan test set di knowledge base yang sedang berjalan (4 dokumen: `sop-pengajuan-kredit.md`, `sop-klaim-asuransi.md`, `sop-pembukaan-rekening-tabungan.pdf`, dan `catatan-cabang-bandung.md`) memberi hasil berikut:
 
@@ -507,13 +507,13 @@ Menjalankan `python -m app.run_evaluation` terhadap 10 pertanyaan test set di kn
 | Hit Rate@3 | 0.800 | **1.000** | +0.200 |
 | MRR | 0.583 | 0.783 | +0.200 |
 
-Ketiga metrik naik ke arah yang diharapkan setelah reranking diaktifkan — bukan angka yang identik seperti yang diwaspadai kalau ada bug harness (Bagian 2), dan bukan pula perbaikan yang cuma terlihat di satu contoh yang kebetulan dipilih tangan. **Temuan paling meyakinkan**: Hit Rate@3 naik dari 80% ke **100%** — artinya *sebelum* reranking, 2 dari 10 pertanyaan di test set gagal menemukan satu pun chunk relevan di top-3 (termasuk kasus keras "syarat pengajuan kredit nasabah perorangan" yang didokumentasikan panjang lebar di Module 17 Bagian 8 dan Module 18 Bagian 8), sementara *sesudah* reranking, **semua 10 pertanyaan** berhasil.
+Ketiga metrik naik ke arah yang diharapkan setelah reranking diaktifkan — bukan angka yang identik seperti yang diwaspadai kalau ada bug harness (Bagian 2), dan bukan pula perbaikan yang cuma terlihat di satu contoh yang kebetulan dipilih tangan. **Temuan paling meyakinkan**: Hit Rate@3 naik dari 80% ke **100%** — artinya *sebelum* reranking, 2 dari 10 pertanyaan di test set gagal menemukan satu pun chunk relevan di top-3 (termasuk kasus keras "syarat pengajuan kredit nasabah perorangan" yang didokumentasikan panjang lebar di Module 18 Bagian 8 dan Module 19 Bagian 8), sementara *sesudah* reranking, **semua 10 pertanyaan** berhasil.
 
-Ini melengkapi bukti kualitatif dari Module 17-18 (yang cuma menguji 1 pertanyaan secara manual, berulang kali, lewat `curl`) dengan bukti kuantitatif di seluruh test set sekaligus — persis tujuan module ini: mengubah "kelihatannya lebih baik" jadi "terbukti lebih baik, diukur dengan angka yang sama setiap kali".
+Ini melengkapi bukti kualitatif dari Module 18-19 (yang cuma menguji 1 pertanyaan secara manual, berulang kali, lewat `curl`) dengan bukti kuantitatif di seluruh test set sekaligus — persis tujuan module ini: mengubah "kelihatannya lebih baik" jadi "terbukti lebih baik, diukur dengan angka yang sama setiap kali".
 
 ## Kesimpulan
 
-Module ini mengubah klaim "hybrid search dan reranking membuat NALA lebih baik" (Module 17-18) dari pengamatan kualitatif jadi sesuatu yang bisa diukur ulang: test set berlabel kecil, tiga metrik retrieval (Precision@3, Hit Rate@3, MRR) yang masing-masing menangkap aspek berbeda, dan LLM-as-judge lokal untuk faithfulness/relevance jawaban akhir — semuanya berjalan sepenuhnya offline, tanpa API cloud.
+Module ini mengubah klaim "hybrid search dan reranking membuat NALA lebih baik" (Module 18-19) dari pengamatan kualitatif jadi sesuatu yang bisa diukur ulang: test set berlabel kecil, tiga metrik retrieval (Precision@3, Hit Rate@3, MRR) yang masing-masing menangkap aspek berbeda, dan LLM-as-judge lokal untuk faithfulness/relevance jawaban akhir — semuanya berjalan sepenuhnya offline, tanpa API cloud.
 
-Yang jujur belum terselesaikan: framework ini kecil dan proxy-based (Bagian 7), bukan pengganti evaluasi produksi skala penuh. Tapi ia sudah cukup untuk hal yang paling penting di titik ini — mendeteksi kalau sebuah perubahan (mis. mengganti model reranker, mengubah `chunk_size`, atau menambah dokumen baru) membuat retrieval **membaik** atau **memburuk**, diukur dengan angka yang sama setiap kali, bukan tebak-tebakan. Module 20 melangkah dari "mengukur kualitas retrieval secara batch" ke "mengamati setiap request individual secara real-time" — observability dengan Langfuse, untuk kasus ketika satu jawaban tertentu terlihat buruk dan perlu ditelusuri persis di tahap mana masalahnya muncul (retrieval, reranking, atau generation).
+Yang jujur belum terselesaikan: framework ini kecil dan proxy-based (Bagian 7), bukan pengganti evaluasi produksi skala penuh. Tapi ia sudah cukup untuk hal yang paling penting di titik ini — mendeteksi kalau sebuah perubahan (mis. mengganti model reranker, mengubah `chunk_size`, atau menambah dokumen baru) membuat retrieval **membaik** atau **memburuk**, diukur dengan angka yang sama setiap kali, bukan tebak-tebakan. Module 21 melangkah dari "mengukur kualitas retrieval secara batch" ke "mengamati setiap request individual secara real-time" — observability dengan Langfuse, untuk kasus ketika satu jawaban tertentu terlihat buruk dan perlu ditelusuri persis di tahap mana masalahnya muncul (retrieval, reranking, atau generation).
 
