@@ -39,6 +39,29 @@ Dua istilah yang perlu dikenal sebelum melihat kode di Bagian 4, dan keduanya se
 
 Satu istilah lagi yang muncul di konfigurasi Bagian 4: **cluster** dan **node** — anggap saja **node** itu satu "gedung kantor cabang" tempat OpenSearch bekerja, dan **cluster** adalah kumpulan beberapa gedung yang bekerja sama. Di lingkungan production sungguhan, biasanya dipakai beberapa gedung (node) sekaligus supaya kalau satu gedung bermasalah, gedung lain tetap bisa melayani, dan pekerjaannya juga terbagi rata. Untuk training ini, cukup **satu gedung saja** (`discovery.type=single-node`) — jauh lebih ringan buat laptop, dan cara kerjanya tetap sama persis dengan yang dipakai di lingkungan production sungguhan.
 
+**Single-node** berarti cuma **satu** proses OpenSearch yang menyimpan **seluruh** data dan mengerjakan **seluruh** pencarian sendirian — kalau container ini mati, seluruh sistem pencarian ikut mati, tidak ada cadangan. **Multi-node** (cluster sungguhan) memecah satu index yang sama jadi beberapa potongan yang disebar ke beberapa node (disebut *sharding*), dan tiap potongan biasanya punya salinan/cadangan di node lain (disebut *replica*) — aplikasi tetap bicara ke "satu alamat cluster" seolah-olah itu satu mesin, tapi di baliknya permintaan pencarian otomatis dipecah, dikerjakan paralel di beberapa node, lalu hasilnya digabung. Kalau satu node mati, data yang tadi cuma ada di situ masih bisa diambil dari salinannya di node lain.
+
+```mermaid
+flowchart LR
+    subgraph Single["Single-node (dipakai training ini)"]
+        N1["Node tunggal<br/>seluruh data + seluruh pencarian"]
+    end
+    subgraph Multi["Multi-node / cluster (production skala besar)"]
+        NA["Node A<br/>sebagian data + salinan data node lain"]
+        NB["Node B<br/>sebagian data + salinan data node lain"]
+        NC["Node C<br/>sebagian data + salinan data node lain"]
+        NA --- NB --- NC
+    end
+```
+
+**Apakah NALA perlu multi-node?** Tidak, untuk skala dan kebutuhannya sekarang:
+- **Skala datanya kecil** — dokumen SOP/kebijakan internal, paling ratusan sampai ribuan chunk, bukan jutaan dokumen. Single-node sanggup menangani ini tanpa masalah performa.
+- **Ini aplikasi internal, bukan layanan publik skala besar** — multi-node menyelesaikan masalah "banyak user mengakses bersamaan dalam jumlah besar" dan/atau "data terlalu besar untuk satu mesin". Staff yang memakai NALA jumlahnya terbatas, bukan jutaan user simultan.
+- **High availability (HA) biasanya krusial untuk sistem yang tidak boleh down sama sekali** (misal sistem pembayaran real-time). Kalau OpenSearch NALA sempat down beberapa menit karena container di-restart, dampaknya cuma staff tidak bisa pakai chatbot sebentar — bukan kerugian finansial langsung. Kompleksitas setup multi-node (beberapa mesin/VM, jaringan antar node, koordinasi cluster) tidak sepadan dengan manfaatnya di skala ini.
+- **Migrasi ke multi-node nanti, kalau memang dibutuhkan, tidak perlu mengubah kode aplikasi sama sekali** — `VectorStore` bicara ke OpenSearch lewat REST API biasa (`httpx`), endpoint-nya sama persis baik di belakangnya satu node atau sepuluh node. Yang berubah cuma konfigurasi infrastruktur, bukan `app/vector_store.py` (Module 13).
+
+Jadi single-node di sini bukan "versi murah/kurang lengkap" — untuk skala dan kebutuhan NALA, itu memang pilihan yang tepat, bukan kompromi sementara.
+
 ```mermaid
 flowchart TD
     subgraph OS["OpenSearch (single-node)"]
