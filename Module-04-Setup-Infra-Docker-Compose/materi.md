@@ -321,6 +321,34 @@ Response (dipotong):
 
 Field `response` inilah yang diambil `OllamaClient.generate()` lewat `response.json()["response"]` (Module 6) — persis satu baris kode yang membungkus request `curl` ini.
 
+**Parameter apa saja yang bisa dikirim ke `/api/generate`?** Contoh di atas cuma pakai `model`, `prompt`, `stream` — padahal ada beberapa field lain. Tiga tempat untuk melihatnya:
+
+1. **Dokumentasi resmi Ollama** — `https://docs.ollama.com/api`, sumber paling lengkap dan selalu up-to-date untuk semua endpoint.
+2. **`POST /api/show`** (lihat 4.2 di bawah) — menunjukkan parameter yang **sedang aktif** untuk satu model tertentu, cocok untuk cek nilai default.
+3. **Module 3 Bagian 8 "Referensi Lengkap Parameter Ollama"** — di sana sudah dibahas satu per satu `temperature`, `top_k`, `top_p`, `num_ctx`, `repeat_penalty`, `seed`, dst, lewat `PARAMETER` di Modelfile. **Nilai yang sama itu juga bisa dikirim langsung per-request**, tanpa bikin Modelfile baru, lewat objek `options`:
+
+```bash
+curl http://localhost:11434/api/generate -d '{
+  "model": "llama3.2:3b",
+  "prompt": "Sebutkan 3 kegunaan AI di industri keuangan",
+  "stream": false,
+  "options": {
+    "temperature": 0.3,
+    "num_ctx": 4096
+  }
+}'
+```
+
+Field lain yang tersedia di level atas (bukan di dalam `options`):
+
+| Field | Fungsi |
+|---|---|
+| `system` | override system prompt sesaat, tanpa perlu Modelfile |
+| `format` | `"json"` untuk memaksa output berupa JSON valid |
+| `keep_alive` | override durasi model tetap di memori (lihat Module 3 Bagian G) |
+| `images` | array base64, khusus model vision |
+| `raw` | lewati template prompt bawaan model |
+
 **`POST /api/chat`** — kirim riwayat percakapan sebagai array `messages`, bukan satu `prompt` string:
 
 ```bash
