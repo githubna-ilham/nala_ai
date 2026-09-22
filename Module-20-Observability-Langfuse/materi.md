@@ -71,6 +71,17 @@ Penting untuk tidak tertukar: Postgres yang ditambahkan module ini (`langfuse-db
 
 Dua Tahap: **Tahap A** menambah service `langfuse-db` + `langfuse` di `docker-compose.yml` dan setup akun. **Tahap B** instrumentasi `/chat/stream` (satu-satunya endpoint chat NALA) — span `hybrid_search`/`rerank` dibuka/ditutup langsung di badan endpoint, tapi `generation` untuk pemanggilan LLM harus ditutup **di dalam generator**, setelah token terakhir, bukan di badan fungsi endpoint, karena endpoint ini streaming.
 
+**Prasyarat sebelum mulai:**
+- Sudah menyelesaikan **Module 19** — `Nala/` sudah punya framework evaluasi bekerja.
+- Docker Desktop dinaikkan lagi alokasi RAM-nya untuk menampung dua service baru:
+
+| Setting | Minimal | Direkomendasikan | Alasan |
+|---|---|---|---|
+| **Memory (RAM)** | 16 GB | 20 GB+ jika tersedia | Semua service sebelumnya (Ollama, OpenSearch, Airflow, api dengan reranker) + Langfuse & Postgres-nya (`langfuse-db`, terpisah dari Postgres data operasional yang baru akan muncul di Module 21) berjalan bersamaan di titik puncak. |
+| **Disk image size** | 100 GB | 120 GB+ | Image `langfuse/langfuse` menambah beberapa GB lagi di atas image sebelumnya. |
+
+Kalau laptop mulai terasa berat, pertimbangkan mematikan sementara `airflow` (tidak dipakai lagi setelah ingest awal selesai — lihat Bagian 6).
+
 ### Tahap A — Tambah Service Langfuse di `docker-compose.yml`
 
 **Langkah 1 — Tambah `langfuse-db` dan `langfuse`**
@@ -109,13 +120,56 @@ volumes:
 - **`NEXTAUTH_SECRET` dan `SALT`**: Langfuse (dibangun di atas Next.js) memakai keduanya untuk keamanan sesi login dan enkripsi — untuk lingkungan pelatihan lokal, string acak apa pun yang cukup panjang sudah memadai (bukan dipakai untuk deployment produksi sungguhan yang terekspos ke internet). **Ganti nilai placeholder ini** sebelum menjalankan — jangan disalin apa adanya.
 - **Port `3000`**: web UI Langfuse — beda dari `8000` (NALA API), `8080` (Airflow), `9200` (OpenSearch), `11434` (Ollama) yang sudah dipakai sejak modul-modul sebelumnya.
 
+<details>
+<summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 1</strong></summary>
+
+```
+Tambah service langfuse-db dan langfuse di docker-compose.yml (Module
+20, Tahap A, Langkah 1) — belum ada instrumentasi kode Python.
+
+GOAL:
+- Di Nala/docker-compose.yml, tambah dua
+  service baru:
+  1. langfuse-db: image postgres:15-alpine, environment
+     POSTGRES_USER=langfuse, POSTGRES_PASSWORD=langfuse,
+     POSTGRES_DB=langfuse, volume langfuse_db_data:/var/lib/postgresql/data.
+  2. langfuse: image langfuse/langfuse:2, environment DATABASE_URL
+     (postgresql ke langfuse-db), NEXTAUTH_URL=http://localhost:3000,
+     NEXTAUTH_SECRET dan SALT (placeholder string, beri komentar untuk
+     diganti), port "3000:3000", depends_on langfuse-db.
+- Tambah langfuse_db_data ke daftar top-level volumes.
+
+CONTEXT:
+- Ini Langfuse v2 (bukan v3) — sengaja dipilih karena v3 butuh
+  ClickHouse+Redis+object storage, terlalu berat untuk laptop 16GB
+  yang sudah menjalankan Ollama+OpenSearch+Airflow+reranker.
+- langfuse-db TERPISAH dari Postgres data operasional yang akan
+  ditambahkan Module 21 — jangan digabung.
+
+GUARDRAIL:
+- JANGAN ubah service ollama, opensearch, airflow, api yang sudah
+  ada — tambahan API key untuk service api itu Langkah 2, bukan di
+  sini.
+- JANGAN hardcode NEXTAUTH_SECRET/SALT dengan nilai yang terlihat
+  seperti secret produktif sungguhan — pakai placeholder yang jelas
+  harus diganti.
+```
+
+</details>
+
 **Langkah 2 — Nyalakan, buat akun, dan ambil API key**
 
 ```bash
 docker compose up -d --build langfuse-db langfuse
 ```
 
-Tunggu beberapa saat (Langfuse perlu migrasi skema database saat pertama kali jalan), lalu buka `http://localhost:3000` — buat akun lokal (email+password apa saja, tidak terkirim ke mana pun karena self-hosted).
+**Proses ini akan terasa lama** — Langfuse perlu migrasi skema database saat pertama kali jalan. Pantau progresnya:
+
+```bash
+docker compose logs -f langfuse
+```
+
+Tunggu sampai log menunjukkan service siap menerima koneksi, lalu `Ctrl+C` untuk keluar dari `logs -f`, baru buka `http://localhost:3000` — buat akun lokal (email+password apa saja, tidak terkirim ke mana pun karena self-hosted).
 
 Setelah sign up/sign in, Langfuse v2 **tidak langsung** menampilkan form buat Project — ada wizard setup 4 langkah yang mudah terlewat kalau tidak diberi tahu dulu, dimulai dari halaman "Home":
 
@@ -156,6 +210,12 @@ environment:
 
 ⚠️ Ini contoh paling sederhana untuk lingkungan pelatihan (key ditulis langsung di `docker-compose.yml`). Untuk deployment sungguhan, key sensitif seperti ini semestinya disimpan di file `.env` yang **tidak** dikomit ke git — dicatat di sini sebagai pengingat, bukan diterapkan penuh di module ini supaya tetap fokus pada instrumentasi.
 
+Restart service `api` supaya environment variable barunya terbaca:
+
+```bash
+docker compose up --build -d api
+```
+
 **▶️ Jalankan & lihat hasilnya**
 
 ```bash
@@ -165,38 +225,35 @@ curl http://localhost:3000/api/public/health
 ✅ **Indikator sukses**: `docker compose ps` menunjukkan `langfuse-db` dan `langfuse` berstatus `running`/`healthy`, halaman `http://localhost:3000` bisa diakses dan login berhasil, Project dan API key sudah dibuat.
 
 <details>
-<summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 1</strong></summary>
+<summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 2</strong></summary>
 
 ```
-Tambah service langfuse-db dan langfuse di docker-compose.yml (Module
-18, Langkah 1) — belum ada instrumentasi kode Python.
+Tambah environment variable Langfuse (placeholder) ke service api di
+docker-compose.yml (Module 20, Tahap A, Langkah 2) — nilai key asli
+didapat manual dari UI Langfuse setelah Project & API key dibuat.
 
 GOAL:
-- Di Nala/docker-compose.yml, tambah dua
-  service baru:
-  1. langfuse-db: image postgres:15-alpine, environment
-     POSTGRES_USER=langfuse, POSTGRES_PASSWORD=langfuse,
-     POSTGRES_DB=langfuse, volume langfuse_db_data:/var/lib/postgresql/data.
-  2. langfuse: image langfuse/langfuse:2, environment DATABASE_URL
-     (postgresql ke langfuse-db), NEXTAUTH_URL=http://localhost:3000,
-     NEXTAUTH_SECRET dan SALT (placeholder string, beri komentar untuk
-     diganti), port "3000:3000", depends_on langfuse-db.
-- Tambah langfuse_db_data ke daftar top-level volumes.
+- Di Nala/docker-compose.yml, service `api`: tambah tiga environment
+  variable baru di bagian environment yang sudah ada:
+  - LANGFUSE_PUBLIC_KEY=pk-lf-xxxxxxxx
+  - LANGFUSE_SECRET_KEY=sk-lf-xxxxxxxx
+  - LANGFUSE_HOST=http://langfuse:3000
 
 CONTEXT:
-- Ini Langfuse v2 (bukan v3) — sengaja dipilih karena v3 butuh
-  ClickHouse+Redis+object storage, terlalu berat untuk laptop 16GB
-  yang sudah menjalankan Ollama+OpenSearch+Airflow+reranker.
-- langfuse-db TERPISAH dari Postgres data operasional yang akan
-  ditambahkan Module 21 — jangan digabung.
+- pk-lf-xxxxxxxx dan sk-lf-xxxxxxxx adalah PLACEHOLDER — nilai asli
+  didapat manual dari halaman Settings > API Keys project Langfuse
+  (langkah UI, tidak bisa diotomasi lewat Claude Code), lalu user
+  menggantinya sendiri setelah prompt ini dijalankan.
+- LANGFUSE_HOST memakai nama service Docker Compose `langfuse`
+  (bukan localhost) karena service api memanggilnya dari dalam
+  jaringan Docker yang sama.
 
 GUARDRAIL:
-- JANGAN ubah service ollama, opensearch, airflow, api yang sudah
-  ada — tambahan API key untuk service api itu Langkah 2, bukan di
-  sini.
-- JANGAN hardcode NEXTAUTH_SECRET/SALT dengan nilai yang terlihat
-  seperti secret produktif sungguhan — pakai placeholder yang jelas
-  harus diganti.
+- JANGAN mengarang nilai key yang terlihat seperti key produktif
+  sungguhan — pakai placeholder yang jelas (pk-lf-xxxxxxxx/
+  sk-lf-xxxxxxxx) supaya user tahu harus menggantinya.
+- JANGAN ubah service langfuse-db atau langfuse (Tahap A, Langkah 1)
+  di langkah ini.
 ```
 
 </details>
@@ -224,6 +281,40 @@ langfuse_client = Langfuse(
 ```
 
 `langfuse_client` dibuat sekali sebagai instance modul-level — pola yang sama seperti `ollama_client`, `vector_store`, dan `reranker` di module-module sebelumnya.
+
+<details>
+<summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 3</strong></summary>
+
+```
+Tambah dependency Langfuse dan setup client Langfuse SDK di
+app/main.py (Module 20, Tahap B, Langkah 3) — belum instrumentasi
+endpoint /chat/stream.
+
+GOAL:
+- Di Nala/requirements.txt: tambah baris
+  langfuse>=2.0,<3.0.
+- Di Nala/app/main.py:
+  - Tambah `from langfuse import Langfuse`.
+  - Tambah instance modul-level langfuse_client = Langfuse(public_key=
+    os.environ.get("LANGFUSE_PUBLIC_KEY"), secret_key=os.environ.get(
+    "LANGFUSE_SECRET_KEY"), host=os.environ.get("LANGFUSE_HOST",
+    "http://localhost:3000")) — ditaruh dekat instance ollama_client/
+    vector_store/reranker yang sudah ada, pola modul-level yang sama.
+
+CONTEXT:
+- LANGFUSE_PUBLIC_KEY, LANGFUSE_SECRET_KEY, LANGFUSE_HOST sudah
+  di-set di environment docker-compose.yml service api (Tahap A,
+  Langkah 2) — kode ini hanya membacanya lewat os.environ.get().
+- Ini baru setup client, BELUM instrumentasi trace/span/generation di
+  /chat/stream — itu Langkah 4 terpisah.
+
+GUARDRAIL:
+- JANGAN ubah endpoint /chat/stream atau logika bisnisnya di langkah
+  ini — hanya tambah dependency dan instance client.
+- JANGAN hardcode API key — selalu baca dari environment variable.
+```
+
+</details>
 
 **Langkah 4 — Bungkus retrieval, reranking, dan generation dengan span/generation, ditutup di dalam generator**
 
@@ -336,6 +427,24 @@ curl -N -X POST http://localhost:8000/chat/stream \
 
 ✅ **Indikator sukses**: streaming tetap berjalan token demi token seperti Module 8 (tidak ada perubahan perilaku dari sisi user), dan trace baru untuk `chat_stream` muncul di `http://localhost:3000` (halaman **Traces** project Anda) **setelah** curl selesai menerima seluruh stream (bukan langsung saat request dikirim) — bukti `flush()` di dalam generator benar-benar menunggu token terakhir, bukan terpanggil prematur. Klik trace tersebut untuk melihat span `hybrid_search`, `rerank`, dan generation `llm_generate_stream` tersusun bersarang dengan waktu eksekusi masing-masing.
 
+**Uji juga alur fallback tetap tercatat saat OpenSearch mati** (mensimulasikan kegagalan):
+
+```bash
+docker compose stop opensearch
+```
+
+```bash
+curl -N -X POST http://localhost:8000/chat/stream \
+  -H "Content-Type: application/json" \
+  -d '{"messages": [{"role": "user", "content": "Apa saja syarat pengajuan kredit?"}]}'
+```
+
+✅ **Indikator sukses**: `/chat/stream` tetap membalas (fallback `NALA_SYSTEM_PROMPT_NO_CONTEXT`, jawaban generik) — bukan error 500 — dan trace baru tetap muncul di Langfuse, dengan `level="ERROR"` tercatat di trace tersebut (Bagian 5d). Nyalakan lagi OpenSearch setelahnya:
+
+```bash
+docker compose start opensearch
+```
+
 <details>
 <summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 4</strong></summary>
 
@@ -345,14 +454,7 @@ trace ditutup DI DALAM generator, bukan di badan fungsi endpoint
 (Module 20, Tahap B, Langkah 4).
 
 GOAL:
-- Di Nala/requirements.txt: tambah
-  baris langfuse>=2.0,<3.0.
 - Di Nala/app/main.py:
-  - Tambah `from langfuse import Langfuse`.
-  - Tambah instance modul-level langfuse_client = Langfuse(public_key=
-    os.environ.get("LANGFUSE_PUBLIC_KEY"), secret_key=os.environ.get(
-    "LANGFUSE_SECRET_KEY"), host=os.environ.get("LANGFUSE_HOST",
-    "http://localhost:3000")).
   - Tambah fungsi generator baru traced_chat_stream(trace,
     ollama_messages: list[dict]): buat generation =
     trace.generation(name="llm_generate_stream", model=...,
@@ -385,9 +487,8 @@ CONTEXT:
 - Alur retrieval-rerank-generate di chat_stream() sudah lengkap dari
   Module 17-18 — module ini HANYA menambah instrumentasi observability
   di sekitarnya, tidak mengubah logika bisnisnya.
-- API key Langfuse (LANGFUSE_PUBLIC_KEY, LANGFUSE_SECRET_KEY,
-  LANGFUSE_HOST) sudah di-set di environment docker-compose.yml
-  service api (Tahap A, Langkah 2).
+- langfuse_client sudah dibuat sebagai instance modul-level di Langkah
+  3 — pakai langsung, jangan buat instance baru.
 
 GUARDRAIL:
 - WAJIB pakai try/finally di traced_chat_stream() supaya trace tetap
@@ -402,6 +503,14 @@ GUARDRAIL:
 </details>
 
 **📄 Kode lengkap** (bagian relevan `app/main.py` setelah Module 20 — lihat Bagian 4 Tahap B untuk fungsi `traced_chat_stream()` dan `chat_stream()` secara utuh; setup `langfuse_client` di Bagian 4 Tahap B Langkah 3).
+
+### Troubleshooting
+
+- **`langfuse` container gagal start / `langfuse-db` connection refused**: `langfuse` butuh `langfuse-db` sudah siap menerima koneksi sebelum migrasi database berhasil — tunggu beberapa saat lebih lama, atau restart `langfuse` saja setelah `langfuse-db` benar-benar `healthy`: `docker compose restart langfuse`.
+- **Trace tidak muncul sama sekali di UI Langfuse**: cek `LANGFUSE_PUBLIC_KEY`/`LANGFUSE_SECRET_KEY`/`LANGFUSE_HOST` di environment service `api` — key yang salah biasanya gagal secara diam-diam (SDK Langfuse dirancang tidak mengganggu aplikasi utama kalau pengiriman trace gagal). Cek juga apakah `langfuse_client.flush()` benar-benar terpanggil di dalam `traced_chat_stream()` (Tahap B Langkah 4).
+- **Trace `chat_stream` tidak pernah muncul, walau curl berhasil menerima seluruh stream**: kemungkinan besar instrumentasi masih ditulis di badan fungsi `chat_stream()` setelah baris `return StreamingResponse(...)` (baris itu tidak akan pernah tereksekusi tepat waktu) — pastikan `trace.update()`/`flush()` ada di dalam `traced_chat_stream()` (generator terpisah), bukan di `chat_stream()` sendiri. Lihat penjelasan lengkap di Tahap B Langkah 4 di atas.
+- **Semua service terasa sangat lambat / laptop panas / container ter-*kill***: alokasi RAM Docker Desktop kurang — lihat bagian Prasyarat di awal Bagian 4, naikkan ke 20GB+ kalau tersedia, atau matikan sementara `airflow` (lihat Bagian 6) selama eksplorasi berlangsung.
+- **Port sudah dipakai (3000/8000/9200/11434)**: ubah mapping port yang bentrok di `docker-compose.yml`, atau pastikan container lama sudah benar-benar dimatikan (`docker compose down` di `Nala`).
 
 ## 5. Menelusuri Jawaban Buruk Lewat UI Langfuse
 
@@ -454,12 +563,22 @@ Koneksi yang belum dimanfaatkan di sini: `judge_answer()` dari Module 19 (`app/l
 
 **Yang dibayar:**
 - **Latensi tambahan per request** — setiap `trace.span()`/`.generation()` dan `flush()` adalah kerja tambahan (walau SDK Langfuse mem-buffer dan mengirim secara batch di background, `flush()` eksplisit di akhir `traced_chat_stream()` menunggu pengiriman selesai). Untuk `/chat/stream`, ini terjadi **setelah** token terakhir dikirim ke user, jadi user tidak merasakan langsung — tapi tetap menahan koneksi/proses sedikit lebih lama di sisi server.
-- **Dua service tambahan** (`langfuse`, `langfuse-db`) menambah beban RAM di atas stack yang sudah berat sejak Module 18 (reranker). Ini kemungkinan besar titik dengan jumlah service **terbanyak** sepanjang Module 1-20: `ollama`, `opensearch`, `airflow`, `api` (dengan reranker), `langfuse`, `langfuse-db` — enam container berjalan bersamaan. Kalau laptop mulai terasa berat, pertimbangkan mematikan sementara `airflow` (tidak dipakai lagi setelah ingest awal selesai, lihat pola staged startup di Module 16 materi.md, bagian Panduan Praktik) selama sesi eksplorasi Langfuse berlangsung.
+- **Dua service tambahan** (`langfuse`, `langfuse-db`) menambah beban RAM di atas stack yang sudah berat sejak Module 18 (reranker). Ini kemungkinan besar titik dengan jumlah service **terbanyak** sepanjang Module 1-20: `ollama`, `opensearch`, `airflow`, `api` (dengan reranker), `langfuse`, `langfuse-db` — enam container berjalan bersamaan. Kalau laptop mulai terasa berat, pertimbangkan mematikan sementara `airflow`: DAG-nya cuma dipicu manual (lihat Module 16 Bagian 6, "Cara Trigger DAG Manual") dan tidak dipakai lagi setelah ingest dokumen awal selesai, jadi mematikannya sementara selama eksplorasi Langfuse tidak mengganggu `/chat/stream`, yang tidak bergantung pada Airflow sama sekali:
+
+  ```bash
+  docker compose stop airflow
+  ```
+
+  Nyalakan lagi kapan pun dibutuhkan (misalnya untuk ingest dokumen baru):
+
+  ```bash
+  docker compose up -d airflow
+  ```
 - **Data trace berisi potongan dokumen internal** (chunk SOP yang di-retrieve, muncul di `output` span `hybrid_search`/`rerank`) — karena Langfuse dijalankan self-hosted (Bagian 2), ini tidak masalah untuk skenario pelatihan/privasi data. Kalau suatu saat Langfuse dipindah ke layanan cloud (bukan self-hosted), ini jadi pertimbangan privasi data yang serius dan tidak boleh dilakukan tanpa tinjauan keamanan — dicatat di sini sebagai pengingat prinsip, bukan skenario yang direncanakan.
 
 ## 7. Checkpoint Praktik
 
-Langkah eksekusi lengkap ada di bagian **Panduan Praktik** di bawah, Langkah 1-6. Yang perlu dipastikan sebelum Module 17-20 dianggap selesai:
+Langkah eksekusi lengkap ada di Bagian 4 (Struktur Kode yang Ditambahkan) di atas, Langkah 1-4. Yang perlu dipastikan sebelum Module 17-20 dianggap selesai:
 
 - [ ] `http://localhost:3000` bisa diakses, akun dan Project sudah dibuat, API key sudah tersambung ke service `api`
 - [ ] Trace baru muncul di Langfuse setiap kali `/chat/stream` dipanggil, dengan span `hybrid_search`, `rerank`, dan generation `llm_generate_stream` tersusun bersarang, muncul setelah stream selesai (bukan gagal/tidak muncul sama sekali)
@@ -472,101 +591,3 @@ Module ini menutup rangkaian Module 17-20 dengan lapisan yang membungkus **selur
 
 **Module 17-20 secara keseluruhan** mengangkat NALA dari sistem RAG dasar (Module 7-16, retrieval vector murni, tidak terukur) menjadi sistem yang lebih akurat retrievalnya (hybrid search + reranking), terukur kualitasnya (framework evaluasi), dan bisa didiagnosis per-request (observability). Yang **belum** disentuh sejauh ini: NALA masih hanya bisa menjawab dari dokumen SOP — belum bisa menjawab pertanyaan yang jawabannya ada di data operasional terstruktur (status pengajuan kredit tertentu, riwayat klaim seorang nasabah, dst). Module 21-25 menambah agentic tools: NALA belajar memilih kapan menjawab dari RAG dokumen (yang baru saja disempurnakan sepanjang Module 17-20 ini) dan kapan menjalankan query SQL langsung ke database operasional — dengan Langfuse yang sudah terpasang di module ini siap merekam trace kedua jalur itu sekaligus.
 
-## Panduan Praktik
-
-> **Catatan penomoran**: "Langkah N" di bagian Panduan Praktik ini adalah urutan eksekusi tersendiri (langkah demi langkah menjalankan perintah), terpisah dari "Langkah N" yang sudah dipakai di bagian kode/struktur di atas (langkah menulis kode). Keduanya kebetulan memakai nomor yang sama tapi menghitung hal yang berbeda — jangan disamakan urutannya.
-
-### Prasyarat
-- Sudah menyelesaikan **Module 19** — `Nala/` sudah punya framework evaluasi bekerja
-- Docker Desktop dinaikkan lagi alokasi RAM-nya untuk menampung dua service baru:
-
-| Setting | Minimal | Direkomendasikan | Alasan |
-|---|---|---|---|
-| **Memory (RAM)** | 16 GB | 20 GB+ jika tersedia | Semua service sebelumnya (Ollama, OpenSearch, Airflow, api dengan reranker) + Langfuse & Postgres-nya (`langfuse-db`, terpisah dari Postgres data operasional yang baru akan muncul di Module 21) berjalan bersamaan di titik puncak. |
-| **Disk image size** | 100 GB | 120 GB+ | Image `langfuse/langfuse` menambah beberapa GB lagi di atas image sebelumnya. |
-
-Kalau laptop mulai terasa berat, pertimbangkan mematikan sementara `airflow` (tidak dipakai lagi setelah ingest, lihat Langkah 6 di bawah).
-
-### Langkah 1: Nyalakan Langfuse
-
-Ikuti Module 20 Bagian 4 Tahap A Langkah 1: tambah service `langfuse-db` dan `langfuse` di `docker-compose.yml`.
-
-```bash
-cd Nala
-docker compose up -d --build langfuse-db langfuse
-```
-
-**Proses ini akan terasa lama** — Langfuse perlu migrasi skema database saat pertama kali jalan.
-
-```bash
-docker compose logs -f langfuse
-```
-
-Tunggu sampai log menunjukkan service siap menerima koneksi, lalu `Ctrl+C`.
-
-### Langkah 2: Buat akun, Project, dan API key Langfuse
-
-Ikuti Module 20 Bagian 4 Langkah 2:
-
-1. Buka `http://localhost:3000`, buat akun lokal (email + password apa saja).
-2. Buat Project baru, misalnya "NALA Observability".
-3. Di halaman Settings project, salin **Public Key** dan **Secret Key**.
-4. Tambahkan `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_HOST=http://langfuse:3000` ke environment service `api` di `docker-compose.yml`.
-
-```bash
-docker compose up --build -d api
-```
-
-### Langkah 3: Instrumentasi `/chat/stream`
-
-Ikuti Module 20 Bagian 4 Tahap B Langkah 3-4 — perhatikan baik-baik penjelasan di sana tentang kenapa `generation` (pemanggilan LLM) harus ditutup **di dalam generator**, bukan di badan fungsi endpoint, sementara span `hybrid_search`/`rerank` tetap bisa dibuka/ditutup langsung di badan `chat_stream()`.
-
-```bash
-docker compose up --build api
-```
-
-```bash
-curl -N -X POST http://localhost:8000/chat/stream \
-  -H "Content-Type: application/json" \
-  -d '{"messages": [{"role": "user", "content": "Apa saja syarat pengajuan kredit untuk nasabah perorangan?"}]}'
-```
-
-✅ **Indikator sukses**: endpoint tetap berfungsi seperti sebelumnya (tidak ada perubahan perilaku dari sisi user), dan trace baru muncul di `http://localhost:3000` halaman Traces **setelah** stream selesai diterima.
-
-### Langkah 4: Telusuri trace di UI Langfuse
-
-Buka trace yang baru dibuat di Langkah 3, klik untuk membuka detail. Verifikasi span `hybrid_search`, `rerank`, dan generation `llm_generate_stream` tersusun bersarang dengan `input`/`output` yang masuk akal, dan perhatikan durasi tiap span. Ikuti alur diagnosis lengkap di Module 20 Bagian 5 sebagai latihan.
-
-### Langkah 5: Uji fallback tetap tercatat
-
-```bash
-docker compose stop opensearch
-```
-
-```bash
-curl -N -X POST http://localhost:8000/chat/stream \
-  -H "Content-Type: application/json" \
-  -d '{"messages": [{"role": "user", "content": "Apa saja syarat pengajuan kredit?"}]}'
-```
-
-✅ **Indikator sukses**: `/chat/stream` tetap membalas (fallback `NALA_SYSTEM_PROMPT_NO_CONTEXT`, jawaban generik) — bukan error 500 — dan trace baru tetap muncul di Langfuse, dengan `level="ERROR"` tercatat di trace tersebut. Nyalakan lagi OpenSearch setelahnya:
-
-```bash
-docker compose start opensearch
-```
-
-### Langkah 6: (Opsional) Matikan Airflow sementara kalau laptop terasa berat
-
-```bash
-docker compose stop airflow
-```
-
-Airflow tidak dipakai lagi setelah ingest dokumen awal selesai — mematikannya sementara selama eksplorasi Module 19-20 membebaskan RAM untuk reranker dan Langfuse tanpa mengganggu `/chat/stream`, yang tidak bergantung pada Airflow sama sekali. Nyalakan lagi (`docker compose up -d airflow`) kapan pun dibutuhkan lagi (misalnya untuk ingest dokumen baru).
-
-### Troubleshooting
-
-- **`langfuse` container gagal start / `langfuse-db` connection refused**: `langfuse` butuh `langfuse-db` sudah siap menerima koneksi sebelum migrasi database berhasil — tunggu beberapa saat lebih lama, atau restart `langfuse` saja setelah `langfuse-db` benar-benar `healthy`: `docker compose restart langfuse`.
-- **Trace tidak muncul sama sekali di UI Langfuse**: cek `LANGFUSE_PUBLIC_KEY`/`LANGFUSE_SECRET_KEY`/`LANGFUSE_HOST` di environment service `api` — key yang salah biasanya gagal secara diam-diam (SDK Langfuse dirancang tidak mengganggu aplikasi utama kalau pengiriman trace gagal). Cek juga apakah `langfuse_client.flush()` benar-benar terpanggil di dalam `traced_chat_stream()` (Module 20 Bagian 4).
-- **Trace `chat_stream` tidak pernah muncul, walau curl berhasil menerima seluruh stream**: kemungkinan besar instrumentasi masih ditulis di badan fungsi `chat_stream()` setelah baris `return StreamingResponse(...)` (baris itu tidak akan pernah tereksekusi tepat waktu) — pastikan `trace.update()`/`flush()` ada di dalam `traced_chat_stream()` (generator terpisah), bukan di `chat_stream()` sendiri. Lihat penjelasan lengkap Module 20 Bagian 4 Tahap B.
-- **Semua service terasa sangat lambat / laptop panas / container ter-*kill***: alokasi RAM Docker Desktop kurang — lihat bagian Prasyarat di atas, naikkan ke 20GB+ kalau tersedia, atau matikan sementara `airflow` (Langkah 6) selama eksplorasi berlangsung.
-- **Port sudah dipakai (3000/8000/9200/11434)**: ubah mapping port yang bentrok di `docker-compose.yml`, atau pastikan container lama sudah benar-benar dimatikan (`docker compose down` di `Nala`).
