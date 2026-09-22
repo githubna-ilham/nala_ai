@@ -329,6 +329,12 @@ docker-compose exec api bash
 
 Bagian 3.4 tadi sudah memanggil satu endpoint Ollama lewat `curl` (`/api/tags`) untuk verifikasi. Tapi Ollama sendiri, begitu servicenya menyala di port `11434`, sudah menyediakan **seluruh** REST API ini — hampir semua yang bisa dilakukan lewat CLI `ollama <sesuatu>` punya endpoint HTTP yang setara di baliknya. Mengenal permukaan lengkapnya berguna supaya kita tahu apa lagi yang tersedia, sebelum Module 6 membangun `OllamaClient` yang cuma membungkus satu endpoint tertentu.
 
+> 💡 **Lebih nyaman pakai Postman daripada `curl`?** Semua contoh di bagian ini bisa dites lewat Postman juga — endpoint dan isi JSON-nya persis sama, cuma cara mengirimnya beda:
+> - Endpoint **GET** (misal `/api/tags`, `/api/ps`, `/api/version`): pilih method **GET**, isi URL-nya, tidak perlu isi apa pun di tab Body.
+> - Endpoint **POST** (misal `/api/generate`, `/api/chat`, `/api/show`, `/api/embed`): pilih method **POST**, isi URL-nya, lalu di tab **Body** pilih **raw** → format **JSON**, paste isi JSON yang ada di contoh `curl -d '{...}'` (tanpa perlu tanda kutip escape seperti di shell).
+>
+> Keduanya sama-sama valid — pakai yang paling nyaman. Sisa materi ini tetap memakai `curl` supaya konsisten dan gampang di-*copy-paste* langsung ke terminal.
+
 ### 4.1 Endpoint yang Sudah Dipakai/Akan Dipakai NALA
 
 | Endpoint | Fungsi | Dipakai di NALA |
