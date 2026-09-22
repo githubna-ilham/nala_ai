@@ -173,6 +173,35 @@ volumes:
 
 Sebelum menulis satu baris kode FastAPI, pastikan dulu fondasinya — Ollama di dalam container — benar-benar menyala dan bisa dipakai. Ini juga latihan yang lebih murni untuk memahami perintah Docker Compose dasar (section 3.5), tanpa harus sekaligus mikirin kode Python.
 
+**Prasyarat:**
+- Docker Desktop sudah terinstall dan berjalan
+- Minimal 16GB RAM tersedia
+
+**Langkah 0 — Atur RAM & Storage Docker Desktop:**
+
+Secara default, Docker Desktop **tidak otomatis memakai semua resource laptop Anda** — ada batas RAM, CPU, dan disk yang dialokasikan sendiri, terpisah dari sisa laptop. Kalau batas ini terlalu kecil, container bisa lambat, gagal start, atau ke-*kill* otomatis (biasanya errornya "Killed" atau container tiba-tiba restart) — terutama untuk Ollama yang butuh RAM cukup besar untuk memuat model.
+
+Cara mengecek/mengubah (macOS & Windows): buka aplikasi **Docker Desktop** → klik ikon **⚙️ Settings** → tab **Resources**.
+
+| Setting | Minimal | Direkomendasikan | Alasan |
+|---|---|---|---|
+| **Memory (RAM)** | 8 GB | 12–16 GB | `llama3.2:3b` butuh ~4-6GB saat dimuat; sisanya untuk FastAPI, OS container, dan buffer. Modul-modul selanjutnya (Module 15 dst.) nanti menambah OpenSearch/PostgreSQL yang juga butuh RAM. |
+| **CPUs** | 2 | 4+ | Inference LLM cukup CPU-intensive kalau tidak pakai GPU. |
+| **Disk image size** | 60 GB | 100 GB+ | Setiap image Docker (Python, Ollama, nanti OpenSearch/Airflow/PostgreSQL) + model Ollama (~2GB per model) menumpuk seiring modul training berjalan. |
+| **Swap** | 1 GB | 2 GB | Buffer tambahan kalau Memory limit sempat mepet. |
+
+Setelah mengubah, klik **Apply & Restart** — Docker Desktop akan restart untuk menerapkan setting baru (container yang sedang jalan akan ikut berhenti, jalankan ulang `docker compose up --build` setelahnya).
+
+**Kalau disk mulai penuh** (sering terjadi setelah beberapa modul training karena image/model menumpuk), bersihkan yang tidak terpakai:
+
+```bash
+docker system prune -a --volumes
+```
+
+⚠️ Perintah ini menghapus **semua** container, image, dan volume yang tidak sedang dipakai — termasuk model Ollama yang sudah di-pull (harus di-pull ulang setelahnya). Jangan jalankan sembarangan kalau ada project Docker lain di laptop yang sama yang masih dibutuhkan.
+
+**Cek pemakaian resource real-time** (container mana yang paling banyak makan RAM/CPU): `docker stats`
+
 **Langkah A — Nyalakan service `ollama` saja:**
 
 ```bash
@@ -197,6 +226,8 @@ Ollama yang berjalan **di dalam container** punya storage terpisah dari Ollama y
 docker compose exec ollama ollama pull llama3.2:3b
 ```
 
+⚠️ Tag `:3b` **wajib** ditulis persis seperti di atas — harus sama dengan `OLLAMA_MODEL` yang akan dipakai service `api` nanti (Module 6). Kalau Anda pull `llama3.2` tanpa tag, aplikasi tetap bisa gagal mencari model `llama3.2:3b` walau terlihat "mirip".
+
 **Langkah D — Verifikasi model & API Ollama merespons:**
 
 ```bash
@@ -216,9 +247,18 @@ docker compose exec ollama ollama run llama3.2:3b "Halo, siapa kamu?"
 
 `docker compose exec ollama ...` menjalankan perintah **di dalam** container `ollama` — persis seperti masuk terminal container itu lalu mengetik `ollama run` biasa. Kalau muncul jawaban (walau masih generik, belum berkarakter NALA — system prompt baru masuk di Module 6), berarti Ollama di dalam container ini benar-benar berfungsi penuh, bukan cuma "kelihatan menyala".
 
-✅ **Checkpoint sebelum lanjut**: `docker compose ps` menunjukkan `ollama` running, `ollama list` di dalam container menampilkan `llama3.2:3b`, `curl http://localhost:11434/api/tags` dari luar container juga berhasil, **dan** `docker compose exec ollama ollama run llama3.2:3b "..."` menghasilkan jawaban nyata. Kalau salah satu belum terpenuhi, selesaikan dulu di sini — menambah service `api` di atas fondasi Ollama yang belum stabil cuma akan mempersulit debugging nanti.
+✅ **Checkpoint sebelum lanjut — jangan lanjut ke Module 6 kalau salah satu berikut belum terpenuhi:**
+- [ ] `docker compose ps` menunjukkan `ollama` berstatus `running`
+- [ ] `docker compose exec ollama ollama list` menampilkan `llama3.2:3b`
+- [ ] `curl http://localhost:11434/api/tags` dari luar container berhasil dan menampilkan `llama3.2:3b`
+- [ ] `docker compose exec ollama ollama run llama3.2:3b "..."` menghasilkan jawaban nyata
 
 Biarkan container `ollama` tetap berjalan (tidak perlu `docker compose down`) — Module 6 menambahkan service `api` ke `docker-compose.yml` yang sama, dan Module 6 nanti akan menyalakan `api` sekaligus tetap memakai `ollama` yang sudah berjalan ini.
+
+**Troubleshooting:**
+- **Container `ollama` berstatus `Exited`/`Restarting` di Langkah B**: cek log-nya duluan — `docker compose logs ollama`. Penyebab paling umum: RAM Docker Desktop tidak cukup (lihat Langkah 0) atau port `11434` sudah dipakai proses lain di laptop Anda (misal Ollama versi native dari Module 2 masih berjalan langsung di laptop — matikan dulu, lihat Module 2 section 2.1, sebelum menjalankan versi container-nya).
+- **`no configuration file provided: not found`**: `docker compose` dijalankan bukan dari folder yang berisi `docker-compose.yml`. Pastikan Anda berada persis di `Nala/` (cek dengan `ls` — harus ada `docker-compose.yml`).
+- **Ollama lambat merespons pertama kali** (Langkah E): wajar, model sedang dimuat ke memori. Percobaan kedua akan lebih cepat.
 
 <details>
 <summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi section 3.3</strong></summary>
@@ -452,106 +492,6 @@ Dari daftar di atas, `OllamaClient.generate()` yang dibangun Module 6 sengaja **
 
 ---
 
-## Panduan Praktik
-
-### Prasyarat
-- Docker Desktop sudah terinstall dan berjalan
-- Minimal 16GB RAM tersedia
-- Docker Desktop sudah dialokasikan resource yang cukup (lihat Langkah 0 di bawah)
-
-### Langkah 0: Atur RAM & Storage Docker Desktop
-
-Secara default, Docker Desktop **tidak otomatis memakai semua resource laptop Anda** — ada batas RAM, CPU, dan disk yang dialokasikan sendiri, terpisah dari sisa laptop. Kalau batas ini terlalu kecil, container bisa lambat, gagal start, atau ke-*kill* otomatis (biasanya errornya "Killed" atau container tiba-tiba restart) — terutama untuk Ollama yang butuh RAM cukup besar untuk memuat model.
-
-**Cara mengecek/mengubah (macOS & Windows):**
-
-1. Buka aplikasi **Docker Desktop**
-2. Klik ikon **⚙️ Settings** (gear icon, biasanya di kanan atas)
-3. Masuk ke tab **Resources**
-
-**Pengaturan yang direkomendasikan untuk NALA:**
-
-| Setting | Minimal | Direkomendasikan | Alasan |
-|---|---|---|---|
-| **Memory (RAM)** | 8 GB | 12–16 GB | `llama3.2:3b` butuh ~4-6GB saat dimuat; sisanya untuk FastAPI, OS container, dan buffer. Modul-modul selanjutnya (Module 15 dst.) nanti menambah OpenSearch/PostgreSQL yang juga butuh RAM. |
-| **CPUs** | 2 | 4+ | Inference LLM cukup CPU-intensive kalau tidak pakai GPU. |
-| **Disk image size** | 60 GB | 100 GB+ | Setiap image Docker (Python, Ollama, nanti OpenSearch/Airflow/PostgreSQL) + model Ollama (~2GB per model) menumpuk seiring modul training berjalan. |
-| **Swap** | 1 GB | 2 GB | Buffer tambahan kalau Memory limit sempat mepet. |
-
-Setelah mengubah, klik **Apply & Restart** — Docker Desktop akan restart untuk menerapkan setting baru (container yang sedang jalan akan ikut berhenti, jalankan ulang `docker compose up --build` setelahnya).
-
-**Kalau disk mulai penuh** (sering terjadi setelah beberapa modul training karena image/model menumpuk), bersihkan yang tidak terpakai:
-
-```bash
-docker system prune -a --volumes
-```
-
-⚠️ Perintah ini menghapus **semua** container, image, dan volume yang tidak sedang dipakai — termasuk model Ollama yang sudah di-pull (harus di-pull ulang setelahnya). Jangan jalankan sembarangan kalau ada project Docker lain di laptop yang sama yang masih dibutuhkan.
-
-**Cek pemakaian resource real-time** (container mana yang paling banyak makan RAM/CPU):
-
-```bash
-docker stats
-```
-
-### Langkah 1: Clone & masuk ke folder starter code
-
-```bash
-cd Nala
-```
-
-Prinsipnya: pastikan fondasi (Ollama di Docker) benar-benar sehat sebelum Module 6 menyambungkannya ke FastAPI — debug di sini dulu kalau ada masalah, karena akan jauh lebih sulit membedakan "Ollama-nya yang bermasalah" vs "FastAPI-nya yang bermasalah" kalau keduanya dinyalakan bersamaan.
-
-### Langkah 2: Nyalakan service `ollama` saja
-
-Pastikan `docker-compose.yml` Anda di titik ini **baru** berisi service `ollama` (lihat section 3.3 di atas — belum ada `api`):
-
-```bash
-docker compose up -d ollama
-```
-
-`-d` menjalankan di background. Cek statusnya:
-
-```bash
-docker compose ps
-```
-
-Kolom status `ollama` harus `running`/`Up`, bukan `Exited` atau `Restarting`.
-
-### Langkah 3: Pull & verifikasi model di dalam container
-
-Ollama yang berjalan **di dalam container** punya storage terpisah dari Ollama yang mungkin sudah terinstall langsung di laptop Anda (lihat Module 2) — jadi modelnya perlu di-pull lagi khusus untuk container ini (sekali saja; tersimpan permanen di volume `ollama_data` selama volume tidak dihapus).
-
-```bash
-docker compose exec ollama ollama pull llama3.2:3b
-```
-
-⚠️ Tag `:3b` **wajib** ditulis persis seperti di atas — harus sama dengan `OLLAMA_MODEL` yang akan dipakai service `api` nanti. Kalau Anda pull `llama3.2` tanpa tag, aplikasi tetap bisa gagal mencari model `llama3.2:3b` walau terlihat "mirip".
-
-Verifikasi model sudah ada, **dari dua sisi**:
-
-```bash
-docker compose exec ollama ollama list
-curl http://localhost:11434/api/tags
-```
-
-`llama3.2:3b` harus muncul di kedua output — yang pertama dari **dalam** container, yang kedua dari **luar** container (lewat port `11434` yang sudah di-mapping ke laptop Anda).
-
-✅ **Checkpoint "aman" — jangan lanjut ke Module 6 kalau salah satu berikut belum terpenuhi:**
-- [ ] `docker compose ps` menunjukkan `ollama` berstatus `running`
-- [ ] `docker compose exec ollama ollama list` menampilkan `llama3.2:3b`
-- [ ] `curl http://localhost:11434/api/tags` dari luar container berhasil dan menampilkan `llama3.2:3b`
-
-Biarkan container `ollama` tetap berjalan (tidak perlu `docker compose down`) — Module 6 melanjutkan dari sini dengan menambahkan service `api` ke `docker-compose.yml` yang sama.
-
-### Troubleshooting
-
-- **Container `ollama` berstatus `Exited`/`Restarting` di Langkah 2**: cek log-nya duluan — `docker compose logs ollama`. Penyebab paling umum: RAM Docker Desktop tidak cukup (lihat Langkah 0) atau port `11434` sudah dipakai proses lain di laptop Anda (misal Ollama versi native dari Module 2 masih berjalan langsung di laptop — matikan dulu, lihat Module 2 section 2.1, sebelum menjalankan versi container-nya).
-- **`no configuration file provided: not found`**: `docker compose` dijalankan bukan dari folder yang berisi `docker-compose.yml`. Pastikan Anda berada persis di `Nala/` (cek dengan `ls` — harus ada `docker-compose.yml`).
-- **Ollama lambat merespons pertama kali** (Langkah E): wajar, model sedang dimuat ke memori. Percobaan kedua akan lebih cepat.
-
----
-
 ## Ringkasan & Next Steps
 
 Anda telah memahami:
@@ -563,7 +503,7 @@ Anda telah memahami:
 ✅ **Permukaan lengkap REST API Ollama** — `generate`, `chat`, `tags`, `show`, `pull`, `embed`, `ps`, dan lainnya — bukan cuma satu endpoint yang nanti dipakai `OllamaClient`  
 
 **Next Steps:**
-- **Praktik langsung**: lihat bagian Panduan Praktik di atas — setup docker-compose.yml, jalankan container `ollama`
+- **Praktik langsung**: lihat section 3.4 di atas — atur RAM Docker Desktop, jalankan container `ollama`, verifikasi
 - **Starter code**: `Nala/` — docker-compose NALA (baru berisi service `ollama`)
 - **Module 5**: Membangun FastAPI murni (`app/main.py`, endpoint `/health`, Pydantic models) — belum terhubung ke Ollama
 - **Module 6**: Menambahkan service `api` (FastAPI) ke docker-compose.yml dan menyambungkannya ke Ollama yang sudah terverifikasi di module ini
