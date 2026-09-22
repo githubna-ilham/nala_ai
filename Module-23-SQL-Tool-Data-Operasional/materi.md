@@ -20,7 +20,8 @@ flowchart LR
 
 - Tool `query_data_operasional` sudah dibangun: LLM hanya memilih parameter terstruktur dari whitelist (`enum` tabel/mode/status), kode Python yang menyusun query lewat parameterized query (`%s`), tidak ada jalur SQL bebas
 - Tool ini memakai `get_connection()` yang sudah ada dari `app/db.py` (Module 21) — koneksi lewat role `nala_readonly`, tidak pernah lewat role tulis
-- Tool ini terdaftar sebagai tool kedua di agent (`tools_schema`, cabang baru di `call_tool`) tanpa mengubah struktur graph dari Module 22`/chat` bisa menjawab pertanyaan jumlah/status data operasional maupun detail satu nasabah, memakai data yang sudah Anda tambahkan lewat `/data-operasional` di Module 21, sementara tool RAG (Module 22) tetap berfungsi berdampingan tanpa regresi
+- Tool ini terdaftar sebagai tool kedua di agent (`tools_schema`, cabang baru di `call_tool`) tanpa mengubah struktur graph dari Module 22
+- `/chat` bisa menjawab pertanyaan jumlah/status data operasional maupun detail satu nasabah, memakai data yang sudah Anda tambahkan lewat `/data-operasional` di Module 21, sementara tool RAG (Module 22) tetap berfungsi berdampingan tanpa regresi
 - `/chat` mendukung riwayat multi-turn (`history`, windowing 10 pesan) dan bisa dicoba langsung lewat toggle "Pakai Agent" di `chat.html`, tidak cuma lewat `curl`
 - Angka mata uang (`jumlah_pengajuan`/`jumlah_klaim`) diformat eksplisit (`Rp 50.000.000`) di tool, dan pemanggilan tool tahan terhadap argumen tidak lengkap dari LLM (tidak crash jadi 500)
 - Keterbatasan nyata model kecil didokumentasikan dengan angka (Bagian 6): sintesis jawaban dari hasil tool cuma berhasil ~20-33% dari percobaan berulang untuk kasus yang sama — dicatat jujur, bukan disembunyikan atau diklaim sudah terselesaikan
@@ -66,7 +67,7 @@ Lapisan keamanan tambahan yang dipakai bersama-sama (bukan mengandalkan satu saj
 
 ## 3. Struktur Kode yang Ditambahkan
 
-Dua tahap: **Tahap A** membangun tool query-builder, **Tahap B** mendaftarkan tool kedua ini ke agent (Module 22). Tidak ada tahap setup database di module ini — service PostgreSQL, skema tabel, data, dan role `nala_readonly` semuanya sudah ada dari Module 21.
+Tiga tahap: **Tahap A** membangun tool query-builder, **Tahap B** mendaftarkan tool kedua ini ke agent (Module 22), **Tahap C** dua penyesuaian tambahan yang ditemukan lewat uji nyata. Tidak ada tahap setup database di module ini — service PostgreSQL, skema tabel, data, dan role `nala_readonly` semuanya sudah ada dari Module 21.
 
 ### Tahap A — Bangun tool query-builder
 
@@ -191,6 +192,17 @@ Penjelasan kenapa desain ini tetap aman walau **terlihat** memakai f-string untu
 - **Tidak ada mode "SQL bebas"** — hanya dua `mode` yang terdaftar (`hitung_per_status`, `detail_nasabah`), masing-masing menyusun struktur query yang **fixed**, cuma nilainya yang berubah dari argumen. LLM tidak pernah bisa "menciptakan" bentuk query baru yang tidak dirancang developer.
 - **`LIMIT` tetap** (`_MAX_ROWS = 20`) di `detail_nasabah` mencegah satu query menarik seluruh isi tabel walau `nasabah_id` salah ketik jadi pola yang cocok ke banyak baris.
 - **Koneksi lewat `nala_readonly`** (Module 21) sebagai lapisan terakhir — bahkan kalau semua validasi di atas entah bagaimana gagal, database sendiri menolak apa pun selain `SELECT`.
+
+**▶️ Jalankan & lihat hasilnya**
+
+```bash
+docker compose exec api python -c "
+from app.tools.sql_tool import query_data_operasional
+print(query_data_operasional(tabel='pengajuan_kredit', mode='hitung_per_status'))
+"
+```
+
+✅ **Indikator sukses**: daftar status beserta jumlahnya (mis. `pending: 3`, dst.) sesuai data yang sudah Anda masukkan lewat form `/data-operasional` di Module 21.
 
 <details>
 <summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 1</strong></summary>
@@ -376,6 +388,41 @@ informasinya tidak ditemukan. Jangan mengarang jawaban.
 """
 ```
 
+<details>
+<summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 3</strong></summary>
+
+```
+Perbarui system prompt agent supaya menyebut kedua tool (Module 23,
+Tahap C, Langkah 3).
+
+GOAL:
+- Di Nala/app/system_prompt.py: perbarui NALA_SYSTEM_PROMPT_AGENT
+  supaya menyebutkan DUA tool secara eksplisit: (1) cari_dokumen_sop
+  untuk pertanyaan prosedur/syarat/kebijakan internal, (2)
+  query_data_operasional untuk pertanyaan status/jumlah/detail data
+  transaksi (pengajuan kredit, klaim asuransi) milik nasabah
+  tertentu. Tambahkan instruksi eksplisit: kalau tool sudah
+  mengembalikan hasil, PERCAYA dan PAKAI hasil itu apa adanya, jangan
+  bilang "tidak ditemukan" kalau hasil tool sebenarnya relevan; kalau
+  hasil tool benar-benar kosong/tidak relevan baru katakan jujur
+  tidak ditemukan; jangan mengarang jawaban.
+
+CONTEXT:
+- app/system_prompt.py sudah ada dari Module 8, dan
+  NALA_SYSTEM_PROMPT_AGENT ditambahkan di Module 22 saat agent baru
+  punya satu tool (cari_dokumen_sop) — sekarang perlu diperbarui
+  karena tool kedua (query_data_operasional) sudah didaftarkan di
+  Langkah 2 module ini.
+
+GUARDRAIL:
+- JANGAN ubah tool schema (SQL_TOOL_SCHEMA/RAG_TOOL_SCHEMA) atau kode
+  fungsi tool apa pun — ini murni perubahan teks system prompt.
+- JANGAN hapus prompt lain (mis. NALA_SYSTEM_PROMPT untuk /chat/stream
+  non-agent) yang sudah ada dari module sebelumnya.
+```
+
+</details>
+
 **Langkah 4 — Dukungan riwayat multi-turn di `/chat`, plus toggle di UI chat**
 
 `/chat` (endpoint baru sejak Module 22) awalnya cuma menerima satu `message` (string), beda dari `/chat/stream` yang menerima `messages` (array riwayat) sejak Module 8. Ini artinya mode Agent (lewat `/chat`) awalnya **tidak** bisa memahami pertanyaan lanjutan tanpa konteks eksplisit. Diperbaiki dengan menambah field opsional `history`:
@@ -453,7 +500,57 @@ print('Turn 2 (tanpa sebut \'pengajuan kredit\' lagi):', turn2['reply'])
 
 ✅ **Indikator sukses**: giliran 2 (yang tidak menyebut "pengajuan kredit" sama sekali) tetap dijawab dengan topik/tabel yang benar — bukti riwayat dari giliran 1 berhasil dipahami. (Catatan: `curl` biasa juga bisa dipakai, tapi Python di atas menghindari isu encoding/quoting untuk payload JSON bersarang di shell.)
 
+<details>
+<summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 4</strong></summary>
+
+```
+Tambahkan dukungan riwayat multi-turn ke endpoint /chat, plus toggle
+"Pakai Agent" di UI chat (Module 23, Tahap C, Langkah 4).
+
+GOAL:
+- Di Nala/app/main.py: pindahkan/tambahkan model ChatMessage (role:
+  str, content: str) di atas ChatRequest; tambahkan field opsional
+  history: list[ChatMessage] = [] ke ChatRequest. Di dalam handler
+  chat(), sebelum membangun initial_state: susun history_messages
+  dari request.history, gabungkan dengan pesan user baru, lalu
+  window-kan pakai HISTORY_WINDOW (variabel yang sudah ada sejak
+  Module 8 untuk /chat/stream) sehingga cuma HISTORY_WINDOW pesan
+  terakhir yang dipakai; masukkan hasilnya ke initial_state["messages"]
+  setelah pesan system (NALA_SYSTEM_PROMPT_AGENT).
+- Di Nala/app/templates/chat.html: tambahkan toggle/checkbox "Pakai
+  Agent". Saat dicentang, submit handler mengirim POST ke /chat
+  (bukan /chat/stream) dengan body { message, history } (history =
+  semua pesan conversation sebelumnya, tidak termasuk pesan baru ini),
+  tanpa streaming — tampilkan data.reply sekaligus setelah response
+  selesai. Saat tidak dicentang, perilaku /chat/stream yang sudah ada
+  tidak berubah.
+
+CONTEXT:
+- app/main.py sudah punya endpoint /chat (dari Module 22, menerima
+  message saja) dan /chat/stream (dari Module 8, sudah menerima
+  messages/history dengan HISTORY_WINDOW) — pakai ulang konstanta
+  HISTORY_WINDOW yang sama, jangan buat angka window baru.
+- app/templates/chat.html sudah punya logic streaming untuk
+  /chat/stream dari module-module sebelumnya.
+
+GUARDRAIL:
+- history WAJIB opsional dengan default [] — pemanggilan /chat lama
+  (cuma kirim message, tanpa history) harus tetap valid, tidak boleh
+  ada breaking change.
+- JANGAN ubah struktur graph di app/agent.py atau perilaku
+  /chat/stream yang sudah ada.
+- JANGAN ubah HISTORY_WINDOW jadi angka lain.
+```
+
+</details>
+
 **📄 Kode lengkap Module 23** (`app/tools/sql_tool.py`, `app/system_prompt.py`, potongan relevan `app/agent.py`/`app/main.py`/`app/templates/chat.html` — sudah ditampilkan utuh di Langkah 1-4 di atas).
+
+**Troubleshooting**
+
+- **`permission denied for table ...` padahal seharusnya diizinkan**: tool SQL (Langkah 1) harus memakai `nala_readonly` (bukan `nala_admin`/`nala_writer`) — tertukar salah satunya akan memicu `permission denied` untuk operasi yang seharusnya sah.
+- **Angka yang dijawab `/chat` tidak cocok dengan database**: verifikasi manual isi tabel dengan perintah `psql` di atas (Langkah 2) — kalau datanya beda dari yang diasumsikan, ulangi pengisian lewat form `/data-operasional` (Module 21) sampai datanya sesuai target.
+- **Error umum lain** (`no configuration file provided`, `failed to read dockerfile`, port sudah dipakai, dsb.): lihat bagian Troubleshooting di materi.md module-module sebelumnya (Module 7-16) — penyebab dan solusinya sama, tidak spesifik rangkaian Module 21-25.
 
 ## 4. Apa yang TIDAK Ada di Module Ini
 
@@ -463,10 +560,11 @@ print('Turn 2 (tanpa sebut \'pengajuan kredit\' lagi):', turn2['reply'])
 
 ## 5. Checkpoint Praktik
 
-Langkah eksekusi lengkap ada di bagian **Panduan Praktik** di bawah (Langkah 11-13). Yang perlu dipastikan sebelum lanjut ke Module 24:
+Yang perlu dipastikan sebelum lanjut ke Module 24:
 
 - [ ] `app/tools/sql_tool.py` berhasil dibuat, `query_data_operasional` memakai `get_connection()` yang sudah ada (bukan koneksi baru)
-- [ ] `/chat` bisa menjawab pertanyaan jumlah/status dari data operasional lewat `query_data_operasional`, dan angkanya cocok dengan data yang sudah Anda tambahkan di Module 21[ ] `/chat` bisa menjawab pertanyaan detail satu nasabah tertentu
+- [ ] `/chat` bisa menjawab pertanyaan jumlah/status dari data operasional lewat `query_data_operasional`, dan angkanya cocok dengan data yang sudah Anda tambahkan di Module 21
+- [ ] `/chat` bisa menjawab pertanyaan detail satu nasabah tertentu
 - [ ] Tool RAG (Module 22) tetap berfungsi berdampingan, tidak ada regresi
 - [ ] Multi-turn (Langkah 4) bekerja — pertanyaan lanjutan yang tidak menyebut ulang topik tetap dipahami lewat `history`
 
@@ -494,67 +592,6 @@ Ini konsisten dengan pola yang sudah berulang kali ditemukan sepanjang kurikulum
 ## Kesimpulan
 
 Tool kedua ini membuktikan pola dari Module 22 memang bisa berkembang: menambah kemampuan baru ke agent tidak berarti menulis ulang graph, cukup menambah skema tool dan cabang eksekusi. Module ini sengaja tidak menyentuh setup database sama sekali — Postgres, skema, data, dan pemisahan role sudah selesai di Module 21, jadi pekerjaan di sini murni soal **keamanan tool**: NALA sengaja tidak pernah membiarkan LLM menulis SQL bebas — pilihannya dibatasi lewat `enum` skema tool, divalidasi ulang di kode Python, dieksekusi lewat parameterized query, dan dijalankan lewat role database (`nala_readonly`, dari Module 21) yang secara struktural cuma bisa membaca. Lapisan-lapisan ini bekerja bersama supaya kesalahan di satu lapisan (termasuk model yang berhalusinasi atau salah paham) tidak otomatis berarti kebocoran atau kerusakan data.
-
-## Panduan Praktik
-
-> Catatan penomoran: bagian ini memakai penomoran "Langkah" tersendiri (melanjutkan urutan global lintas-module: Module 21 = Langkah 1-5, Module 22 = Langkah 6-10, module ini = Langkah 11-13) yang berbeda dari "Langkah 1-4" di dalam bagian struktur kode materi.md di atas — keduanya kebetulan bertumpang tindih penomoran tapi berasal dari dua urutan yang terpisah, peninggalan dari saat panduan ini masih satu dokumen gabungan Module 21-25.
-
-**Panduan Praktik — Module 23: Tool Baru — Query SQL ke Data Operasional (PostgreSQL)**
-
-Lanjutan langsung dari bagian Panduan Praktik di materi Module 22 — agent LangGraph dengan tool `cari_dokumen_sop` harus sudah jalan lewat `/chat` sebelum mulai di sini. Penomoran Langkah melanjutkan penomoran global (Module 21: Langkah 1-5, Module 22: Langkah 6-10).
-
-### Prasyarat
-- Module 22 selesai: endpoint `/chat` sudah membalas lewat agent (tool RAG), `/chat/stream` tidak berubah.
-- Data operasional dari Module 21 (7 baris `pengajuan_kredit`, 4 baris `klaim_asuransi`) masih ada di database.
-
-### Langkah 11: Tool query-builder untuk data operasional (Module 23)
-
-Ikuti Module 23 `materi.md` bagian tool query-builder (`app/tools/sql_tool.py`) — dibangun di atas `get_connection()` (`app/db.py`) dan role `nala_readonly` yang sudah disiapkan Module 21, bukan raw SQL bebas dari LLM.
-
-```bash
-docker compose exec api python -c "
-from app.tools.sql_tool import query_data_operasional
-print(query_data_operasional(tabel='pengajuan_kredit', mode='hitung_per_status'))
-"
-```
-
-✅ **Indikator sukses**: daftar status beserta jumlahnya (mis. `pending: 3`, dst.) sesuai data yang sudah dimasukkan lewat form di Module 21 Langkah 5.
-
-### Langkah 12: Daftarkan tool SQL ke agent (Module 23)
-
-Ikuti Module 23 `materi.md` bagian pendaftaran tool SQL ke agent (`app/agent.py`).
-
-```bash
-docker compose up --build api
-```
-
-```bash
-curl -X POST http://localhost:8000/chat \
-  -H "Content-Type: application/json" \
-  -d '{"message": "Berapa banyak pengajuan kredit yang statusnya pending?"}'
-```
-
-✅ **Indikator sukses**: jawaban menyebut angka yang sesuai (`3`, mengikuti distribusi data Module 21 Langkah 5).
-
-### Langkah 13: Uji detail nasabah, pastikan tool RAG tidak rusak
-
-```bash
-curl -X POST http://localhost:8000/chat \
-  -H "Content-Type: application/json" \
-  -d '{"message": "Bagaimana status pengajuan kredit nasabah N-00231?"}'
-
-curl -X POST http://localhost:8000/chat \
-  -H "Content-Type: application/json" \
-  -d '{"message": "Apa saja syarat pengajuan kredit untuk nasabah perorangan?"}'
-```
-
-✅ **Indikator sukses**: pertanyaan pertama menyebut status `pending` untuk N-00231; pertanyaan kedua tetap menjawab dari dokumen SOP seperti sebelumnya. Module 23 selesai — lanjut ke bagian Panduan Praktik di materi Module 24.
-
-### Troubleshooting
-
-- **`permission denied for table ...` padahal seharusnya diizinkan**: tool SQL (Module 23) harus memakai `nala_readonly` (bukan `nala_admin`/`nala_writer`) — tertukar salah satunya akan memicu `permission denied` untuk operasi yang seharusnya sah.
-- **Angka yang dijawab `/chat` tidak cocok dengan database**: verifikasi manual dulu isi tabel (`docker compose exec postgres psql -U nala_admin -d nala_operasional -c "SELECT status, COUNT(*) FROM pengajuan_kredit GROUP BY status;"`) — kalau datanya beda dari yang diasumsikan, ulangi Module 21 Langkah 5 sampai datanya sesuai target (7 baris `pengajuan_kredit`, 4 baris `klaim_asuransi`).
-- **Error umum lain** (`no configuration file provided`, `failed to read dockerfile`, port sudah dipakai, dsb.): lihat bagian Panduan Praktik > Troubleshooting di materi.md module-module sebelumnya (Module 7-16) — penyebab dan solusinya sama, tidak spesifik rangkaian Module 21-25.
 
 ---
 
