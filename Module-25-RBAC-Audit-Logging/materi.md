@@ -114,7 +114,7 @@ docker compose up -d --build postgres
 docker compose logs -f postgres
 ```
 
-⚠️ **Perhatian**: reset volume ini menghapus **semua** data operasional yang sudah dimasukkan lewat form di Module 21 Langkah 5 — database kembali ke seed minimal (2 baris `pengajuan_kredit` + 1 baris `klaim_asuransi`). Ini perlu dilakukan supaya `db/seed.sql` yang baru saja ditambah tabel `audit_log` + role `nala_app` ter-*load* ulang (lihat catatan "Seed data tidak berubah setelah mengedit `db/seed.sql`" di Troubleshooting akhir Tahap D). Setelah Langkah 1-3 selesai, **ulangi Module 21 Langkah 5** (isi ulang lewat `/data-operasional` sampai `7` baris `pengajuan_kredit` dan `4` baris `klaim_asuransi`, termasuk `N-00231` `pending` dan `N-00305` `ditolak`) **sebelum** menjalankan uji di Langkah 4 — kalau tidak, jawaban `/chat` di Langkah 4 tidak akan cocok dengan indikator sukses yang tercantum di sana.
+⚠️ **Perhatian**: reset volume ini menghapus **semua** data operasional yang sudah dimasukkan lewat form di Module 21 Langkah 6 — database kembali ke seed minimal (2 baris `pengajuan_kredit` + 1 baris `klaim_asuransi`). Ini perlu dilakukan supaya `db/seed.sql` yang baru saja ditambah tabel `audit_log` + role `nala_app` ter-*load* ulang (lihat catatan "Seed data tidak berubah setelah mengedit `db/seed.sql`" di Troubleshooting akhir Tahap D). Setelah Langkah 1-3 selesai, **ulangi Module 21 Langkah 6** (isi ulang lewat `/data-operasional` sampai `7` baris `pengajuan_kredit` dan `4` baris `klaim_asuransi`, termasuk `N-00231` `pending` dan `N-00305` `ditolak`) **sebelum** menjalankan uji di Langkah 4 — kalau tidak, jawaban `/chat` di Langkah 4 tidak akan cocok dengan indikator sukses yang tercantum di sana.
 
 ```bash
 docker compose exec postgres psql -U nala_app -d nala_operasional -c \
@@ -215,7 +215,7 @@ def log_audit(
 
 Dua keputusan desain yang perlu dijelaskan:
 
-- **`POSTGRES_APP_DSN` memakai `nala_app`, bukan `nala_admin` atau `nala_readonly`.** Sama seperti Module 23 Bagian 4 Langkah 4 (tool SQL memakai `nala_readonly`, bukan admin), setiap komponen memakai role paling terbatas yang cukup untuk tugasnya — menulis log tidak butuh (dan tidak boleh punya) akses ke tabel data nasabah.
+- **`POSTGRES_APP_DSN` memakai `nala_app`, bukan `nala_admin` atau `nala_readonly`.** Sama seperti Module 23 Tahap A (tool SQL memakai `nala_readonly`, bukan admin), setiap komponen memakai role paling terbatas yang cukup untuk tugasnya — menulis log tidak butuh (dan tidak boleh punya) akses ke tabel data nasabah.
 - **Kegagalan menulis audit log sengaja tidak melempar exception ke pemanggil.** Kalau `log_audit()` gagal (mis. PostgreSQL sedang down) dan itu membuat `/chat` ikut gagal (`500`), NALA jadi tidak bisa menjawab pertanyaan sederhana hanya karena masalah di sistem pencatatan — trade-off yang diambil di sini adalah **ketersediaan layanan chat lebih diprioritaskan** daripada audit yang sempurna 100%, dengan syarat kegagalan itu sendiri tercatat di log aplikasi (`logger.error`) supaya bisa dipantau dan ditindaklanjuti terpisah, bukan diam-diam hilang. Ini trade-off yang bisa diperdebatkan (institusi finansial yang sangat ketat mungkin memilih sebaliknya — menolak melayani permintaan kalau audit tidak bisa dijamin tercatat), disebutkan di sini secara eksplisit supaya kita tahu ini keputusan sadar, bukan kealpaan.
 
 Ingat menambahkan/override `POSTGRES_APP_DSN` di `docker-compose.yml` (service `api`) memakai host `postgres` (bukan `localhost`), sama seperti catatan Langkah 3 di Module 21.
@@ -452,7 +452,7 @@ def chat(request: ChatRequest) -> ChatResponse:
 docker compose up --build api
 ```
 
-⚠️ Pastikan data operasional sudah diisi ulang sesuai catatan di Langkah 1 (`7` baris `pengajuan_kredit`, `4` baris `klaim_asuransi`, via `/data-operasional` — lihat Module 21 Langkah 5) sebelum menjalankan uji di bawah — kalau belum, jumlah "pending" di jawaban tidak akan cocok dengan indikator sukses.
+⚠️ Pastikan data operasional sudah diisi ulang sesuai catatan di Langkah 1 (`7` baris `pengajuan_kredit`, `4` baris `klaim_asuransi`, via `/data-operasional` — lihat Module 21 Langkah 6) sebelum menjalankan uji di bawah — kalau belum, jumlah "pending" di jawaban tidak akan cocok dengan indikator sukses.
 
 Uji **role tidak berwenang** (harus ditolak):
 
