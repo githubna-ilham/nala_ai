@@ -413,7 +413,7 @@ services:
       - POSTGRES_WRITER_DSN=postgresql://nala_writer:writer_dev_only@postgres:5432/nala_operasional
       - POSTGRES_APP_DSN=postgresql://nala_app:app_dev_only@postgres:5432/nala_operasional
     volumes:
-      - ../resources/sample-knowledge-base:/app/knowledge-base
+      - ./knowledge-base:/app/knowledge-base
       - hf_cache:/app/.cache/huggingface
     depends_on:
       ollama:
@@ -465,7 +465,7 @@ services:
     volumes:
       - ./airflow/dags:/opt/airflow/dags
       - ./app:/opt/airflow/dags/app
-      - ../resources/sample-knowledge-base:/opt/airflow/knowledge-base
+      - ./knowledge-base:/opt/airflow/knowledge-base
     depends_on:
       - opensearch
       - ollama

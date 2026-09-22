@@ -73,7 +73,7 @@ def is_relevant(chunk_text: str, must_contain: list[str]) -> bool:
 
 ## 4. Test Set Berlabel: 10 Pertanyaan dari `sop-pengajuan-kredit.md`
 
-Knowledge base yang tersedia saat ini di `resources/sample-knowledge-base/` berisi 4 dokumen: dua SOP markdown (`sop-pengajuan-kredit.md`, `sop-klaim-asuransi.md`), satu SOP dalam bentuk PDF (`sop-pembukaan-rekening-tabungan.pdf`) — ketiganya di-seed sejak Module 10 — plus satu file catatan singkat hasil upload demo di Module 15 (`catatan-cabang-bandung.md`). Test set berikut fokus ke `sop-pengajuan-kredit.md`, yang cukup kaya (5 bagian: tujuan dan ruang lingkup, syarat, tahapan proses, kontak, catatan) untuk membangun test set awal yang berarti. Kalau di deployment nyata knowledge base bertambah dokumen, format test set ini dirancang supaya tinggal ditambah entri baru, bukan ditulis ulang.
+Knowledge base yang tersedia saat ini di `Nala/knowledge-base/` berisi 4 dokumen: dua SOP markdown (`sop-pengajuan-kredit.md`, `sop-klaim-asuransi.md`), satu SOP dalam bentuk PDF (`sop-pembukaan-rekening-tabungan.pdf`) — ketiganya di-seed sejak Module 10 — plus satu file catatan singkat hasil upload demo di Module 15 (`catatan-cabang-bandung.md`). Test set berikut fokus ke `sop-pengajuan-kredit.md`, yang cukup kaya (5 bagian: tujuan dan ruang lingkup, syarat, tahapan proses, kontak, catatan) untuk membangun test set awal yang berarti. Kalau di deployment nyata knowledge base bertambah dokumen, format test set ini dirancang supaya tinggal ditambah entri baru, bukan ditulis ulang.
 
 ```python
 # app/eval_testset.py

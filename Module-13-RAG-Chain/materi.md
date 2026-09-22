@@ -93,7 +93,7 @@ docker compose up --build api
 docker compose exec api python -c "from app.ingest import ingest_documents; print(ingest_documents('/app/knowledge-base'))"
 ```
 
-✅ **Indikator sukses**: mengembalikan angka sesuai jumlah dokumen `.md`/`.txt`/`.pdf` di `resources/sample-knowledge-base/` (lihat Module 10 Bagian 2) — kalau ada 2 SOP contoh plus beberapa PDF latihan, angkanya sejumlah itu. Verifikasi lewat OpenSearch langsung:
+✅ **Indikator sukses**: mengembalikan angka sesuai jumlah dokumen `.md`/`.txt`/`.pdf` di `Nala/knowledge-base/` (lihat Module 10 Bagian 2) — kalau ada 2 SOP contoh plus beberapa PDF latihan, angkanya sejumlah itu. Verifikasi lewat OpenSearch langsung:
 
 ```bash
 curl "http://localhost:9200/nala-docs/_count"

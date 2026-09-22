@@ -138,7 +138,7 @@ def run_ingest():
 
 with DAG(
     dag_id="ingest_documents",
-    description="Scan resources/sample-knowledge-base, chunk, embed, dan index ke OpenSearch",
+    description="Scan Nala/knowledge-base, chunk, embed, dan index ke OpenSearch",
     start_date=datetime(2026, 1, 1),
     schedule=None,
     catchup=False,
@@ -276,7 +276,7 @@ Cuma **satu Tahap** — `ingest_documents()` (Module 13, di-upgrade Module 14) d
     volumes:
       - ./airflow/dags:/opt/airflow/dags
       - ./app:/opt/airflow/dags/app
-      - ../resources/sample-knowledge-base:/opt/airflow/knowledge-base
+      - ./knowledge-base:/opt/airflow/knowledge-base
     depends_on:
       - opensearch
       - ollama
@@ -286,7 +286,7 @@ Tambahkan sebagai service baru (sejajar dengan `ollama`, `opensearch`, `api`). E
 
 - **`./airflow/dags:/opt/airflow/dags`**: menghubungkan folder DAG di laptop Anda ke tempat Airflow membaca DAG-nya.
 - **`./app:/opt/airflow/dags/app`**: DAG (Langkah 2) memanggil `from app.ingest import ingest_documents` — supaya `import` itu berhasil **di dalam** container Airflow (terpisah dari container `api`), folder `app/` yang sama dipasang lagi di situ.
-- **`../resources/sample-knowledge-base:/opt/airflow/knowledge-base`**: volume terpisah dari yang dipakai `api` (`/app/knowledge-base`) — path beda, tapi **folder sumber di laptop Anda sama persis**.
+- **`./knowledge-base:/opt/airflow/knowledge-base`**: volume terpisah dari yang dipakai `api` (`/app/knowledge-base`) — path di dalam container beda, tapi **menunjuk ke folder host yang sama persis** (`Nala/knowledge-base/`), jadi Airflow meng-index knowledge base yang sama dengan yang dipakai app, termasuk file hasil upload di Module 15.
 - **`_PIP_ADDITIONAL_REQUIREMENTS=pypdf==5.1.0 httpx==0.27.2`**: **wajib**, tanpa ini task DAG gagal dengan `ModuleNotFoundError: No module named 'pypdf'`. Penyebabnya: container `api` di-build dari `Dockerfile` yang menginstall seluruh `requirements.txt`, tapi container `airflow` pakai image `apache/airflow:2.10.2` mentah — tidak pernah menginstall dependency aplikasi kita.
 
 <details>
@@ -306,7 +306,7 @@ GOAL:
   tanpa ini task DAG gagal dengan ModuleNotFoundError), port
   8080:8080, volumes ./airflow/dags:/opt/airflow/dags,
   ./app:/opt/airflow/dags/app,
-  ../resources/sample-knowledge-base:/opt/airflow/knowledge-base,
+  ./knowledge-base:/opt/airflow/knowledge-base,
   depends_on opensearch dan ollama).
 
 CONTEXT:
@@ -345,7 +345,7 @@ def run_ingest():
 
 with DAG(
     dag_id="ingest_documents",
-    description="Scan resources/sample-knowledge-base, chunk, embed, dan index ke OpenSearch",
+    description="Scan Nala/knowledge-base, chunk, embed, dan index ke OpenSearch",
     start_date=datetime(2026, 1, 1),
     schedule=None,
     catchup=False,

@@ -166,7 +166,7 @@ GUARDRAIL:
 
 **Langkah 2 — Tambah volume `knowledge-base` di `docker-compose.yml`**
 
-`/upload` butuh tempat menyimpan file di **luar** container (supaya tidak hilang saat container di-rebuild). Ini sudah ada sejak Module 10 (`KNOWLEDGE_BASE_PATH`, bind mount ke `resources/sample-knowledge-base/`) — tidak ada perubahan `docker-compose.yml` di langkah ini.
+`/upload` butuh tempat menyimpan file di **luar** container (supaya tidak hilang saat container di-rebuild). Ini sudah ada sejak Module 10 (`KNOWLEDGE_BASE_PATH`, bind mount ke `Nala/knowledge-base/`) — tidak ada perubahan `docker-compose.yml` di langkah ini.
 
 **Langkah 3 — Tambah dependency `python-multipart`**
 
@@ -355,7 +355,7 @@ docker compose up --build api
 
 Ada dua cara mencoba upload — pilih salah satu atau keduanya:
 
-- **Lewat browser**: buka `http://localhost:8000/upload`, pilih file `.md`/`.txt`/`.pdf` (bisa file teks singkat baru, atau salah satu dokumen contoh yang sudah ada di `resources/sample-knowledge-base/`, misalnya `sop-pengajuan-kredit.md`), lalu klik "Upload".
+- **Lewat browser**: buka `http://localhost:8000/upload`, pilih file `.md`/`.txt`/`.pdf` (bisa file teks singkat baru, atau salinan salah satu dokumen contoh dari arsip `resources/sample-knowledge-base/`, misalnya `sop-pengajuan-kredit.md`), lalu klik "Upload".
 - **Lewat curl** (lebih mudah dipakai ulang untuk demo/testing):
 
 ```bash
@@ -366,7 +366,7 @@ curl -X POST http://localhost:8000/upload -F "file=@catatan-cabang-bandung.md"
 
 Setelah upload (lewat cara mana pun), cek file **benar-benar tersimpan** — dua cara, pilih salah satu:
 - Di dalam container: `docker compose exec api ls -la /app/knowledge-base`
-- Langsung di laptop Anda (tanpa masuk container): `ls resources/sample-knowledge-base/` — folder ini adalah bind mount yang sama persis dengan `/app/knowledge-base` di container, jadi isinya selalu identik.
+- Langsung di laptop Anda (tanpa masuk container): `ls Nala/knowledge-base/` — folder ini adalah bind mount yang sama persis dengan `/app/knowledge-base` di container, jadi isinya selalu identik.
 
 Nama file yang diupload harus muncul di kedua tempat itu, dan juga langsung terlihat di daftar dokumen pada halaman `/upload` (termasuk dokumen contoh yang sudah ada sejak awal) — tanpa perlu refresh manual kedua kalinya.
 

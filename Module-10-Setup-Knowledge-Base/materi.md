@@ -10,7 +10,7 @@ Menyiapkan **fondasi data** untuk RAG: folder `knowledge-base/` berisi dokumen S
 
 ## Definisi
 
-**Knowledge base** adalah kumpulan dokumen sumber — bisa berupa SOP, kebijakan, atau panduan internal — yang jadi satu-satunya bahan yang boleh dipakai NALA untuk menjawab pertanyaan staff. Di NALA, knowledge base ini diwakili folder `knowledge-base/` (bind mount ke `resources/sample-knowledge-base/`) — sekumpulan file `.md`/`.txt`/`.pdf` biasa di disk, bukan database terstruktur dengan tabel dan kolom.
+**Knowledge base** adalah kumpulan dokumen sumber — bisa berupa SOP, kebijakan, atau panduan internal — yang jadi satu-satunya bahan yang boleh dipakai NALA untuk menjawab pertanyaan staff. Di NALA, knowledge base ini diwakili folder `Nala/knowledge-base/` (di-bind mount ke dalam container) — sekumpulan file `.md`/`.txt`/`.pdf` biasa di disk, bukan database terstruktur dengan tabel dan kolom. Folder ini adalah **working copy** milik aplikasi: isinya di-*seed* dari arsip referensi `resources/sample-knowledge-base/`, lalu nanti bisa bertambah lewat fitur upload (Module 15). `resources/sample-knowledge-base/` sendiri tetap jadi **arsip referensi** read-only milik kursus — sumber contoh, bukan folder yang dipakai container saat runtime.
 
 Isi awal folder itu disebut **data seed** — dokumen yang sudah disiapkan tim sejak sebelum ada jalur input dari user seperti form upload, supaya mesin RAG bisa langsung dites dari awal tanpa menunggu fitur upload selesai dibangun (Bagian 1-2). Untuk membaca isi tiap dokumen apa pun formatnya (Markdown, teks polos, atau PDF) jadi satu string teks polos yang siap diproses lebih lanjut, module ini membangun `extract_text()` — langkah pertama sebelum teks itu bisa diubah jadi vektor di Module 11.
 
@@ -30,7 +30,7 @@ flowchart LR
 
 Module 9 sudah menjelaskan **kenapa** RAG dibutuhkan (halusinasi, analogi *open-book*) dan **alur garis besarnya** (retrieval → augmented → generation). Sekarang saatnya mulai membangun — dan langkah pertama yang paling masuk akal secara teknis adalah **menyiapkan datanya**, sebelum satu baris kode pemrosesan pun ditulis. Tanpa dokumen yang ada di suatu tempat, tidak ada yang bisa di-embed, tidak ada yang bisa disimpan di vector store, tidak ada yang bisa di-retrieve.
 
-Alih-alih menunggu staff mengupload dokumen lewat form web (yang belum dibangun sampai Module 14), kita siapkan **data dasar awal** langsung: sebuah folder `knowledge-base/` berisi 1-2 dokumen SOP contoh yang sudah disiapkan tim (persis seperti `resources/sample-knowledge-base/` yang sudah ada sejak awal training). Ini bukan cara "curang" — ini pola umum di proyek RAG sungguhan: ada **data seed** untuk development/testing sebelum jalur input dari user (upload, sinkronisasi otomatis, dst) dibangun.
+Alih-alih menunggu staff mengupload dokumen lewat form web (yang belum dibangun sampai Module 14), kita siapkan **data dasar awal** langsung: folder `Nala/knowledge-base/` di-*seed* dengan 1-2 dokumen SOP contoh yang sudah disiapkan tim (disalin dari arsip referensi `resources/sample-knowledge-base/` yang sudah ada sejak awal training). Ini bukan cara "curang" — ini pola umum di proyek RAG sungguhan: ada **data seed** untuk development/testing sebelum jalur input dari user (upload, sinkronisasi otomatis, dst) dibangun.
 
 ```mermaid
 flowchart LR
@@ -42,7 +42,7 @@ flowchart LR
 
 **Prasyarat**: sudah menyelesaikan Module 9 (Konsep RAG), dan container `ollama`+`api` dari `Nala/` masih berjalan (kalau tidak, ulangi Module 7 Langkah 1) — module ini belum butuh `opensearch`/`airflow`.
 
-Sepanjang Module 7-16, kita memakai **dua dokumen SOP contoh** sebagai knowledge base untuk mendemonstrasikan sistem RAG. Contoh isi dokumennya juga tersedia langsung di folder module ini (`Module-10-Setup-Knowledge-Base/`) untuk dibaca — file yang sama persis dengan yang ada di `resources/sample-knowledge-base/`, yang dipakai `Nala/` saat runtime:
+Sepanjang Module 7-16, kita memakai **dua dokumen SOP contoh** sebagai knowledge base untuk mendemonstrasikan sistem RAG. Contoh isi dokumennya juga tersedia langsung di folder module ini (`Module-10-Setup-Knowledge-Base/`) untuk dibaca — file yang sama persis dengan yang ada di arsip referensi `resources/sample-knowledge-base/`, yang disalin ke `Nala/knowledge-base/` (folder yang dipakai container saat runtime):
 
 ### a. SOP Pengajuan Kredit (`sop-pengajuan-kredit.md`)
 - **Syarat Umum**: usia minimal 21 tahun, menjadi customer 6 bulan, memiliki rekening aktif
@@ -64,7 +64,14 @@ Dengan dua dokumen pendek ini, versi pertama RAG (Module 13) bisa meng-embed **m
 
 **Langkah 1 — Bind mount folder data seed ke dalam container**
 
-Folder `resources/sample-knowledge-base/` (di root project, sudah berisi kedua dokumen SOP di atas plus satu file PDF contoh) baru tersedia **di laptop Anda** — container `api` belum bisa mengaksesnya sama sekali, karena belum ada volume yang menghubungkan keduanya. Tambahkan `volumes:` baru dan environment variable `KNOWLEDGE_BASE_PATH` ke service `api` di `docker-compose.yml`:
+Pertama, siapkan folder working copy milik Nala dengan menyalin dokumen seed dari arsip referensi ke dalamnya:
+
+```bash
+mkdir -p Nala/knowledge-base
+cp resources/sample-knowledge-base/* Nala/knowledge-base/
+```
+
+Sekarang `Nala/knowledge-base/` berisi kedua dokumen SOP plus satu file PDF contoh — tapi masih hanya tersedia **di laptop Anda**; container `api` belum bisa mengaksesnya sama sekali, karena belum ada volume yang menghubungkan keduanya. Tambahkan `volumes:` baru dan environment variable `KNOWLEDGE_BASE_PATH` ke service `api` di `docker-compose.yml`:
 
 ```yaml
 services:
@@ -84,7 +91,7 @@ services:
       - OLLAMA_MODEL=llama3.2:3b
       - KNOWLEDGE_BASE_PATH=/app/knowledge-base
     volumes:
-      - ../resources/sample-knowledge-base:/app/knowledge-base
+      - ./knowledge-base:/app/knowledge-base
     depends_on:
       - ollama
 
@@ -92,8 +99,8 @@ volumes:
   ollama_data:
 ```
 
-- **`../resources/sample-knowledge-base:/app/knowledge-base`** — path host-nya relatif terhadap lokasi `docker-compose.yml` (`Nala/`), jadi `../resources/...` naik satu level ke root project. Path container-nya (`/app/knowledge-base`) inilah yang dipakai kode Python sepanjang module ini dan seterusnya.
-- Ini **bind mount**, bukan named volume seperti `ollama_data` — perubahan file di `resources/sample-knowledge-base/` (tambah/hapus/edit) langsung terlihat di dalam container tanpa perlu rebuild, karena keduanya menunjuk fisik ke folder yang sama.
+- **`./knowledge-base:/app/knowledge-base`** — path host-nya relatif terhadap lokasi `docker-compose.yml` (`Nala/`), jadi `./knowledge-base` menunjuk ke folder `Nala/knowledge-base/` yang barusan Anda siapkan. Path container-nya (`/app/knowledge-base`) inilah yang dipakai kode Python sepanjang module ini dan seterusnya.
+- Ini **bind mount**, bukan named volume seperti `ollama_data` — perubahan file di `Nala/knowledge-base/` (tambah/hapus/edit, termasuk file yang nanti diupload staff di Module 15) langsung terlihat di dalam container tanpa perlu rebuild, karena keduanya menunjuk fisik ke folder yang sama. Arsip `resources/sample-knowledge-base/` tidak ikut tersentuh — ia cuma sumber seed di awal.
 - **`KNOWLEDGE_BASE_PATH=/app/knowledge-base`** — nilainya **sama persis** dengan sisi kanan bind mount di atas, sengaja disebut dua kali (bukan tumpang tindih): baris `volumes:` yang membuat Docker benar-benar menghubungkan foldernya, baris `environment:` ini yang nanti dibaca kode Python (langkah berikutnya) supaya path-nya tidak di-hardcode di banyak tempat.
 
 Sekarang baca environment variable itu di `app/main.py`, mengikuti pola `os.environ.get(...)` yang sama dengan `OLLAMA_BASE_URL`/`OLLAMA_MODEL` sejak Module 6:
@@ -112,21 +119,23 @@ docker compose up --build -d api
 docker compose exec api ls -la /app/knowledge-base
 ```
 
-✅ **Indikator sukses**: `sop-pengajuan-kredit.md`, `sop-klaim-asuransi.md`, dan `sop-pembukaan-rekening-tabungan.pdf` muncul di listing — dari **dalam** container, bukan cuma di laptop Anda (`ls resources/sample-knowledge-base/` di host akan menunjukkan isi yang sama persis, karena bind mount menyamakan keduanya).
+✅ **Indikator sukses**: `sop-pengajuan-kredit.md`, `sop-klaim-asuransi.md`, dan `sop-pembukaan-rekening-tabungan.pdf` muncul di listing — dari **dalam** container, bukan cuma di laptop Anda (`ls Nala/knowledge-base/` di host akan menunjukkan isi yang sama persis, karena bind mount menyamakan keduanya).
 
 <details>
 <summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 1</strong></summary>
 
 ```
-Tambahkan bind mount + KNOWLEDGE_BASE_PATH ke service api
-(Module 10) — belum ada sebelumnya.
+Siapkan folder knowledge-base + bind mount + KNOWLEDGE_BASE_PATH
+ke service api (Module 10) — belum ada sebelumnya.
 
 GOAL:
+- Buat folder Nala/knowledge-base/ dan salin semua file dari
+  resources/sample-knowledge-base/ ke dalamnya (seed awal).
 - Di Nala/docker-compose.yml, service `api`: tambah baris
   `- KNOWLEDGE_BASE_PATH=/app/knowledge-base` ke `environment:`
   yang sudah ada, lalu tambah key `volumes:` baru (sejajar dengan
   `environment:`/`depends_on:`), isinya persis satu baris:
-  - ../resources/sample-knowledge-base:/app/knowledge-base
+  - ./knowledge-base:/app/knowledge-base
 - Di Nala/app/main.py, tambah baris baru di dekat konstanta
   OLLAMA_BASE_URL/OLLAMA_MODEL yang sudah ada:
   KNOWLEDGE_BASE_PATH = os.environ.get("KNOWLEDGE_BASE_PATH", "/app/knowledge-base")
@@ -134,8 +143,9 @@ GOAL:
 CONTEXT:
 - Service `api` sekarang cuma punya OLLAMA_BASE_URL/OLLAMA_MODEL di
   environment, belum ada volumes sama sekali.
-- docker-compose.yml ada di Nala/, folder resources/sample-knowledge-base
-  ada satu level di atas (root project), makanya pakai ../.
+- docker-compose.yml ada di Nala/, jadi ./knowledge-base menunjuk ke
+  folder Nala/knowledge-base/ (working copy milik aplikasi). Arsip
+  resources/sample-knowledge-base/ cuma sumber seed, read-only.
 - KNOWLEDGE_BASE_PATH belum dipakai fungsi apa pun di langkah ini —
   baru dipakai mulai Module 13/15.
 
