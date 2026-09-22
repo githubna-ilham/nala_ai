@@ -1,12 +1,12 @@
-# Module 22: Desain Agent dengan LangGraph — Tool-Calling
+# Module 23: Desain Agent dengan LangGraph — Tool-Calling
 
 ## Tujuan
 
-Mengubah NALA dari pipeline RAG linear (Module 7-20) menjadi agent berbasis LangGraph yang bisa memutuskan sendiri kapan perlu memanggil tool, dimulai dengan satu tool (pencarian dokumen SOP) sebagai fondasi sebelum tool kedua ditambahkan di Module 23.
+Mengubah NALA dari pipeline RAG linear (Module 7-21) menjadi agent berbasis LangGraph yang bisa memutuskan sendiri kapan perlu memanggil tool, dimulai dengan satu tool (pencarian dokumen SOP) sebagai fondasi sebelum tool kedua ditambahkan di Module 24.
 
 ## Definisi
 
-**Agent**, dalam konteks module ini, adalah sistem yang memutuskan sendiri langkah apa yang perlu diambil untuk menjawab sebuah pertanyaan — berbeda dari **pipeline linear** (Module 7-20) yang urutan langkahnya selalu sama apa pun pertanyaannya. Keputusan itu diambil lewat **tool calling**: LLM diberi daftar "tool" (fungsi Python yang bisa dipanggil, masing-masing dengan skema nama/deskripsi/parameter) dan diminta memilih tool mana yang relevan — kalau ada — sebelum menyusun jawaban akhir. Ollama sendiri tidak pernah mengeksekusi tool apa pun; ia cuma memutuskan *tool mana* dan *argumen apa*, kode aplikasi yang benar-benar menjalankannya.
+**Agent**, dalam konteks module ini, adalah sistem yang memutuskan sendiri langkah apa yang perlu diambil untuk menjawab sebuah pertanyaan — berbeda dari **pipeline linear** (Module 7-21) yang urutan langkahnya selalu sama apa pun pertanyaannya. Keputusan itu diambil lewat **tool calling**: LLM diberi daftar "tool" (fungsi Python yang bisa dipanggil, masing-masing dengan skema nama/deskripsi/parameter) dan diminta memilih tool mana yang relevan — kalau ada — sebelum menyusun jawaban akhir. Ollama sendiri tidak pernah mengeksekusi tool apa pun; ia cuma memutuskan *tool mana* dan *argumen apa*, kode aplikasi yang benar-benar menjalankannya.
 
 **LangGraph** adalah pustaka yang dipakai untuk merangkai keputusan itu jadi sebuah **graph**: kumpulan **node** (langkah kerja, ditulis sebagai fungsi Python) yang saling terhubung lewat **edge** (jalur antar-node, ada yang tetap dan ada yang **kondisional** — bercabang tergantung hasil node sebelumnya), dengan **state** (data yang mengalir dan terus bertambah dari satu node ke node berikutnya, di NALA berupa daftar `messages`) sebagai "memori kerja" bersama. Bedanya dengan pipeline lurus: graph bisa **loop back** — sebuah node bisa dilewati berkali-kali dalam satu request (mis. `call_tool` selalu kembali ke `call_model`) sampai model memutuskan tidak perlu tool lagi.
 
@@ -21,27 +21,27 @@ flowchart LR
 ## Hasil Akhir yang Diharapkan
 
 - `OllamaClient` punya method `chat()` baru yang mendukung parameter `tools`, tanpa mengubah `generate()`/`chat_stream()` yang sudah ada
-- Logika retrieval RAG Module 9-20 sudah di-refactor jadi tool berdiri sendiri (`rag_search()` + `RAG_TOOL_SCHEMA`) yang mengembalikan teks konteks, bukan langsung memanggil LLM — dibuktikan lewat uji nyata (Bagian 7a) memakai `search_hybrid()` + reranker Module 17-18, bukan `search()` polos, supaya tidak regresi kualitas
-- Graph LangGraph (`call_model` ↔ `call_tool`, dengan edge kondisional) sudah dibangun dan disambungkan ke endpoint `POST /chat` yang **baru dibuat** di module ini — logikanya adalah refactor dari retrieval yang sebelumnya hardcoded di `/chat/stream` (Module 9-20), bukan mengganti isi `/chat` yang sudah ada
-- `/chat` tetap menjawab dengan kualitas setara Module 9-20 untuk pertanyaan seputar SOP, dan tetap bisa menjawab pertanyaan yang tidak butuh tool sama sekali (mis. sapaan) — kedua kasus sudah diuji langsung dan berhasil
+- Logika retrieval RAG Module 9-21 sudah di-refactor jadi tool berdiri sendiri (`rag_search()` + `RAG_TOOL_SCHEMA`) yang mengembalikan teks konteks, bukan langsung memanggil LLM — dibuktikan lewat uji nyata (Bagian 7a) memakai `search_hybrid()` + reranker Module 18-19, bukan `search()` polos, supaya tidak regresi kualitas
+- Graph LangGraph (`call_model` ↔ `call_tool`, dengan edge kondisional) sudah dibangun dan disambungkan ke endpoint `POST /chat` yang **baru dibuat** di module ini — logikanya adalah refactor dari retrieval yang sebelumnya hardcoded di `/chat/stream` (Module 9-21), bukan mengganti isi `/chat` yang sudah ada
+- `/chat` tetap menjawab dengan kualitas setara Module 9-21 untuk pertanyaan seputar SOP, dan tetap bisa menjawab pertanyaan yang tidak butuh tool sama sekali (mis. sapaan) — kedua kasus sudah diuji langsung dan berhasil
 - `/chat/stream` sengaja tidak disentuh sama sekali di module ini, tetap berjalan seperti sebelumnya
 - Trace Langfuse `chat_agent` mencatat tiap node LangGraph (`agent_call_model`, `agent_tool:*`) sebagai observation terpisah dengan latency yang benar — bug nyata ditemukan lewat inspeksi trace (awalnya `latency: 0`, `observations: 0`) dan diperbaiki di Bagian 7b, bukan diasumsikan langsung benar
 
 ## 1. Kenapa NALA Butuh Jadi "Agent", Bukan Cuma Pipeline
 
-Sejak Module 8, `/chat/stream` (satu-satunya endpoint chat NALA sampai sebelum module ini — lihat Module 8) bekerja dengan urutan langkah yang **selalu sama**, apapun pertanyaannya: terima pesan → embed → cari di vector store (Module 17-18: hybrid search + rerank) → susun prompt ber-konteks → generate jawaban. Urutan ini disebut **pipeline linear** — jalurnya lurus, tidak pernah bercabang, tidak pernah "mikir dulu langkah apa yang cocok".
+Sejak Module 8, `/chat/stream` (satu-satunya endpoint chat NALA sampai sebelum module ini — lihat Module 8) bekerja dengan urutan langkah yang **selalu sama**, apapun pertanyaannya: terima pesan → embed → cari di vector store (Module 18-19: hybrid search + rerank) → susun prompt ber-konteks → generate jawaban. Urutan ini disebut **pipeline linear** — jalurnya lurus, tidak pernah bercabang, tidak pernah "mikir dulu langkah apa yang cocok".
 
 Itu bekerja baik selama satu-satunya sumber jawaban adalah dokumen SOP. Tapi mulai module ini, NALA punya sumber jawaban **kedua**: data operasional (pengajuan kredit, klaim asuransi) yang tersimpan di database, bukan di dokumen teks. Pipeline linear tidak punya cara untuk memutuskan "pertanyaan ini butuh dokumen atau butuh angka dari database?" — keputusan itu harus ada di suatu tempat, dan LangGraph adalah alat yang dipakai untuk menaruhnya.
 
 ### a. Analogi untuk yang belum pernah pegang kode
 
-Bayangkan pipeline Module 7-20 seperti **jalur produksi pabrik**: bahan mentah masuk di satu ujung, keluar produk jadi di ujung lain, urutan mesinnya tetap sama untuk semua bahan. Agent lewat LangGraph lebih mirip **resepsionis yang bisa mendelegasikan**: dia dengar pertanyaan, memutuskan "ini perlu saya cek ke bagian arsip (dokumen SOP) atau ke bagian data (database)?", kadang perlu cek ke **dua-duanya** sebelum bisa menjawab, dan kalau jawaban pertama masih kurang, dia bisa balik bertanya lagi ke bagian yang tadi — bukan cuma jalan satu arah.
+Bayangkan pipeline Module 7-21 seperti **jalur produksi pabrik**: bahan mentah masuk di satu ujung, keluar produk jadi di ujung lain, urutan mesinnya tetap sama untuk semua bahan. Agent lewat LangGraph lebih mirip **resepsionis yang bisa mendelegasikan**: dia dengar pertanyaan, memutuskan "ini perlu saya cek ke bagian arsip (dokumen SOP) atau ke bagian data (database)?", kadang perlu cek ke **dua-duanya** sebelum bisa menjawab, dan kalau jawaban pertama masih kurang, dia bisa balik bertanya lagi ke bagian yang tadi — bukan cuma jalan satu arah.
 
 ### b. Bedanya secara teknis: pipeline vs graph
 
 ```mermaid
 flowchart LR
-    subgraph "Sebelum Module 22: Pipeline linear (tetap)"
+    subgraph "Sebelum Module 23: Pipeline linear (tetap)"
         direction LR
         A1["Pertanyaan"] --> A2["Embed"] --> A3["Search/Rerank"] --> A4["Generate"] --> A5["Jawaban"]
     end
@@ -49,7 +49,7 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    subgraph "Module 22: Agent berbasis graph (bisa bercabang & mengulang)"
+    subgraph "Module 23: Agent berbasis graph (bisa bercabang & mengulang)"
         direction LR
         B1["Pertanyaan"] --> B2{"LLM: perlu tool?"}
         B2 -->|"ya, cari dokumen"| B3["Tool: RAG search"]
@@ -60,7 +60,7 @@ flowchart LR
     end
 ```
 
-Perhatikan panah `B3 --> B2` dan `B4 --> B2`: setelah tool dipanggil, alur **kembali** ke node yang sama (LLM) untuk memutuskan langkah berikutnya — bisa berhenti (jawab), bisa panggil tool lain, atau (jarang tapi mungkin) panggil tool yang sama lagi dengan query berbeda. Inilah yang dimaksud "graph yang bisa loop back", beda dari pipeline Module 7-20 yang cuma bisa jalan satu arah dari kiri ke kanan.
+Perhatikan panah `B3 --> B2` dan `B4 --> B2`: setelah tool dipanggil, alur **kembali** ke node yang sama (LLM) untuk memutuskan langkah berikutnya — bisa berhenti (jawab), bisa panggil tool lain, atau (jarang tapi mungkin) panggil tool yang sama lagi dengan query berbeda. Inilah yang dimaksud "graph yang bisa loop back", beda dari pipeline Module 7-21 yang cuma bisa jalan satu arah dari kiri ke kanan.
 
 ### c. Tiga konsep inti LangGraph
 
@@ -97,7 +97,7 @@ flowchart LR
 - **NODE** (dua kotak besar) adalah `call_model` dan `call_tool` — masing-masing satu fungsi Python yang menerima state, melakukan sesuatu, lalu mengembalikan perubahan ke state itu. Perhatikan: node **tidak pernah** terhubung langsung ke node lain tanpa state di antaranya — selalu "node → state (baru) → node berikutnya", persis yang ditunjukkan `S1`/`S2` di diagram.
 - **EDGE** (label di atas panah) adalah jalur yang menghubungkan node ke state berikutnya — dua di antaranya **kondisional** (arahnya baru ditentukan setelah `call_model` selesai, tergantung ada `tool_calls` atau tidak), satu **tetap** (`call_tool` selalu mengalir ke `S2` lalu ke `call_model`, tidak pernah langsung ke `END`).
 
-Yang membuat ini "agent" (bukan cuma percabangan `if/else` biasa) adalah **keputusan tool mana yang dipanggil, dan kapan berhenti, diambil oleh LLM itu sendiri** — bukan oleh aturan `if "kredit" in pertanyaan` yang ditulis manual oleh developer. Ini penting dipahami sebelum Module 24: kualitas keputusan ini bergantung pada kemampuan model, bukan pada logika kode — itu sebabnya routing bisa salah (lihat Module 24 Bagian 4), dan itu bukan bug di kode.
+Yang membuat ini "agent" (bukan cuma percabangan `if/else` biasa) adalah **keputusan tool mana yang dipanggil, dan kapan berhenti, diambil oleh LLM itu sendiri** — bukan oleh aturan `if "kredit" in pertanyaan` yang ditulis manual oleh developer. Ini penting dipahami sebelum Module 25: kualitas keputusan ini bergantung pada kemampuan model, bukan pada logika kode — itu sebabnya routing bisa salah (lihat Module 25 Bagian 4), dan itu bukan bug di kode.
 
 ## 2. Apa itu Tool (Function) dan Tool Calling
 
@@ -115,7 +115,7 @@ RAG_TOOL_SCHEMA = {
             "Finance — misalnya syarat/prosedur pengajuan kredit, prosedur klaim "
             "asuransi, kebijakan internal. Gunakan untuk pertanyaan tentang ATURAN "
             "atau PROSEDUR, bukan untuk angka/status transaksi spesifik milik "
-            "nasabah tertentu (untuk itu ada tool lain, lihat Module 23)."
+            "nasabah tertentu (untuk itu ada tool lain, lihat Module 24)."
         ),
         "parameters": {
             "type": "object",
@@ -131,7 +131,7 @@ RAG_TOOL_SCHEMA = {
 }
 ```
 
-Perhatikan: field **`description`** (baik di level tool maupun di level tiap parameter) adalah **satu-satunya sinyal** yang dipakai LLM untuk memutuskan relevansi — bukan nama fungsinya (`cari_dokumen_sop` cuma label internal untuk kode, LLM tidak "mengerti" arti nama itu secara istimewa), dan tentu bukan isi kodenya (tidak pernah dilihat LLM). Kalimat deskripsi yang samar atau tumpang tindih dengan tool lain adalah penyebab paling umum routing yang salah (dibahas lebih jauh di Module 24) — menulis deskripsi tool yang tajam bukan detail kecil, tapi bagian paling menentukan dari desain agent.
+Perhatikan: field **`description`** (baik di level tool maupun di level tiap parameter) adalah **satu-satunya sinyal** yang dipakai LLM untuk memutuskan relevansi — bukan nama fungsinya (`cari_dokumen_sop` cuma label internal untuk kode, LLM tidak "mengerti" arti nama itu secara istimewa), dan tentu bukan isi kodenya (tidak pernah dilihat LLM). Kalimat deskripsi yang samar atau tumpang tindih dengan tool lain adalah penyebab paling umum routing yang salah (dibahas lebih jauh di Module 25) — menulis deskripsi tool yang tajam bukan detail kecil, tapi bagian paling menentukan dari desain agent.
 
 **Tool calling** adalah nama untuk keseluruhan protokolnya: proses di mana LLM, alih-alih (atau selain) langsung menulis jawaban teks, bisa memilih mengembalikan **permintaan terstruktur** untuk menjalankan salah satu tool yang ditawarkan — lengkap dengan argumen yang menurutnya sesuai. LLM **berhenti** persis di titik ini: ia tidak pernah menjalankan apa pun sendiri, cuma memutuskan "tool mana" dan "argumen apa" — mekanisme detailnya, spesifik untuk Ollama dan Llama 3.2 yang dipakai NALA, dijelaskan di Bagian 3.
 
@@ -149,7 +149,7 @@ flowchart LR
 
 ## 3. Tool-Calling Native di Ollama untuk Llama 3.2
 
-Agar LLM bisa "meminta" sebuah tool dipanggil, Ollama menyediakan parameter `tools` di endpoint `/api/chat` (bukan `/api/generate` yang dipakai `OllamaClient.generate()` sejak Module 22 — `/api/generate` tidak mendukung tools). Model family Llama 3.2 (termasuk `llama3.2:3b` yang dipakai default sepanjang training ini — lihat README utama bagian "Rekomendasi Model LLM") sudah mendukung fitur ini, itulah salah satu alasan model ini dipilih sebagai default sejak Module 22.
+Agar LLM bisa "meminta" sebuah tool dipanggil, Ollama menyediakan parameter `tools` di endpoint `/api/chat` (bukan `/api/generate` yang dipakai `OllamaClient.generate()` sejak Module 23 — `/api/generate` tidak mendukung tools). Model family Llama 3.2 (termasuk `llama3.2:3b` yang dipakai default sepanjang training ini — lihat README utama bagian "Rekomendasi Model LLM") sudah mendukung fitur ini, itulah salah satu alasan model ini dipilih sebagai default sejak Module 23.
 
 Pola kerjanya:
 
@@ -162,15 +162,15 @@ Pola kerjanya:
 
 ## 4. Struktur Kode yang Ditambahkan
 
-Melanjutkan langsung di `Nala/` (folder yang sama sejak Module 1 — lihat bagian "3. Struktur Kode yang Ditambahkan" → "Prasyarat" di materi Module 21). Tiga tahap di module ini:
+Melanjutkan langsung di `Nala/` (folder yang sama sejak Module 1 — lihat bagian "3. Struktur Kode yang Ditambahkan" → "Prasyarat" di materi Module 22). Tiga tahap di module ini:
 
 1. **Tahap A — Tambah kemampuan tool-calling ke `OllamaClient`**, tanpa membuat atau menyentuh endpoint apa pun dulu.
-2. **Tahap B — Tulis tool pertama**: bungkus RAG chain Module 9-20 jadi fungsi `rag_search()` yang berdiri sendiri, plus skema tool-nya.
+2. **Tahap B — Tulis tool pertama**: bungkus RAG chain Module 9-21 jadi fungsi `rag_search()` yang berdiri sendiri, plus skema tool-nya.
 3. **Tahap C — Bangun graph LangGraph**, lalu buat endpoint baru `/chat` yang mendelegasikan ke agent (menggantikan pendekatan retrieval langsung yang dipakai `/chat/stream`, tapi sebagai endpoint terpisah, bukan mengubah `/chat/stream` itu sendiri).
 
 ### Prasyarat
 
-- Module 21 selesai: service `postgres` sehat, tabel `pengajuan_kredit`/`klaim_asuransi` sudah berisi data (7 baris + 4 baris) lewat form `/data-operasional`, role `nala_readonly`/`nala_writer` terverifikasi dua arah.
+- Module 22 selesai: service `postgres` sehat, tabel `pengajuan_kredit`/`klaim_asuransi` sudah berisi data (7 baris + 4 baris) lewat form `/data-operasional`, role `nala_readonly`/`nala_writer` terverifikasi dua arah.
 - `docker compose up -d --build` sudah pernah dijalankan dari `Nala/` — kalau container belum jalan, jalankan ulang dari folder itu sebelum melanjutkan.
 
 ### Tahap A — Tambah method `chat()` dengan dukungan `tools` ke `OllamaClient`
@@ -186,7 +186,7 @@ langgraph==0.2.39
 <summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 1</strong></summary>
 
 ```
-Tambah dependency langgraph ke requirements.txt (Module 22, Tahap A,
+Tambah dependency langgraph ke requirements.txt (Module 23, Tahap A,
 Langkah 1) — belum ada perubahan kode apa pun.
 
 GOAL:
@@ -206,7 +206,7 @@ GUARDRAIL:
 
 **Langkah 2 — Tambah method `chat()` di `app/ollama_client.py`**
 
-`OllamaClient` sejak Module 22 sudah punya `generate()` (non-streaming, lewat `/api/generate`) dan `chat_stream()` (streaming, lewat `/api/chat`, dipakai `/chat/stream` sejak Module 8). Tambahkan method ketiga — non-streaming, lewat `/api/chat`, dengan dukungan `tools`:
+`OllamaClient` sejak Module 23 sudah punya `generate()` (non-streaming, lewat `/api/generate`) dan `chat_stream()` (streaming, lewat `/api/chat`, dipakai `/chat/stream` sejak Module 8). Tambahkan method ketiga — non-streaming, lewat `/api/chat`, dengan dukungan `tools`:
 
 ```python
 # app/ollama_client.py — tambahkan di dalam class OllamaClient, di bawah generate()
@@ -249,7 +249,7 @@ print(result)
 
 ```
 Tambah method chat() baru (dengan dukungan tools) ke OllamaClient
-(Module 22, Tahap A, Langkah 2) — belum mengubah endpoint apa pun.
+(Module 23, Tahap A, Langkah 2) — belum mengubah endpoint apa pun.
 
 GOAL:
 - Di Nala/app/ollama_client.py: tambah
@@ -265,7 +265,7 @@ GOAL:
 CONTEXT:
 - File ini sudah punya generate() (lewat /api/generate, non-streaming,
   tanpa tools) dan chat_stream() (lewat /api/chat, streaming, tanpa
-  tools) dari Module 1-16 — JANGAN diubah, method chat() ini murni
+  tools) dari Module 1-17 — JANGAN diubah, method chat() ini murni
   tambahan baru.
 - requirements.txt sudah punya dependency langgraph dari Langkah 1.
 
@@ -302,7 +302,7 @@ RAG_TOOL_SCHEMA = {
             "Finance — misalnya syarat/prosedur pengajuan kredit, prosedur klaim "
             "asuransi, kebijakan internal. Gunakan untuk pertanyaan tentang ATURAN "
             "atau PROSEDUR, bukan untuk angka/status transaksi spesifik milik "
-            "nasabah tertentu (untuk itu ada tool lain, lihat Module 23)."
+            "nasabah tertentu (untuk itu ada tool lain, lihat Module 24)."
         ),
         "parameters": {
             "type": "object",
@@ -331,7 +331,7 @@ def rag_search(query: str, vector_store: VectorStore, ollama_base_url: str) -> s
     return "\n\n".join(r["text"] for r in results)
 ```
 
-`rag_search()` adalah **refactor**, bukan fitur baru — isinya persis logika retrieval yang sejak Module 9 (lalu ditingkatkan Module 17-18 dengan hybrid search + reranking) sudah ada di dalam `/chat/stream`, cuma sekarang dipisah jadi fungsi berdiri sendiri yang **mengembalikan teks konteks**, bukan langsung memanggil `ollama_client.generate()`. Perbedaan penting dari versi Module 9-20: fungsi ini **tidak lagi menyusun prompt atau memanggil LLM sama sekali** — itu sekarang tugas node `call_model` di graph (Langkah 5), tool hanya bertugas "ambil data", bukan "susun jawaban". `RAG_TOOL_SCHEMA` mengikuti format skema tools yang diterima Ollama `/api/chat` — `description` sengaja ditulis detail karena **inilah** satu-satunya petunjuk yang dipakai LLM untuk memutuskan kapan tool ini relevan (lihat Module 24 Bagian 2 soal betapa pentingnya kualitas description ini terhadap akurasi routing).
+`rag_search()` adalah **refactor**, bukan fitur baru — isinya persis logika retrieval yang sejak Module 9 (lalu ditingkatkan Module 18-19 dengan hybrid search + reranking) sudah ada di dalam `/chat/stream`, cuma sekarang dipisah jadi fungsi berdiri sendiri yang **mengembalikan teks konteks**, bukan langsung memanggil `ollama_client.generate()`. Perbedaan penting dari versi Module 9-21: fungsi ini **tidak lagi menyusun prompt atau memanggil LLM sama sekali** — itu sekarang tugas node `call_model` di graph (Langkah 5), tool hanya bertugas "ambil data", bukan "susun jawaban". `RAG_TOOL_SCHEMA` mengikuti format skema tools yang diterima Ollama `/api/chat` — `description` sengaja ditulis detail karena **inilah** satu-satunya petunjuk yang dipakai LLM untuk memutuskan kapan tool ini relevan (lihat Module 25 Bagian 2 soal betapa pentingnya kualitas description ini terhadap akurasi routing).
 
 **▶️ Jalankan & lihat hasilnya**
 
@@ -346,14 +346,14 @@ print(result[:200])
 "
 ```
 
-✅ **Indikator sukses**: tidak ada error, output berupa potongan teks dari `sop-pengajuan-kredit.md` (asumsi index OpenSearch sudah terisi dari Module 7-20) — bukti `rag_search()` bekerja identik dengan retrieval yang sebelumnya ada di `/chat/stream`, cuma sekarang bisa dipanggil terpisah. Kalau hasilnya kosong, index OpenSearch mungkin belum terisi — jalankan ulang ingest lewat Airflow (Module 16).
+✅ **Indikator sukses**: tidak ada error, output berupa potongan teks dari `sop-pengajuan-kredit.md` (asumsi index OpenSearch sudah terisi dari Module 7-21) — bukti `rag_search()` bekerja identik dengan retrieval yang sebelumnya ada di `/chat/stream`, cuma sekarang bisa dipanggil terpisah. Kalau hasilnya kosong, index OpenSearch mungkin belum terisi — jalankan ulang ingest lewat Airflow (Module 17).
 
 <details>
 <summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 3</strong></summary>
 
 ```
-Refactor logika retrieval RAG yang sejak Module 9-20 ada di /chat/stream
-jadi tool berdiri sendiri (Module 22, Tahap B) — belum
+Refactor logika retrieval RAG yang sejak Module 9-21 ada di /chat/stream
+jadi tool berdiri sendiri (Module 23, Tahap B) — belum
 disambungkan ke agent atau endpoint mana pun.
 
 GOAL:
@@ -378,8 +378,8 @@ GOAL:
 
 CONTEXT:
 - embed_text ada di app/embeddings.py, VectorStore ada di
-  app/vector_store.py (keduanya sudah ada dari Module 7-16, mungkin
-  diperbarui Module 17 untuk hybrid search — jangan ubah keduanya).
+  app/vector_store.py (keduanya sudah ada dari Module 7-17, mungkin
+  diperbarui Module 18 untuk hybrid search — jangan ubah keduanya).
 - rag_search() TIDAK memanggil LLM/ollama_client sama sekali — hanya
   mengembalikan teks konteks mentah.
 
@@ -413,13 +413,13 @@ Aturan:
 """
 ```
 
-Berbeda dari `NALA_SYSTEM_PROMPT`/`NALA_SYSTEM_PROMPT_NO_CONTEXT` (Module 13) yang mengasumsikan konteks **sudah** disisipkan ke prompt sebelum dikirim ke model, versi `_AGENT` ini tidak menyebut "konteks" sama sekali — modelnya sendiri yang memutuskan kapan perlu mengambil konteks lewat tool, baru menjawab setelah hasil tool tersedia sebagai pesan `role: "tool"` di riwayat.
+Berbeda dari `NALA_SYSTEM_PROMPT`/`NALA_SYSTEM_PROMPT_NO_CONTEXT` (Module 14) yang mengasumsikan konteks **sudah** disisipkan ke prompt sebelum dikirim ke model, versi `_AGENT` ini tidak menyebut "konteks" sama sekali — modelnya sendiri yang memutuskan kapan perlu mengambil konteks lewat tool, baru menjawab setelah hasil tool tersedia sebagai pesan `role: "tool"` di riwayat.
 
 <details>
 <summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 4</strong></summary>
 
 ```
-Tambah system prompt versi agent ke system_prompt.py (Module 22,
+Tambah system prompt versi agent ke system_prompt.py (Module 23,
 Tahap C, Langkah 4) — belum membangun graph atau endpoint apa pun.
 
 GOAL:
@@ -442,7 +442,7 @@ GOAL:
   """
 
 CONTEXT:
-- NALA_SYSTEM_PROMPT/NALA_SYSTEM_PROMPT_NO_CONTEXT (Module 13) sudah
+- NALA_SYSTEM_PROMPT/NALA_SYSTEM_PROMPT_NO_CONTEXT (Module 14) sudah
   ada di file yang sama dan masih dipakai /chat/stream.
 
 GUARDRAIL:
@@ -523,7 +523,7 @@ Penjelasan tiap bagian:
 - **`call_model`**: satu-satunya node yang bicara ke LLM. Mengirim seluruh riwayat `messages` beserta `tools_schema`, hasilnya (dict `message`, mungkin berisi `tool_calls`) langsung ditambahkan ke state.
 - **`call_tool`**: **tidak** memanggil LLM sama sekali — murni menjalankan fungsi Python (`rag_search`) berdasarkan `tool_calls` yang diminta model di langkah sebelumnya, lalu membungkus hasilnya sebagai pesan `role: "tool"`. Kalau model meminta tool yang tidak ada di `TOOLS` (jarang terjadi, tapi mungkin kalau model "berhalusinasi" nama tool), dibalas dengan pesan error yang tetap membuat graph berjalan, bukan crash.
 - **`should_continue`**: fungsi routing edge kondisional — mengecek apakah pesan terakhir dari `call_model` mengandung `tool_calls`. Kalau ya, lanjut ke `call_tool`; kalau tidak, `content` di pesan itu dianggap **jawaban final** dan graph berhenti (`END`).
-- **`graph.add_edge("call_tool", "call_model")`**: edge tetap (bukan kondisional) — setelah tool selesai dijalankan, **selalu** kembali ke `call_model` supaya LLM bisa menyusun jawaban dari hasil tool (atau minta tool lain, kalau Module 23 menambah tool kedua).
+- **`graph.add_edge("call_tool", "call_model")`**: edge tetap (bukan kondisional) — setelah tool selesai dijalankan, **selalu** kembali ke `call_model` supaya LLM bisa menyusun jawaban dari hasil tool (atau minta tool lain, kalau Module 24 menambah tool kedua).
 
 **▶️ Jalankan & lihat hasilnya**
 
@@ -538,7 +538,7 @@ docker compose up --build api
 
 ```
 Bangun graph LangGraph minimal dengan satu tool (RAG) di app/agent.py
-(Module 22, Tahap C, Langkah 5) — belum disambungkan ke endpoint
+(Module 23, Tahap C, Langkah 5) — belum disambungkan ke endpoint
 apa pun.
 
 GOAL:
@@ -590,7 +590,7 @@ nala_agent = build_agent(
 )
 ```
 
-Lalu **buat** fungsi `chat()` (endpoint baru `POST /chat`, belum pernah ada sebelum module ini) yang mendelegasikan sepenuhnya ke agent — logikanya sengaja mengikuti kontrak sederhana `{message}` → `{reply}`, tapi jalur di baliknya sekarang agent dengan tool-calling, bukan `embed_text`/`vector_store.search`/`ollama_client.generate()` langsung seperti yang masih dipakai `/chat/stream` (Module 13, disempurnakan Module 17-20):
+Lalu **buat** fungsi `chat()` (endpoint baru `POST /chat`, belum pernah ada sebelum module ini) yang mendelegasikan sepenuhnya ke agent — logikanya sengaja mengikuti kontrak sederhana `{message}` → `{reply}`, tapi jalur di baliknya sekarang agent dengan tool-calling, bukan `embed_text`/`vector_store.search`/`ollama_client.generate()` langsung seperti yang masih dipakai `/chat/stream` (Module 14, disempurnakan Module 18-21):
 
 ```python
 # app/main.py
@@ -607,9 +607,9 @@ def chat(request: ChatRequest) -> ChatResponse:
     return ChatResponse(reply=reply)
 ```
 
-`/chat` sengaja diberi kontrak sesederhana mungkin (`ChatRequest{message}` → `ChatResponse{reply}`) — bukan karena mempertahankan kontrak lama (endpoint ini baru), tapi karena kontrak paling sederhana, tanpa streaming, sudah cukup untuk kebutuhan agent non-streaming ini, supaya `chat.html` (setelah toggle "Pakai Agent" ditambah Module 23) bisa memanggilnya tanpa penyesuaian besar.
+`/chat` sengaja diberi kontrak sesederhana mungkin (`ChatRequest{message}` → `ChatResponse{reply}`) — bukan karena mempertahankan kontrak lama (endpoint ini baru), tapi karena kontrak paling sederhana, tanpa streaming, sudah cukup untuk kebutuhan agent non-streaming ini, supaya `chat.html` (setelah toggle "Pakai Agent" ditambah Module 24) bisa memanggilnya tanpa penyesuaian besar.
 
-⚠️ **Keputusan scope yang disengaja: `/chat/stream` TIDAK disentuh di module ini.** Endpoint itu tetap memakai retrieval langsung (Module 9-20), belum lewat agent — bukan karena "belum sempat diubah", tapi karena keputusan desain: `chat_stream()` di `OllamaClient` mengalirkan token satu per satu, sedangkan tool-calling butuh respons **utuh** dulu (`message.tool_calls`) sebelum tahu langkah berikutnya — menggabungkan keduanya (streaming + tool loop yang mungkin butuh beberapa putaran) menambah kompleksitas yang tidak sepadan untuk kurikulum ini. Karena itu rangkaian Module 21-25 membangun agent sebagai endpoint **baru** (`/chat`, non-streaming, bisa pakai tool) berdampingan dengan `/chat/stream` (tetap di kemampuan Module 17-20), bukan mengonversi `/chat/stream` menjadi agent. Module 23-25 semuanya dibangun di atas `/chat`, bukan `/chat/stream`.
+⚠️ **Keputusan scope yang disengaja: `/chat/stream` TIDAK disentuh di module ini.** Endpoint itu tetap memakai retrieval langsung (Module 9-21), belum lewat agent — bukan karena "belum sempat diubah", tapi karena keputusan desain: `chat_stream()` di `OllamaClient` mengalirkan token satu per satu, sedangkan tool-calling butuh respons **utuh** dulu (`message.tool_calls`) sebelum tahu langkah berikutnya — menggabungkan keduanya (streaming + tool loop yang mungkin butuh beberapa putaran) menambah kompleksitas yang tidak sepadan untuk kurikulum ini. Karena itu rangkaian Module 22-26 membangun agent sebagai endpoint **baru** (`/chat`, non-streaming, bisa pakai tool) berdampingan dengan `/chat/stream` (tetap di kemampuan Module 18-21), bukan mengonversi `/chat/stream` menjadi agent. Module 24-26 semuanya dibangun di atas `/chat`, bukan `/chat/stream`.
 
 **▶️ Jalankan & lihat hasilnya**
 
@@ -623,14 +623,14 @@ curl -X POST http://localhost:8000/chat \
   -d '{"message": "Apa saja syarat pengajuan kredit untuk nasabah perorangan?"}'
 ```
 
-✅ **Indikator sukses**: tidak ada error `500`, jawaban tetap berbasis dokumen SOP seperti sejak Module 9-20 (kualitasnya seharusnya setara, karena `rag_search()` adalah refactor, bukan perubahan logika retrieval). Cek juga log container `api` — kalau memungkinkan, tambahkan `print()` sementara di `call_model`/`call_tool` untuk melihat bahwa graph benar-benar melewati kedua node itu (dihapus lagi setelah verifikasi, atau ganti dengan `logging` semestinya — audit logging asli baru dibangun di Module 25).
+✅ **Indikator sukses**: tidak ada error `500`, jawaban tetap berbasis dokumen SOP seperti sejak Module 9-21 (kualitasnya seharusnya setara, karena `rag_search()` adalah refactor, bukan perubahan logika retrieval). Cek juga log container `api` — kalau memungkinkan, tambahkan `print()` sementara di `call_model`/`call_tool` untuk melihat bahwa graph benar-benar melewati kedua node itu (dihapus lagi setelah verifikasi, atau ganti dengan `logging` semestinya — audit logging asli baru dibangun di Module 26).
 
 <details>
 <summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 6</strong></summary>
 
 ```
 Buat endpoint baru /chat yang mendelegasikan ke agent LangGraph yang
-sudah dibangun di Langkah 5 (Module 22, Tahap C, Langkah 6) — logika
+sudah dibangun di Langkah 5 (Module 23, Tahap C, Langkah 6) — logika
 retrieval di baliknya adalah refactor dari yang sebelumnya hardcoded
 di /chat/stream, TAPI /chat/stream sendiri tidak diubah.
 
@@ -659,7 +659,7 @@ CONTEXT:
 GUARDRAIL:
 - JANGAN ubah endpoint /chat/stream, /health, /, /upload — Module ini
   SENGAJA tidak menyentuh /chat/stream (lihat catatan scope di
-  materi.md Bagian 4 Tahap C), tetap pakai retrieval langsung Module 9-20.
+  materi.md Bagian 4 Tahap C), tetap pakai retrieval langsung Module 9-21.
 - JANGAN ubah signature ChatRequest/ChatResponse.
 - JANGAN hapus NALA_SYSTEM_PROMPT/NALA_SYSTEM_PROMPT_NO_CONTEXT lama —
   keduanya masih dipakai /chat/stream.
@@ -681,30 +681,30 @@ curl -X POST http://localhost:8000/chat \
   -d '{"message": "Halo, kamu siapa?"}'
 ```
 
-✅ **Indikator sukses**: `/chat/stream` tetap streaming seperti sebelumnya (belum lewat agent, sesuai catatan scope Bagian 4 Tahap C). `/chat` untuk sapaan tetap menjawab tanpa error — jawaban tetap muncul tanpa memanggil tool, membuktikan `should_continue` benar mengarahkan ke `END` langsung tanpa memanggil `call_tool`. Module 22 selesai — lanjut ke Module 23.
+✅ **Indikator sukses**: `/chat/stream` tetap streaming seperti sebelumnya (belum lewat agent, sesuai catatan scope Bagian 4 Tahap C). `/chat` untuk sapaan tetap menjawab tanpa error — jawaban tetap muncul tanpa memanggil tool, membuktikan `should_continue` benar mengarahkan ke `END` langsung tanpa memanggil `call_tool`. Module 23 selesai — lanjut ke Module 24.
 
 ### Troubleshooting
 
 - **`message.tool_calls` selalu kosong padahal pertanyaannya jelas butuh tool**: cek versi Ollama (`docker compose exec ollama ollama --version`) — dukungan tool-calling butuh versi yang cukup baru. Cek juga `RAG_TOOL_SCHEMA` terkirim dengan benar sebagai parameter `tools` di `OllamaClient.chat()` (Bagian 3, ⚠️ catatan kejujuran teknis).
 - **Agent tampak "menggantung" lama (timeout)**: wajar sampai batas tertentu — setiap panggilan tool berarti minimal satu panggilan tambahan ke `llama3.2:3b`, jadi pertanyaan yang butuh tool otomatis lebih lambat dari pertanyaan tanpa tool.
-- **Error umum lain** (`no configuration file provided`, `failed to read dockerfile`, port sudah dipakai, dsb.): lihat bagian praktik Module 7-16 materi.md — penyebab dan solusinya sama, tidak spesifik rangkaian Module 21-25.
+- **Error umum lain** (`no configuration file provided`, `failed to read dockerfile`, port sudah dipakai, dsb.): lihat bagian praktik Module 7-17 materi.md — penyebab dan solusinya sama, tidak spesifik rangkaian Module 22-26.
 
-**📄 Kode lengkap Module 22** (`app/agent.py`, `app/tools/rag_tool.py`, potongan relevan `app/main.py` — sudah ditampilkan utuh di Langkah 3, 5, 6 di atas; tidak ada file lain yang berubah).
+**📄 Kode lengkap Module 23** (`app/agent.py`, `app/tools/rag_tool.py`, potongan relevan `app/main.py` — sudah ditampilkan utuh di Langkah 3, 5, 6 di atas; tidak ada file lain yang berubah).
 
 ## 5. Apa yang TIDAK Ada di Module Ini
 
-- Tool kedua (SQL ke data operasional) — Module 23.
-- Routing eksplisit antara dua tool, termasuk kasus gagal — Module 24 (module ini baru punya **satu** tool, jadi "routing" satu-satunya keputusan yang ada adalah "pakai tool atau tidak", belum "pakai tool yang mana").
-- RBAC dan audit logging — Module 25.
+- Tool kedua (SQL ke data operasional) — Module 24.
+- Routing eksplisit antara dua tool, termasuk kasus gagal — Module 25 (module ini baru punya **satu** tool, jadi "routing" satu-satunya keputusan yang ada adalah "pakai tool atau tidak", belum "pakai tool yang mana").
+- RBAC dan audit logging — Module 26.
 - Perubahan pada `/chat/stream` — lihat catatan scope di Bagian 4 Tahap C di atas.
 
 ## 6. Checkpoint Praktik
 
-Langkah eksekusi lengkap ada di Bagian 4 di atas (Langkah 1-7). Yang perlu dipastikan sebelum lanjut ke Module 23:
+Langkah eksekusi lengkap ada di Bagian 4 di atas (Langkah 1-7). Yang perlu dipastikan sebelum lanjut ke Module 24:
 
 - [ ] `docker compose exec api python -c "..."` di Langkah 1 Tahap A menunjukkan `OllamaClient.chat()` bekerja (dict dengan `role`/`content`)
 - [ ] `rag_search()` (Tahap B) mengembalikan potongan teks dokumen SOP yang relevan
-- [ ] `/chat` (endpoint baru) menjawab pertanyaan seputar SOP dengan kualitas setara `/chat/stream` Module 9-20 (logika retrieval-nya refactor, bukan regresi)
+- [ ] `/chat` (endpoint baru) menjawab pertanyaan seputar SOP dengan kualitas setara `/chat/stream` Module 9-21 (logika retrieval-nya refactor, bukan regresi)
 - [ ] `/chat` tetap menjawab pertanyaan yang tidak butuh dokumen (mis. sapaan) tanpa error
 - [ ] `/chat/stream` masih berjalan seperti sebelumnya, tidak tersentuh sama sekali
 
@@ -714,9 +714,9 @@ Implementasi module ini sudah diuji langsung, dan menghasilkan **dua penyesuaian
 
 ### a. `rag_search()` pakai hybrid search + reranker, bukan `search()` polos
 
-Kode di Langkah 3 (Bagian 4 Tahap B) menunjukkan `rag_search()` memanggil `vector_store.search()` — vector search murni. Tapi Module 17-18 sudah membangun `search_hybrid()` (Module 17) dan `Reranker` (Module 18) yang jauh lebih akurat (dibuktikan dengan angka nyata: Hit Rate@3 naik dari 80% ke 100% setelah reranking, lihat Module 19 Bagian 9). Kalau `rag_search()` dibuat memakai `search()` polos, itu **regresi** — tool RAG di agent ini akan lebih buruk dari `/chat/stream` versi Module 17-20 yang menjadi acuan kualitasnya.
+Kode di Langkah 3 (Bagian 4 Tahap B) menunjukkan `rag_search()` memanggil `vector_store.search()` — vector search murni. Tapi Module 18-19 sudah membangun `search_hybrid()` (Module 18) dan `Reranker` (Module 19) yang jauh lebih akurat (dibuktikan dengan angka nyata: Hit Rate@3 naik dari 80% ke 100% setelah reranking, lihat Module 20 Bagian 9). Kalau `rag_search()` dibuat memakai `search()` polos, itu **regresi** — tool RAG di agent ini akan lebih buruk dari `/chat/stream` versi Module 18-21 yang menjadi acuan kualitasnya.
 
-Implementasi final `rag_search()` diperbaiki supaya konsisten dengan Module 17-18:
+Implementasi final `rag_search()` diperbaiki supaya konsisten dengan Module 18-19:
 
 ```python
 # app/tools/rag_tool.py — versi final, beda dari Langkah 3 di atas
@@ -743,7 +743,7 @@ def build_agent(ollama_client, vector_store, ollama_base_url: str, reranker=None
 
 ### b. Bug ditemukan lewat pengujian: trace Langfuse kehilangan latency dan observations
 
-Setelah `/chat` (endpoint baru) dibangun di atas agent, trace `chat_agent` yang muncul di Langfuse ternyata **`latency: 0`, `observations: 0`** — dibandingkan trace `chat_stream` (masih pipeline lama Module 17-20) yang tetap `latency: ~14s`, `3 observations`. Ini ditemukan lewat inspeksi trace UI langsung, bukan dari membaca kode.
+Setelah `/chat` (endpoint baru) dibangun di atas agent, trace `chat_agent` yang muncul di Langfuse ternyata **`latency: 0`, `observations: 0`** — dibandingkan trace `chat_stream` (masih pipeline lama Module 18-21) yang tetap `latency: ~14s`, `3 observations`. Ini ditemukan lewat inspeksi trace UI langsung, bukan dari membaca kode.
 
 **Akar masalahnya**: instrumentasi Langfuse di `chat()` disederhanakan jadi cuma `trace.update()` di akhir — tidak ada `trace.span()`/`trace.generation()` di dalam node `call_model`/`call_tool`, jadi Langfuse tidak punya observation apa pun untuk menghitung durasi.
 
@@ -820,7 +820,7 @@ def chat(request: ChatRequest) -> ChatResponse:
 
 ## Kesimpulan
 
-Module ini tidak menambah kemampuan baru yang terasa dari sisi user — jawaban `/chat` (endpoint baru) untuk pertanyaan seputar SOP seharusnya terasa sama seperti jawaban `/chat/stream` di akhir Module 20. Yang berubah adalah **arsitektur di baliknya**: logika retrieval yang dulu hardcoded langsung di endpoint sekarang jadi tool yang dipanggil lewat keputusan LLM sendiri, dibungkus graph LangGraph dengan state dan edge kondisional. Fondasi ini sengaja dibangun dengan satu tool dulu, supaya perubahan arsitekturnya bisa diverifikasi terpisah dari kompleksitas tool kedua — yang baru ditambahkan di Module 23.
+Module ini tidak menambah kemampuan baru yang terasa dari sisi user — jawaban `/chat` (endpoint baru) untuk pertanyaan seputar SOP seharusnya terasa sama seperti jawaban `/chat/stream` di akhir Module 21. Yang berubah adalah **arsitektur di baliknya**: logika retrieval yang dulu hardcoded langsung di endpoint sekarang jadi tool yang dipanggil lewat keputusan LLM sendiri, dibungkus graph LangGraph dengan state dan edge kondisional. Fondasi ini sengaja dibangun dengan satu tool dulu, supaya perubahan arsitekturnya bisa diverifikasi terpisah dari kompleksitas tool kedua — yang baru ditambahkan di Module 24.
 
 ---
 

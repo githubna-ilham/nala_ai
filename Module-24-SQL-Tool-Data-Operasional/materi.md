@@ -1,14 +1,14 @@
-# Module 23: Tool Baru — Query SQL ke Data Operasional (PostgreSQL)
+# Module 24: Tool Baru — Query SQL ke Data Operasional (PostgreSQL)
 
 ## Tujuan
 
-Menambahkan tool kedua ke agent NALA (Module 22) untuk menjawab pertanyaan data transaksi operasional (status pengajuan kredit, klaim asuransi) yang tidak pernah ada di dokumen SOP, dengan pendekatan query-builder yang dibatasi (bukan SQL bebas dari LLM) supaya aman untuk data finansial nasabah. Module ini **tidak** menyiapkan PostgreSQL/seed/role dari nol — semua itu sudah dibangun dan diverifikasi di Module 21 (Setup Data Operasional). Module ini murni membangun kode tool yang **membaca** data yang sudah ada di sana, lewat role `nala_readonly` yang sudah tersedia.
+Menambahkan tool kedua ke agent NALA (Module 23) untuk menjawab pertanyaan data transaksi operasional (status pengajuan kredit, klaim asuransi) yang tidak pernah ada di dokumen SOP, dengan pendekatan query-builder yang dibatasi (bukan SQL bebas dari LLM) supaya aman untuk data finansial nasabah. Module ini **tidak** menyiapkan PostgreSQL/seed/role dari nol — semua itu sudah dibangun dan diverifikasi di Module 22 (Setup Data Operasional). Module ini murni membangun kode tool yang **membaca** data yang sudah ada di sana, lewat role `nala_readonly` yang sudah tersedia.
 
 ## Definisi
 
-Pendekatan umum untuk menjawab pertanyaan data lewat bahasa natural disebut **text-to-SQL**: LLM menerima skema tabel, lalu menulis query SQL lengkap sendiri. Tool SQL NALA **sengaja tidak** memakai pendekatan itu — sebagai gantinya dipakai **query-builder yang dibatasi (whitelisted)**: LLM cuma memilih parameter terstruktur (nama tabel, mode, filter) dari daftar tetap lewat `enum` skema tool, sementara kode Python sendiri yang menyusun query SQL final. Ini variasi dari pola **tool-use** yang sudah dikenal sejak Module 22 (tool RAG) — bedanya, tool ini menyentuh data transaksi finansial nasabah, sehingga risikonya jauh lebih tinggi kalau LLM diberi kebebasan penuh menulis SQL.
+Pendekatan umum untuk menjawab pertanyaan data lewat bahasa natural disebut **text-to-SQL**: LLM menerima skema tabel, lalu menulis query SQL lengkap sendiri. Tool SQL NALA **sengaja tidak** memakai pendekatan itu — sebagai gantinya dipakai **query-builder yang dibatasi (whitelisted)**: LLM cuma memilih parameter terstruktur (nama tabel, mode, filter) dari daftar tetap lewat `enum` skema tool, sementara kode Python sendiri yang menyusun query SQL final. Ini variasi dari pola **tool-use** yang sudah dikenal sejak Module 23 (tool RAG) — bedanya, tool ini menyentuh data transaksi finansial nasabah, sehingga risikonya jauh lebih tinggi kalau LLM diberi kebebasan penuh menulis SQL.
 
-Keamanannya bertumpu pada **parameterized query** — nilai (status, `nasabah_id`) dikirim lewat placeholder `%s` terpisah dari struktur query, bukan digabung langsung ke string SQL (yang rentan **SQL injection**) — dipasang berlapis bersama validasi ulang di kode Python dan koneksi yang memakai role database `nala_readonly` (Module 21) yang secara struktural cuma bisa `SELECT`. Pola **defense in depth** ini (beberapa lapisan pertahanan independen, bukan mengandalkan satu titik saja) akan dipakai lagi dengan bentuk berbeda di Module 25 untuk RBAC.
+Keamanannya bertumpu pada **parameterized query** — nilai (status, `nasabah_id`) dikirim lewat placeholder `%s` terpisah dari struktur query, bukan digabung langsung ke string SQL (yang rentan **SQL injection**) — dipasang berlapis bersama validasi ulang di kode Python dan koneksi yang memakai role database `nala_readonly` (Module 22) yang secara struktural cuma bisa `SELECT`. Pola **defense in depth** ini (beberapa lapisan pertahanan independen, bukan mengandalkan satu titik saja) akan dipakai lagi dengan bentuk berbeda di Module 26 untuk RBAC.
 
 ```mermaid
 flowchart LR
@@ -19,30 +19,30 @@ flowchart LR
 ## Hasil Akhir yang Diharapkan
 
 - Tool `query_data_operasional` sudah dibangun: LLM hanya memilih parameter terstruktur dari whitelist (`enum` tabel/mode/status), kode Python yang menyusun query lewat parameterized query (`%s`), tidak ada jalur SQL bebas
-- Tool ini memakai `get_connection()` yang sudah ada dari `app/db.py` (Module 21) — koneksi lewat role `nala_readonly`, tidak pernah lewat role tulis
-- Tool ini terdaftar sebagai tool kedua di agent (`tools_schema`, cabang baru di `call_tool`) tanpa mengubah struktur graph dari Module 22
-- `/chat` bisa menjawab pertanyaan jumlah/status data operasional maupun detail satu nasabah, memakai data yang sudah Anda tambahkan lewat `/data-operasional` di Module 21, sementara tool RAG (Module 22) tetap berfungsi berdampingan tanpa regresi
+- Tool ini memakai `get_connection()` yang sudah ada dari `app/db.py` (Module 22) — koneksi lewat role `nala_readonly`, tidak pernah lewat role tulis
+- Tool ini terdaftar sebagai tool kedua di agent (`tools_schema`, cabang baru di `call_tool`) tanpa mengubah struktur graph dari Module 23
+- `/chat` bisa menjawab pertanyaan jumlah/status data operasional maupun detail satu nasabah, memakai data yang sudah Anda tambahkan lewat `/data-operasional` di Module 22, sementara tool RAG (Module 23) tetap berfungsi berdampingan tanpa regresi
 - `/chat` mendukung riwayat multi-turn (`history`, windowing 10 pesan) dan bisa dicoba langsung lewat toggle "Pakai Agent" di `chat.html`, tidak cuma lewat `curl`
 - Angka mata uang (`jumlah_pengajuan`/`jumlah_klaim`) diformat eksplisit (`Rp 50.000.000`) di tool, dan pemanggilan tool tahan terhadap argumen tidak lengkap dari LLM (tidak crash jadi 500)
 - Keterbatasan nyata model kecil didokumentasikan dengan angka (Bagian 6): sintesis jawaban dari hasil tool cuma berhasil ~20-33% dari percobaan berulang untuk kasus yang sama — dicatat jujur, bukan disembunyikan atau diklaim sudah terselesaikan
 
-**Prasyarat**: Module 21 (service `postgres` sehat, tabel `pengajuan_kredit`/`klaim_asuransi` berisi data, role `nala_readonly` sudah ada dan terbukti hanya bisa `SELECT`) dan Module 22 (agent LangGraph dengan tool `cari_dokumen_sop` sudah jalan) harus sudah selesai.
+**Prasyarat**: Module 22 (service `postgres` sehat, tabel `pengajuan_kredit`/`klaim_asuransi` berisi data, role `nala_readonly` sudah ada dan terbukti hanya bisa `SELECT`) dan Module 23 (agent LangGraph dengan tool `cari_dokumen_sop` sudah jalan) harus sudah selesai.
 
 ## 1. Kenapa Dokumen SOP Saja Tidak Cukup
 
-`sop-pengajuan-kredit.md` (dipakai sejak Module 7-16) menjelaskan **prosedur**: syarat dokumen, tahapan proses, estimasi waktu. Tapi staff finance sehari-hari juga bertanya hal yang jawabannya **tidak ada di prosedur mana pun**, karena jawabannya adalah data transaksi yang berubah setiap hari:
+`sop-pengajuan-kredit.md` (dipakai sejak Module 7-17) menjelaskan **prosedur**: syarat dokumen, tahapan proses, estimasi waktu. Tapi staff finance sehari-hari juga bertanya hal yang jawabannya **tidak ada di prosedur mana pun**, karena jawabannya adalah data transaksi yang berubah setiap hari:
 
 > "Berapa banyak pengajuan kredit yang statusnya masih pending minggu ini?"
 > "Nasabah dengan ID N-00231, klaimnya sudah diproses belum?"
 
-Tidak ada jumlah chunking atau reranking (Module 17-20) yang bisa membuat RAG menjawab ini dengan benar — jawabannya bukan tersembunyi di suatu dokumen yang belum ter-retrieve, jawabannya **tidak pernah ditulis di dokumen apa pun**, karena sifatnya data operasional yang berubah, bukan pengetahuan statis. Itu sebabnya PT Nusantara Finance butuh sumber data kedua: query langsung ke database operasional yang sudah disiapkan Module 21. Tool kedua ini yang dibangun di module ini, mengikuti pola tool pertama (Module 22) — fungsi Python biasa yang dipanggil lewat keputusan LLM, bukan hardcoded ke endpoint.
+Tidak ada jumlah chunking atau reranking (Module 18-21) yang bisa membuat RAG menjawab ini dengan benar — jawabannya bukan tersembunyi di suatu dokumen yang belum ter-retrieve, jawabannya **tidak pernah ditulis di dokumen apa pun**, karena sifatnya data operasional yang berubah, bukan pengetahuan statis. Itu sebabnya PT Nusantara Finance butuh sumber data kedua: query langsung ke database operasional yang sudah disiapkan Module 22. Tool kedua ini yang dibangun di module ini, mengikuti pola tool pertama (Module 23) — fungsi Python biasa yang dipanggil lewat keputusan LLM, bukan hardcoded ke endpoint.
 
 ## 2. Risiko Nyata: Kenapa Tidak Boleh "LLM Menulis SQL Bebas"
 
 Pendekatan paling gampang dibayangkan — dan **sengaja tidak dipakai di sini** — adalah: kirim skema tabel ke LLM, minta ia menulis query SQL lengkap sebagai argumen tool, lalu jalankan langsung ke database. Ini terdengar fleksibel, tapi punya dua masalah serius untuk sistem yang menyentuh data finansial nasabah sungguhan:
 
 1. **SQL injection dari arah yang tidak biasa.** Bukan user jahat yang menyisipkan `; DROP TABLE` lewat form input (itu sudah lama diatasi lewat parameterized query di banyak sistem) — di sini risikonya adalah **LLM itu sendiri** yang bisa menghasilkan query destruktif atau bocor-data, baik karena salah paham konteks, halusinasi, maupun (skenario lebih serius untuk sistem produksi) prompt injection lewat konten yang di-retrieve (mis. dokumen yang sengaja diracuni berisi instruksi tersembunyi). LLM yang menulis SQL bebas berarti **string yang tidak sepenuhnya bisa diverifikasi aman, dieksekusi langsung** ke database produksi.
-2. **Tidak ada batas query yang bisa dijalankan.** SQL bebas berarti LLM secara teori bisa menulis `SELECT *` tanpa `WHERE`, join ke tabel yang tidak seharusnya diakses role tertentu (lihat Module 25), atau query yang mahal secara performa (full table scan berulang).
+2. **Tidak ada batas query yang bisa dijalankan.** SQL bebas berarti LLM secara teori bisa menulis `SELECT *` tanpa `WHERE`, join ke tabel yang tidak seharusnya diakses role tertentu (lihat Module 26), atau query yang mahal secara performa (full table scan berulang).
 
 ### Pendekatan yang dipakai NALA: query-builder yang dibatasi (whitelisted), bukan SQL bebas
 
@@ -61,13 +61,13 @@ flowchart LR
 
 Lapisan keamanan tambahan yang dipakai bersama-sama (bukan mengandalkan satu saja):
 
-- **Role database read-only.** Koneksi yang dipakai tool ini memakai user PostgreSQL dengan hak akses `SELECT` saja — role ini (`nala_readonly`) sudah dibuat dan diverifikasi dua arah di Module 21 — bahkan kalau ada celah di lapisan query-builder, user ini secara struktural tidak bisa `INSERT`/`UPDATE`/`DELETE`/`DROP`.
+- **Role database read-only.** Koneksi yang dipakai tool ini memakai user PostgreSQL dengan hak akses `SELECT` saja — role ini (`nala_readonly`) sudah dibuat dan diverifikasi dua arah di Module 22 — bahkan kalau ada celah di lapisan query-builder, user ini secara struktural tidak bisa `INSERT`/`UPDATE`/`DELETE`/`DROP`.
 - **Whitelist nama tabel & kolom.** Nama tabel dan kolom filter yang boleh dipakai ditentukan lewat `enum` di skema tool (bukan string bebas) — LLM tidak bisa meminta tabel/kolom yang tidak terdaftar sama sekali, jadi tidak ada jalan untuk "menebak" nama tabel sensitif lain di database yang sama.
 - **Limit baris & timeout.** Query selalu membawa `LIMIT` tetap dan timeout koneksi, supaya kesalahan/salah paham LLM (mis. lupa filter) tidak berujung menyedot seluruh tabel atau membebani database.
 
 ## 3. Struktur Kode yang Ditambahkan
 
-Tiga tahap: **Tahap A** membangun tool query-builder, **Tahap B** mendaftarkan tool kedua ini ke agent (Module 22), **Tahap C** dua penyesuaian tambahan yang ditemukan lewat uji nyata. Tidak ada tahap setup database di module ini — service PostgreSQL, skema tabel, data, dan role `nala_readonly` semuanya sudah ada dari Module 21.
+Tiga tahap: **Tahap A** membangun tool query-builder, **Tahap B** mendaftarkan tool kedua ini ke agent (Module 23), **Tahap C** dua penyesuaian tambahan yang ditemukan lewat uji nyata. Tidak ada tahap setup database di module ini — service PostgreSQL, skema tabel, data, dan role `nala_readonly` semuanya sudah ada dari Module 22.
 
 ### Tahap A — Bangun tool query-builder
 
@@ -181,7 +181,7 @@ def query_data_operasional(
         return "Tidak dapat terhubung ke database operasional saat ini."
 ```
 
-`from app.db import get_connection` memakai fungsi yang **sudah ada** dari Module 21 — tidak ada dependency baru, tidak ada koneksi baru yang perlu dibuat di module ini. `get_connection()` memakai kredensial `nala_readonly` (dibuat & diverifikasi Module 21) — **bukan** `nala_admin` atau `nala_writer`. Ini konsekuensi langsung dari Bagian 2: koneksi yang dipakai untuk melayani pertanyaan LLM harus selalu lewat role paling terbatas yang cukup untuk tugasnya.
+`from app.db import get_connection` memakai fungsi yang **sudah ada** dari Module 22 — tidak ada dependency baru, tidak ada koneksi baru yang perlu dibuat di module ini. `get_connection()` memakai kredensial `nala_readonly` (dibuat & diverifikasi Module 22) — **bukan** `nala_admin` atau `nala_writer`. Ini konsekuensi langsung dari Bagian 2: koneksi yang dipakai untuk melayani pertanyaan LLM harus selalu lewat role paling terbatas yang cukup untuk tugasnya.
 
 **`_format_value()` ditambahkan setelah uji nyata** (lihat Bagian 6) — tanpa ini, kolom `jumlah_pengajuan`/`jumlah_klaim` dikembalikan sebagai angka mentah (`50000000.00`), dan `llama3.2:3b` pernah salah membaca ulang angka itu jadi `Rp 500.000.000` (salah 10x lipat) saat menyusun kalimat jawaban. Memformat angka jadi `Rp 50.000.000` **langsung di tool**, sebelum dikirim ke LLM, mengurangi peluang model perlu "menghitung ulang" formatnya sendiri.
 
@@ -191,7 +191,7 @@ Penjelasan kenapa desain ini tetap aman walau **terlihat** memakai f-string untu
 - **Nilai (bukan struktur query)** — seperti `status`, `nasabah_id` — **selalu** lewat placeholder `%s` dan parameter terpisah ke `cur.execute()`, tidak pernah digabung ke string SQL. Ini yang benar-benar mencegah SQL injection secara teknis: `%s` membuat psycopg mengirim nilai sebagai data ke PostgreSQL, bukan sebagai teks yang diparse jadi bagian query.
 - **Tidak ada mode "SQL bebas"** — hanya dua `mode` yang terdaftar (`hitung_per_status`, `detail_nasabah`), masing-masing menyusun struktur query yang **fixed**, cuma nilainya yang berubah dari argumen. LLM tidak pernah bisa "menciptakan" bentuk query baru yang tidak dirancang developer.
 - **`LIMIT` tetap** (`_MAX_ROWS = 20`) di `detail_nasabah` mencegah satu query menarik seluruh isi tabel walau `nasabah_id` salah ketik jadi pola yang cocok ke banyak baris.
-- **Koneksi lewat `nala_readonly`** (Module 21) sebagai lapisan terakhir — bahkan kalau semua validasi di atas entah bagaimana gagal, database sendiri menolak apa pun selain `SELECT`.
+- **Koneksi lewat `nala_readonly`** (Module 22) sebagai lapisan terakhir — bahkan kalau semua validasi di atas entah bagaimana gagal, database sendiri menolak apa pun selain `SELECT`.
 
 **▶️ Jalankan & lihat hasilnya**
 
@@ -202,14 +202,14 @@ print(query_data_operasional(tabel='pengajuan_kredit', mode='hitung_per_status')
 "
 ```
 
-✅ **Indikator sukses**: daftar status beserta jumlahnya (mis. `pending: 3`, dst.) sesuai data yang sudah Anda masukkan lewat form `/data-operasional` di Module 21.
+✅ **Indikator sukses**: daftar status beserta jumlahnya (mis. `pending: 3`, dst.) sesuai data yang sudah Anda masukkan lewat form `/data-operasional` di Module 22.
 
 <details>
 <summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 1</strong></summary>
 
 ```
 Bangun tool query SQL yang dibatasi (bukan SQL bebas) untuk data
-operasional (Module 23, Tahap A).
+operasional (Module 24, Tahap A).
 
 GOAL:
 - Buat Nala/app/tools/sql_tool.py:
@@ -234,9 +234,9 @@ GOAL:
 
 CONTEXT:
 - app/db.py (fungsi get_connection() memakai role nala_readonly)
-  SUDAH ADA dari Module 21 — JANGAN buat ulang, cukup import.
+  SUDAH ADA dari Module 22 — JANGAN buat ulang, cukup import.
 - Tabel pengajuan_kredit dan klaim_asuransi, beserta role
-  nala_readonly, sudah ada dan berisi data dari Module 21.
+  nala_readonly, sudah ada dan berisi data dari Module 22.
 
 GUARDRAIL:
 - JANGAN pernah menyusun query dengan menggabungkan nilai (status,
@@ -245,7 +245,7 @@ GUARDRAIL:
 - JANGAN tambahkan mode/parameter yang memungkinkan SQL bebas dari
   LLM.
 - JANGAN ubah app/db.py, app/tools/rag_tool.py, atau struktur graph
-  di app/agent.py yang sudah ada dari Module 21-22.
+  di app/agent.py yang sudah ada dari Module 22-23.
 ```
 
 </details>
@@ -287,11 +287,11 @@ def build_agent(ollama_client, vector_store, ollama_base_url: str, reranker=None
             tool_messages.append({"role": "tool", "content": result, "tool_call_id": call.get("id"), "name": name})
         return {"messages": tool_messages}
 
-    # should_continue, graph.add_node/add_edge/compile() TIDAK berubah dari Module 22
+    # should_continue, graph.add_node/add_edge/compile() TIDAK berubah dari Module 23
     ...
 ```
 
-Perubahan dibanding Module 22: `tools_schema` sekarang berisi **dua** skema (bukan satu), dan `call_tool` punya cabang `elif` baru yang memanggil `query_data_operasional(**args)`. Signature `build_agent()` sendiri **tidak berubah** di langkah ini — parameter `reranker`, `trace`, dan `model_name` sudah ada sejak versi final Module 22 (Bagian 7a-7b) dan dipertahankan apa adanya di sini, supaya `reranker` yang dipakai di pemanggilan `rag_search()` tetap terdefinisi. Struktur graph itu sendiri (`call_model` → `should_continue` → `call_tool`/`END` → kembali ke `call_model`) **tidak berubah sama sekali** — inilah keuntungan pola LangGraph yang sudah dibangun di Module 22: menambah tool kedua tidak butuh mendesain ulang alur, cukup mendaftarkan skema baru dan menambah satu cabang di `call_tool`.
+Perubahan dibanding Module 23: `tools_schema` sekarang berisi **dua** skema (bukan satu), dan `call_tool` punya cabang `elif` baru yang memanggil `query_data_operasional(**args)`. Signature `build_agent()` sendiri **tidak berubah** di langkah ini — parameter `reranker`, `trace`, dan `model_name` sudah ada sejak versi final Module 23 (Bagian 7a-7b) dan dipertahankan apa adanya di sini, supaya `reranker` yang dipakai di pemanggilan `rag_search()` tetap terdefinisi. Struktur graph itu sendiri (`call_model` → `should_continue` → `call_tool`/`END` → kembali ke `call_model`) **tidak berubah sama sekali** — inilah keuntungan pola LangGraph yang sudah dibangun di Module 23: menambah tool kedua tidak butuh mendesain ulang alur, cukup mendaftarkan skema baru dan menambah satu cabang di `call_tool`.
 
 Dua penambahan lain (di luar rencana awal, ditemukan lewat uji nyata — lihat Bagian 6):
 
@@ -310,7 +310,7 @@ curl -X POST http://localhost:8000/chat \
   -d '{"message": "Berapa banyak pengajuan kredit yang statusnya pending?"}'
 ```
 
-✅ **Indikator sukses**: jawaban menyebut angka **sesuai data yang sudah Anda tambahkan di Module 21** (bukan angka seed tetap — data `pengajuan_kredit` sekarang campuran seed minimal + apa pun yang Anda input lewat form `/data-operasional`). Kalau ingin memverifikasi manual angka pastinya:
+✅ **Indikator sukses**: jawaban menyebut angka **sesuai data yang sudah Anda tambahkan di Module 22** (bukan angka seed tetap — data `pengajuan_kredit` sekarang campuran seed minimal + apa pun yang Anda input lewat form `/data-operasional`). Kalau ingin memverifikasi manual angka pastinya:
 
 ```bash
 docker compose exec postgres psql -U nala_admin -d nala_operasional -c "SELECT status, COUNT(*) FROM pengajuan_kredit GROUP BY status;"
@@ -324,7 +324,7 @@ curl -X POST http://localhost:8000/chat \
   -d '{"message": "Bagaimana status pengajuan kredit nasabah N-00231?"}'
 ```
 
-✅ Jawaban harus menyebut status yang sesuai dengan baris `nasabah_id` tersebut di database. Terakhir, verifikasi tool pertama (Module 22) tidak rusak:
+✅ Jawaban harus menyebut status yang sesuai dengan baris `nasabah_id` tersebut di database. Terakhir, verifikasi tool pertama (Module 23) tidak rusak:
 
 ```bash
 curl -X POST http://localhost:8000/chat \
@@ -338,7 +338,7 @@ curl -X POST http://localhost:8000/chat \
 <summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 2</strong></summary>
 
 ```
-Daftarkan tool query SQL sebagai tool kedua di agent (Module 23,
+Daftarkan tool query SQL sebagai tool kedua di agent (Module 24,
 Tahap B).
 
 GOAL:
@@ -349,17 +349,17 @@ GOAL:
   "query_data_operasional", result = query_data_operasional(**args).
 
 CONTEXT:
-- app/agent.py sudah punya struktur graph lengkap dari Module 22 —
+- app/agent.py sudah punya struktur graph lengkap dari Module 23 —
   struktur graph (node/edge) TIDAK berubah, hanya isi call_tool dan
   daftar tools_schema yang bertambah.
 - app/tools/sql_tool.py (SQL_TOOL_SCHEMA, query_data_operasional)
   sudah dibangun di Tahap A module ini.
 - Data dan role nala_readonly yang dipakai tool ini sudah ada dari
-  Module 21.
+  Module 22.
 
 GUARDRAIL:
 - JANGAN ubah app/tools/rag_tool.py atau struktur graph (should_continue,
-  add_node, add_edge) yang sudah ada dari Module 22.
+  add_node, add_edge) yang sudah ada dari Module 23.
 - JANGAN tambahkan mode/parameter baru ke sql_tool.py di langkah ini —
   cukup daftarkan yang sudah ada.
 ```
@@ -370,10 +370,10 @@ GUARDRAIL:
 
 **Langkah 3 — Perbarui `NALA_SYSTEM_PROMPT_AGENT` supaya menyebut KEDUA tool**
 
-`NALA_SYSTEM_PROMPT_AGENT` ditulis di Module 22, saat agent baru punya **satu** tool — isinya cuma bilang "kamu punya akses ke tool untuk mencari dokumen SOP". Setelah tool kedua (`query_data_operasional`) didaftarkan di Langkah 2, system prompt itu **tidak lagi akurat** — dan ternyata ini bukan cuma soal kelengkapan dokumentasi: system prompt yang tidak menyebut tool kedua membuat `llama3.2:3b` lebih sering gagal memakai hasil tool itu dengan benar (lihat Bagian 6).
+`NALA_SYSTEM_PROMPT_AGENT` ditulis di Module 23, saat agent baru punya **satu** tool — isinya cuma bilang "kamu punya akses ke tool untuk mencari dokumen SOP". Setelah tool kedua (`query_data_operasional`) didaftarkan di Langkah 2, system prompt itu **tidak lagi akurat** — dan ternyata ini bukan cuma soal kelengkapan dokumentasi: system prompt yang tidak menyebut tool kedua membuat `llama3.2:3b` lebih sering gagal memakai hasil tool itu dengan benar (lihat Bagian 6).
 
 ```python
-# app/system_prompt.py — NALA_SYSTEM_PROMPT_AGENT, versi final Module 23
+# app/system_prompt.py — NALA_SYSTEM_PROMPT_AGENT, versi final Module 24
 NALA_SYSTEM_PROMPT_AGENT = """Kamu adalah NALA, asisten AI serba bisa untuk PT Nusantara Finance.
 Kamu punya akses ke dua tool:
 1. cari_dokumen_sop — untuk pertanyaan tentang prosedur, syarat, atau kebijakan internal.
@@ -392,7 +392,7 @@ informasinya tidak ditemukan. Jangan mengarang jawaban.
 <summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 3</strong></summary>
 
 ```
-Perbarui system prompt agent supaya menyebut kedua tool (Module 23,
+Perbarui system prompt agent supaya menyebut kedua tool (Module 24,
 Tahap C, Langkah 3).
 
 GOAL:
@@ -409,7 +409,7 @@ GOAL:
 
 CONTEXT:
 - app/system_prompt.py sudah ada dari Module 8, dan
-  NALA_SYSTEM_PROMPT_AGENT ditambahkan di Module 22 saat agent baru
+  NALA_SYSTEM_PROMPT_AGENT ditambahkan di Module 23 saat agent baru
   punya satu tool (cari_dokumen_sop) — sekarang perlu diperbarui
   karena tool kedua (query_data_operasional) sudah didaftarkan di
   Langkah 2 module ini.
@@ -425,7 +425,7 @@ GUARDRAIL:
 
 **Langkah 4 — Dukungan riwayat multi-turn di `/chat`, plus toggle di UI chat**
 
-`/chat` (endpoint baru sejak Module 22) awalnya cuma menerima satu `message` (string), beda dari `/chat/stream` yang menerima `messages` (array riwayat) sejak Module 8. Ini artinya mode Agent (lewat `/chat`) awalnya **tidak** bisa memahami pertanyaan lanjutan tanpa konteks eksplisit. Diperbaiki dengan menambah field opsional `history`:
+`/chat` (endpoint baru sejak Module 23) awalnya cuma menerima satu `message` (string), beda dari `/chat/stream` yang menerima `messages` (array riwayat) sejak Module 8. Ini artinya mode Agent (lewat `/chat`) awalnya **tidak** bisa memahami pertanyaan lanjutan tanpa konteks eksplisit. Diperbaiki dengan menambah field opsional `history`:
 
 ```python
 # app/main.py — ChatMessage dipindah ke atas ChatRequest supaya bisa direferensikan
@@ -505,7 +505,7 @@ print('Turn 2 (tanpa sebut \'pengajuan kredit\' lagi):', turn2['reply'])
 
 ```
 Tambahkan dukungan riwayat multi-turn ke endpoint /chat, plus toggle
-"Pakai Agent" di UI chat (Module 23, Tahap C, Langkah 4).
+"Pakai Agent" di UI chat (Module 24, Tahap C, Langkah 4).
 
 GOAL:
 - Di Nala/app/main.py: pindahkan/tambahkan model ChatMessage (role:
@@ -526,7 +526,7 @@ GOAL:
   tidak berubah.
 
 CONTEXT:
-- app/main.py sudah punya endpoint /chat (dari Module 22, menerima
+- app/main.py sudah punya endpoint /chat (dari Module 23, menerima
   message saja) dan /chat/stream (dari Module 8, sudah menerima
   messages/history dengan HISTORY_WINDOW) — pakai ulang konstanta
   HISTORY_WINDOW yang sama, jangan buat angka window baru.
@@ -544,28 +544,28 @@ GUARDRAIL:
 
 </details>
 
-**📄 Kode lengkap Module 23** (`app/tools/sql_tool.py`, `app/system_prompt.py`, potongan relevan `app/agent.py`/`app/main.py`/`app/templates/chat.html` — sudah ditampilkan utuh di Langkah 1-4 di atas).
+**📄 Kode lengkap Module 24** (`app/tools/sql_tool.py`, `app/system_prompt.py`, potongan relevan `app/agent.py`/`app/main.py`/`app/templates/chat.html` — sudah ditampilkan utuh di Langkah 1-4 di atas).
 
 **Troubleshooting**
 
 - **`permission denied for table ...` padahal seharusnya diizinkan**: tool SQL (Langkah 1) harus memakai `nala_readonly` (bukan `nala_admin`/`nala_writer`) — tertukar salah satunya akan memicu `permission denied` untuk operasi yang seharusnya sah.
-- **Angka yang dijawab `/chat` tidak cocok dengan database**: verifikasi manual isi tabel dengan perintah `psql` di atas (Langkah 2) — kalau datanya beda dari yang diasumsikan, ulangi pengisian lewat form `/data-operasional` (Module 21) sampai datanya sesuai target.
-- **Error umum lain** (`no configuration file provided`, `failed to read dockerfile`, port sudah dipakai, dsb.): lihat bagian Troubleshooting di materi.md module-module sebelumnya (Module 7-16) — penyebab dan solusinya sama, tidak spesifik rangkaian Module 21-25.
+- **Angka yang dijawab `/chat` tidak cocok dengan database**: verifikasi manual isi tabel dengan perintah `psql` di atas (Langkah 2) — kalau datanya beda dari yang diasumsikan, ulangi pengisian lewat form `/data-operasional` (Module 22) sampai datanya sesuai target.
+- **Error umum lain** (`no configuration file provided`, `failed to read dockerfile`, port sudah dipakai, dsb.): lihat bagian Troubleshooting di materi.md module-module sebelumnya (Module 7-17) — penyebab dan solusinya sama, tidak spesifik rangkaian Module 22-26.
 
 ## 4. Apa yang TIDAK Ada di Module Ini
 
-- Routing eksplisit yang dijelaskan/didiagnosis mendalam antara dua tool — module ini baru **membuktikan** kedua tool bekerja lewat contoh pertanyaan yang jelas-jelas satu arah; kasus ambigu dan salah pilih tool baru dibahas Module 24.
-- Pembatasan akses tool SQL berdasarkan role user — saat ini **siapa pun** yang memanggil `/chat` bisa memicu tool SQL. Ini **secara sengaja belum aman untuk production** dan diperbaiki di Module 25 (RBAC).
-- Audit trail siapa mengakses data siapa — Module 25.
+- Routing eksplisit yang dijelaskan/didiagnosis mendalam antara dua tool — module ini baru **membuktikan** kedua tool bekerja lewat contoh pertanyaan yang jelas-jelas satu arah; kasus ambigu dan salah pilih tool baru dibahas Module 25.
+- Pembatasan akses tool SQL berdasarkan role user — saat ini **siapa pun** yang memanggil `/chat` bisa memicu tool SQL. Ini **secara sengaja belum aman untuk production** dan diperbaiki di Module 26 (RBAC).
+- Audit trail siapa mengakses data siapa — Module 26.
 
 ## 5. Checkpoint Praktik
 
-Yang perlu dipastikan sebelum lanjut ke Module 24:
+Yang perlu dipastikan sebelum lanjut ke Module 25:
 
 - [ ] `app/tools/sql_tool.py` berhasil dibuat, `query_data_operasional` memakai `get_connection()` yang sudah ada (bukan koneksi baru)
-- [ ] `/chat` bisa menjawab pertanyaan jumlah/status dari data operasional lewat `query_data_operasional`, dan angkanya cocok dengan data yang sudah Anda tambahkan di Module 21
+- [ ] `/chat` bisa menjawab pertanyaan jumlah/status dari data operasional lewat `query_data_operasional`, dan angkanya cocok dengan data yang sudah Anda tambahkan di Module 22
 - [ ] `/chat` bisa menjawab pertanyaan detail satu nasabah tertentu
-- [ ] Tool RAG (Module 22) tetap berfungsi berdampingan, tidak ada regresi
+- [ ] Tool RAG (Module 23) tetap berfungsi berdampingan, tidak ada regresi
 - [ ] Multi-turn (Langkah 4) bekerja — pertanyaan lanjutan yang tidak menyebut ulang topik tetap dipahami lewat `history`
 
 ## 6. Hasil Uji Nyata: Tool Selalu Benar, Sintesis Jawaban Tidak Selalu
@@ -587,11 +587,11 @@ Tapi generasi jawaban akhir (`agent_call_model` kedua, setelah hasil tool tersed
 
 **Kesimpulan jujur dari eksperimen ini**: ini bukan bug kode yang bisa diperbaiki dengan penyesuaian kecil — ini keterbatasan kapabilitas `llama3.2:3b` dalam mensintesis hasil tool terstruktur jadi kalimat jawaban, yang **tidak deterministik** dan **tidak membaik** dengan menurunkan `temperature` (temuan yang berlawanan dari intuisi umum "temperature rendah = lebih akurat" — di sini temperature rendah cuma bikin *konsisten*, bukan *benar*). `NALA_SYSTEM_PROMPT_AGENT` versi final (Langkah 3, dengan instruksi eksplisit "PERCAYA dan PAKAI hasil tool") membantu tapi tidak menghilangkan masalah ini sepenuhnya.
 
-Ini konsisten dengan pola yang sudah berulang kali ditemukan sepanjang kurikulum ini (Module 18 Bagian 8 "Temuan Tambahan") — model kecil (3B parameter) punya batas kemampuan penalaran yang tidak bisa diatasi murni lewat rekayasa prompt/parameter. Kalau NALA production butuh akurasi lebih tinggi untuk kasus seperti ini, `qwen2.5:7b` (opsi upgrade RAM 32GB+, disebut sejak README utama) adalah jalur yang lebih realistis dibanding terus mengutak-atik prompt untuk model 3B.
+Ini konsisten dengan pola yang sudah berulang kali ditemukan sepanjang kurikulum ini (Module 19 Bagian 8 "Temuan Tambahan") — model kecil (3B parameter) punya batas kemampuan penalaran yang tidak bisa diatasi murni lewat rekayasa prompt/parameter. Kalau NALA production butuh akurasi lebih tinggi untuk kasus seperti ini, `qwen2.5:7b` (opsi upgrade RAM 32GB+, disebut sejak README utama) adalah jalur yang lebih realistis dibanding terus mengutak-atik prompt untuk model 3B.
 
 ## Kesimpulan
 
-Tool kedua ini membuktikan pola dari Module 22 memang bisa berkembang: menambah kemampuan baru ke agent tidak berarti menulis ulang graph, cukup menambah skema tool dan cabang eksekusi. Module ini sengaja tidak menyentuh setup database sama sekali — Postgres, skema, data, dan pemisahan role sudah selesai di Module 21, jadi pekerjaan di sini murni soal **keamanan tool**: NALA sengaja tidak pernah membiarkan LLM menulis SQL bebas — pilihannya dibatasi lewat `enum` skema tool, divalidasi ulang di kode Python, dieksekusi lewat parameterized query, dan dijalankan lewat role database (`nala_readonly`, dari Module 21) yang secara struktural cuma bisa membaca. Lapisan-lapisan ini bekerja bersama supaya kesalahan di satu lapisan (termasuk model yang berhalusinasi atau salah paham) tidak otomatis berarti kebocoran atau kerusakan data.
+Tool kedua ini membuktikan pola dari Module 23 memang bisa berkembang: menambah kemampuan baru ke agent tidak berarti menulis ulang graph, cukup menambah skema tool dan cabang eksekusi. Module ini sengaja tidak menyentuh setup database sama sekali — Postgres, skema, data, dan pemisahan role sudah selesai di Module 22, jadi pekerjaan di sini murni soal **keamanan tool**: NALA sengaja tidak pernah membiarkan LLM menulis SQL bebas — pilihannya dibatasi lewat `enum` skema tool, divalidasi ulang di kode Python, dieksekusi lewat parameterized query, dan dijalankan lewat role database (`nala_readonly`, dari Module 22) yang secara struktural cuma bisa membaca. Lapisan-lapisan ini bekerja bersama supaya kesalahan di satu lapisan (termasuk model yang berhalusinasi atau salah paham) tidak otomatis berarti kebocoran atau kerusakan data.
 
 ---
 
