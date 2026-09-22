@@ -66,9 +66,29 @@ Dibanding starter code Module 1-6, ada tiga penambahan di `Nala/`. Daripada lang
 2. **Tahap B — Buat file halaman dulu** (`chat.html`, `style.css`), belum terhubung ke FastAPI sama sekali. Fokus: menulis halamannya sendiri dulu sebagai unit yang berdiri sendiri, sebelum dipikirkan cara "menyambungkannya".
 3. **Tahap C — Hubungkan**: tambah dependency `jinja2`, pasang `Jinja2Templates`/`StaticFiles`, dan buat endpoint `GET "/"` yang merender file dari Tahap B.
 
-**Target akhirnya satu file yang sama: `Nala/app/main.py`** (plus `chat.html`, `style.css`) — file yang sama yang sudah Anda edit sejak Module 1-6, langsung di tempat. Ikuti Langkah 1-6 berikut untuk menulis kodenya bertahap.
+**Target akhirnya satu file yang sama: `Nala/app/main.py`** (plus `chat.html`, `style.css`) — file yang sama yang sudah Anda edit sejak Module 1-6, langsung di tempat. Ikuti Langkah 0-6 berikut untuk menulis kodenya bertahap.
 
 ### Tahap A — Verifikasi kode Module 1-6 (belum ada HTML)
+
+**Langkah 0 — Prasyarat sebelum mulai**
+
+- Sudah menyelesaikan **Module 1-6** (Docker Desktop terinstall, `llama3.2:3b` pernah dipakai, familiar dengan `docker compose up --build`).
+- **`Nala/`** adalah satu-satunya folder kerja Anda, dipakai sejak Module 1-6 dan terus sama sepanjang Module 7-29 — panduan Module 7-16 membangunnya **bertahap, module demi module, langsung di tempat**, bukan disalin ke folder baru. `ollama_client.py`, `system_prompt.py`, `main.py`, `docker-compose.yml`, dan seterusnya sudah ada di sana dari Module 1-6. Konsekuensinya: **tidak ada folder lain untuk dipindahkan, dan tidak ada container yang perlu dimatikan** — container Ollama yang sudah jalan sejak Module 1-6 terus dipakai apa adanya (project Docker Compose-nya sama, karena foldernya sama), dan model yang sudah di-pull otomatis ikut terbawa, tidak perlu di-pull ulang.
+
+⚠️ **Naikkan alokasi RAM Docker Desktop sebelum Module 16.** Module 7-16 menambahkan dua service baru di atas stack Module 1-6: **OpenSearch** (vector store, mulai Module 12) dan **Airflow** (orchestrator, mode `standalone`, mulai Module 16) — keduanya jauh lebih berat dibanding FastAPI/Ollama saja: OpenSearch adalah JVM yang butuh heap tersendiri, dan Airflow standalone menjalankan webserver + scheduler + database sekaligus dalam satu container. Kalau di Module 1-6 Anda mengalokasikan Docker Desktop di batas minimal (8–12GB), **naikkan ke 16GB+**. Ikuti langkah yang sama seperti **Langkah 0 di `Module-04-Setup-Infra-Docker-Compose/materi.md`, bagian Panduan Praktik** (Docker Desktop → ⚙️ Settings → tab Resources):
+
+| Setting | Minimal Module 7-16 | Direkomendasikan | Alasan |
+|---|---|---|---|
+| **Memory (RAM)** | 8 GB | 16 GB+ | `llama3.2:3b` (~4-6GB) + `nomic-embed-text` + OpenSearch (heap `-Xms512m -Xmx512m` minimal, tapi JVM + OS overhead-nya lebih besar dari itu) + Airflow standalone (webserver+scheduler+metadata DB dalam satu proses) berjalan bersamaan. |
+| **CPUs** | 4 | 4+ | 4 service (ollama, opensearch, airflow, api) aktif sekaligus. |
+| **Disk image size** | 80 GB | 100 GB+ | Image `opensearchproject/opensearch` dan `apache/airflow` cukup besar (>1GB masing-masing), ditambah image Module 1-6 yang mungkin masih tersimpan. |
+| **Swap** | 1 GB | 2 GB | Buffer tambahan kalau Memory limit sempat mepet saat semua service start bersamaan. |
+
+Kalau Anda sudah mengubah setting ini di Module 1-6 ke 16GB+, tidak perlu diubah lagi. Setelah mengubah, klik **Apply & Restart**.
+
+Catatan: panduan Module 7-16 menyalakan service **secara bertahap**, mengikuti urutan module — `ollama`+`api` dulu di Langkah 1 di bawah (Module 7-10 cuma butuh ini — Module 9 malah tidak butuh service apa pun, murni diskusi), `opensearch` menyusul di Module 12, `airflow` terakhir di Module 16 — jadi beban RAM di Module 7-11 jauh lebih ringan dari 16GB. Alokasi 16GB+ tetap perlu disiapkan sebelum Module 16, begitu keempat service jalan bersamaan.
+
+Kalau disk mulai penuh, bersihkan image/volume lama yang tidak terpakai (lihat peringatan di `Module-04-Setup-Infra-Docker-Compose/materi.md`, bagian Panduan Praktik, soal `docker system prune -a --volumes` — perintah ini menghapus model Ollama yang sudah di-pull juga).
 
 **Langkah 1 — Pastikan fondasi Module 1-6 masih utuh**
 
@@ -88,10 +108,22 @@ cd Nala
 docker compose up --build --no-deps ollama api
 ```
 
-Terminal baru, pull model (kalau belum):
+Stack Module 7-16 total punya 4 service (`ollama`, `opensearch`, `airflow`, `api`), tapi Module 7-10 (chat UI, streaming/multi-turn, konsep RAG, data seed — Module 9 murni diskusi konsep, tidak butuh service sama sekali) cuma butuh **dua yang pertama** — `opensearch` baru dipakai mulai Module 12, `airflow` baru dipakai mulai Module 16. Flag `--no-deps` penting: tanpa itu, Docker Compose otomatis ikut menyalakan `opensearch` karena `api` punya `depends_on: opensearch` di `docker-compose.yml`. Dengan `--no-deps`, benar-benar hanya 2 container yang jalan — dan ini aman meski `api` "seharusnya" nantinya butuh OpenSearch, karena di titik ini `/chat` belum menyentuh OpenSearch sama sekali (lihat Module 13 Bagian 2 Langkah 3 dan Module 15 Bagian 2 Tahap B untuk penjelasan fallback-nya begitu Anda sampai di situ).
+
+Tunggu sampai log `api` menunjukkan `Uvicorn running on http://0.0.0.0:8000` — jauh lebih cepat dari menyalakan keempat service sekaligus, karena tidak perlu menunggu inisialisasi cluster OpenSearch atau database metadata Airflow.
+
+Terminal baru, pull model (kalau belum) — di titik ini kita baru butuh `llama3.2:3b` untuk chat/generation; model embedding (`nomic-embed-text`) baru dipakai mulai Module 11, jadi baru di-pull nanti di Module 11 Langkah 1:
 ```bash
 docker compose exec ollama ollama pull llama3.2:3b
 ```
+
+⚠️ Tag `:3b` wajib ditulis persis — harus sama dengan `OLLAMA_MODEL` di `docker-compose.yml`. Verifikasi model sudah ada:
+
+```bash
+docker compose exec ollama ollama list
+```
+
+`llama3.2:3b` harus muncul di daftar.
 
 Tes kedua endpoint, harus **identik persis** dengan Module 1-6:
 ```bash
@@ -102,6 +134,14 @@ curl -X POST http://localhost:8000/chat \
 ```
 
 ✅ **Indikator sukses**: `/health` → `{"status":"ok"}`. `/chat` → jawaban NALA seperti di Module 1-6. Belum ada apa pun yang baru — ini cuma bukti fondasinya masih solid sebelum ditambah. Biarkan `docker compose up` tetap jalan, lanjut ke Tahap B.
+
+**Troubleshooting**
+
+- **`no configuration file provided: not found`**: `docker compose` dijalankan bukan dari folder yang berisi `docker-compose.yml`. Pastikan Anda berada persis di `Nala/` (cek dengan `ls`).
+- **`failed to read dockerfile: open Dockerfile: no such file or directory`**: nama file salah — harus persis `Dockerfile`. Cek dengan `ls` dan rename kalau perlu: `mv DockerFile Dockerfile`.
+- **`Internal Server Error` saat chat**: cek dulu model Ollama sudah ter-pull (`docker compose exec ollama ollama list`) — di titik ini baru `llama3.2:3b` yang dibutuhkan. Detail traceback Python bisa dilihat di log container `api` (terminal yang menjalankan `docker compose up` di atas).
+- **Port sudah dipakai (8000/11434)**: ubah mapping port di `docker-compose.yml` untuk service yang bentrok (misal `8001:8000`).
+- **Semua service terasa sangat lambat / laptop panas / container ter-*kill***: kemungkinan besar alokasi RAM Docker Desktop kurang — lihat Langkah 0 di atas. Cek pemakaian resource real-time dengan `docker stats`. Beban RAM di module ini masih ringan (cuma `ollama`+`api`); ini jadi penting begitu `opensearch` (Module 12) dan `airflow` (Module 16) ikut menyala.
 
 <details>
 <summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 1</strong></summary>
@@ -572,111 +612,10 @@ Kalau dicoba di titik ini, jawaban NALA akan terasa "biasa saja" — sama sepert
 
 ## 5. Checkpoint Praktik
 
-Langkah eksekusi lengkap (menjalankan `docker compose up`, membuka `http://localhost:8000`, dan mencoba chat) ada di **bagian Panduan Praktik di bawah, Langkah 1-4**. Yang perlu dipastikan sebelum lanjut ke Module 8:
+Langkah eksekusi lengkap (menjalankan `docker compose up`, membuka `http://localhost:8000`, dan mencoba chat) ada di **Bagian 3 di atas, Tahap A Langkah 0-1 (setup & jalankan) sampai Tahap C Langkah 6 (buka browser & chat)**. Yang perlu dipastikan sebelum lanjut ke Module 8:
 
 - [ ] `http://localhost:8000` menampilkan halaman chat (bukan JSON mentah)
 - [ ] Mengirim pesan dari UI mengembalikan balasan dari NALA (walau jawabannya generik)
 - [ ] Tidak ada error di log container `api` saat chat dikirim
 
 Begitu ketiga hal ini terverifikasi, lanjut ke Module 8 — yang membuat balasan NALA terasa hidup lewat streaming dan mengingat konteks percakapan sebelumnya (multi-turn), sebelum Module 7-16 menumpuk kompleksitas dokumen/RAG.
-
-## Panduan Praktik
-
-### Satu folder kode untuk Module 7-29
-
-- **`Nala/`** — satu-satunya folder kerja Anda, dipakai sejak Module 1-6 dan terus sama sepanjang Module 7-29. Panduan Module 7-16 membangunnya **bertahap, module demi module, langsung di tempat**: setiap module menambah/mengubah file di folder ini, tidak ada penyalinan ke folder lain. Semua perintah di panduan ini dijalankan di folder ini.
-
-### Prasyarat
-- Sudah menyelesaikan **Module 1-6** (Docker Desktop terinstall, `llama3.2:3b` pernah dipakai, familiar dengan `docker compose up --build`)
-- Docker Desktop sudah dialokasikan resource yang cukup — lihat catatan RAM di bawah
-
-#### Melanjutkan dari Module 1-6 — folder yang sama, tidak ada yang perlu dimatikan
-
-`Nala/` adalah folder yang **sama persis** dengan yang Anda pakai di Module 1-6 — `ollama_client.py`, `system_prompt.py`, `main.py`, `docker-compose.yml`, dan seterusnya sudah ada di sana, dan fitur-fitur baru Module 7-16 (streaming, multi-turn, RAG chain, chunking, embedding, vector store, upload, Airflow) ditambahkan langsung di atasnya, di tempat yang sama.
-
-Konsekuensinya: **tidak ada folder lain untuk dipindahkan, dan tidak ada container yang perlu dimatikan** — container Ollama yang sudah jalan sejak Module 1-6 terus dipakai apa adanya (project Docker Compose-nya sama, karena foldernya sama), model yang sudah di-pull otomatis ikut terbawa, tidak perlu di-pull ulang. Cukup jalankan compose seperti biasa (Langkah 2 di bawah) — Docker Compose otomatis merecreate container yang definisinya berubah.
-
-#### Catatan penting: naikkan alokasi RAM Docker Desktop
-
-Module 7-16 menambahkan **dua service baru** di atas stack Module 1-6: **OpenSearch** (vector store, mulai Module 12) dan **Airflow** (orchestrator, mode `standalone`, mulai Module 16). Kedua service ini jauh lebih berat dibanding FastAPI/Ollama saja — OpenSearch adalah JVM yang butuh heap tersendiri, dan Airflow standalone menjalankan webserver + scheduler + database sekaligus dalam satu container.
-
-Kalau di Module 1-6 Anda mengalokasikan Docker Desktop di batas minimal (8–12GB), **naikkan ke 16GB+** untuk Module 7-16. Ikuti langkah yang sama seperti **Langkah 0 di `Module-04-Setup-Infra-Docker-Compose/materi.md`, bagian Panduan Praktik** (Docker Desktop → ⚙️ Settings → tab Resources):
-
-| Setting | Minimal Module 7-16 | Direkomendasikan | Alasan |
-|---|---|---|---|
-| **Memory (RAM)** | 8 GB | 16 GB+ | `llama3.2:3b` (~4-6GB) + `nomic-embed-text` + OpenSearch (heap `-Xms512m -Xmx512m` minimal, tapi JVM + OS overhead-nya lebih besar dari itu) + Airflow standalone (webserver+scheduler+metadata DB dalam satu proses) berjalan bersamaan. |
-| **CPUs** | 4 | 4+ | 4 service (ollama, opensearch, airflow, api) aktif sekaligus. |
-| **Disk image size** | 80 GB | 100 GB+ | Image `opensearchproject/opensearch` dan `apache/airflow` cukup besar (>1GB masing-masing), ditambah image Module 1-6 yang mungkin masih tersimpan. |
-| **Swap** | 1 GB | 2 GB | Buffer tambahan kalau Memory limit sempat mepet saat semua service start bersamaan. |
-
-Kalau Anda sudah mengubah setting ini di Module 1-6 ke 16GB+, tidak perlu diubah lagi. Setelah mengubah, klik **Apply & Restart**.
-
-Catatan: panduan Module 7-16 menyalakan service **secara bertahap**, mengikuti urutan module: `ollama`+`api` dulu di Langkah 2 di bawah (Module 7-10 cuma butuh ini — Module 9 malah tidak butuh service apa pun, murni diskusi), `opensearch` menyusul di Module 12, `airflow` terakhir di Module 16 — jadi beban RAM di Module 7-11 jauh lebih ringan dari 16GB. Alokasi 16GB+ tetap perlu disiapkan sebelum Module 16, begitu keempat service jalan bersamaan.
-
-Kalau disk mulai penuh, bersihkan image/volume lama yang tidak terpakai (lihat peringatan di `Module-04-Setup-Infra-Docker-Compose/materi.md`, bagian Panduan Praktik, soal `docker system prune -a --volumes` — perintah ini menghapus model Ollama yang sudah di-pull juga).
-
-### Langkah 1: Masuk ke folder starter code
-
-```bash
-cd Nala
-```
-
-### Langkah 2: Jalankan Ollama + API dulu (belum semua service)
-
-Stack Module 7-16 total punya 4 service (`ollama`, `opensearch`, `airflow`, `api`), tapi Module 7-10 (chat UI, streaming/multi-turn, konsep RAG, data seed — Module 9 murni diskusi konsep, tidak butuh service sama sekali) cuma butuh **dua yang pertama** — `opensearch` baru dipakai mulai Module 12, `airflow` baru dipakai mulai Module 16. Supaya urutan belajar juga terasa di infrastrukturnya — bertahap, bukan langsung semua nyala sekaligus — nyalakan `ollama` dan `api` saja dulu, skip dua yang lain:
-
-```bash
-docker compose up --build --no-deps ollama api
-```
-
-Flag `--no-deps` penting: tanpa itu, Docker Compose otomatis ikut menyalakan `opensearch` karena `api` punya `depends_on: opensearch` di `docker-compose.yml`. Dengan `--no-deps`, benar-benar hanya 2 container yang jalan.
-
-Ini aman meski `api` "seharusnya" nantinya butuh OpenSearch — belum sekarang. Di titik ini (`Nala/` baru sampai Module 7), `/chat` belum menyentuh OpenSearch sama sekali. Nanti begitu Module 13 (`/chat/stream` jadi RAG-aware) dan Module 15 (`/upload`) selesai dibangun, kedua endpoint itu akan membungkus setiap panggilan ke OpenSearch dalam `try/except httpx.HTTPError` — kalau `opensearch` tidak jalan, koneksi gagal secara terkontrol dan otomatis fallback (mode tanpa-konteks untuk chat, "tersimpan tapi belum ter-index" untuk upload), bukan crash. Lihat Module 13 Bagian 2 Langkah 3 dan Module 15 Bagian 2 Tahap B untuk penjelasan desainnya begitu Anda sampai di situ.
-
-Tunggu sampai log `api` menunjukkan `Uvicorn running on http://0.0.0.0:8000`. Prosesnya jauh lebih cepat dari menyalakan keempat service sekaligus, karena tidak perlu menunggu inisialisasi cluster OpenSearch atau database metadata Airflow.
-
-### Langkah 3: Pull model untuk chat (di terminal baru)
-
-Sama seperti Module 1-6, Ollama di dalam container punya storage terpisah — model perlu di-pull ulang khusus untuk container ini. Di titik ini kita baru butuh **satu model**: `llama3.2:3b` untuk chat/generation. Model untuk embedding (`nomic-embed-text`) belum dibutuhkan — itu baru dipakai mulai Module 11, jadi baru kita pull nanti di Module 11 Langkah 1 (bukan sekarang, supaya jelas step mana yang butuh apa).
-
-Buka **terminal baru** (biarkan terminal Langkah 2 tetap berjalan), masuk ke folder yang sama (`Nala`), lalu:
-
-```bash
-docker compose exec ollama ollama pull llama3.2:3b
-```
-
-⚠️ Tag `:3b` wajib ditulis persis — harus sama dengan `OLLAMA_MODEL` di `docker-compose.yml`.
-
-Verifikasi model sudah ada:
-
-```bash
-docker compose exec ollama ollama list
-```
-
-`llama3.2:3b` harus muncul di daftar.
-
-### Langkah 4: Coba chat dulu lewat `/chat`, sebelum ada dokumen
-
-Sebelum menyentuh dokumen sama sekali, buka `http://localhost:8000` di browser — ini halaman chat (`chat.html`) versi paling sederhana, memakai endpoint `/chat` (kirim satu pesan, tunggu, terima satu balasan utuh). Coba kirim pesan apa saja, misalnya:
-
-> "Halo, kamu siapa?"
-
-NALA akan tetap membalas — koneksi UI → FastAPI → Ollama sudah bekerja — tapi jawabannya generik karena belum ada dokumen internal untuk dirujuk sama sekali (belum ada RAG di titik ini). Tujuannya memverifikasi dulu bahwa fondasi chat sudah jalan, sebelum lapisan streaming (Module 8) dan RAG (Module 10-16) ditambahkan di atasnya.
-
-⚠️ **`/chat` di langkah ini bersifat sementara** — Module 8 Langkah 1 akan **menghapus total** endpoint ini dan menggantikannya dengan `/chat/stream`. Sengaja dibangun dulu di sini supaya fondasi (Docker, network, model) terverifikasi dengan kontrak paling sederhana, sebelum kompleksitas streaming ditambahkan.
-
-Kalau ingin memverifikasi lewat `curl` juga bisa, response-nya tetap `{"reply": "..."}` seperti Module 1-6:
-
-```bash
-curl -X POST http://localhost:8000/chat \
-  -H "Content-Type: application/json" \
-  -d '{"message": "Halo, kamu siapa?"}'
-```
-
-### Troubleshooting
-
-- **`no configuration file provided: not found`**: `docker compose` dijalankan bukan dari folder yang berisi `docker-compose.yml`. Pastikan Anda berada persis di `Nala/` (cek dengan `ls`).
-- **`failed to read dockerfile: open Dockerfile: no such file or directory`**: nama file salah — harus persis `Dockerfile`. Cek dengan `ls` dan rename kalau perlu: `mv DockerFile Dockerfile`.
-- **`Internal Server Error` saat chat**: cek dulu model Ollama sudah ter-pull (`docker compose exec ollama ollama list`) — di titik ini baru `llama3.2:3b` (Langkah 3) yang dibutuhkan. Detail traceback Python bisa dilihat di log container `api` (terminal yang menjalankan Langkah 2).
-- **Port sudah dipakai (8000/11434)**: ubah mapping port di `docker-compose.yml` untuk service yang bentrok (misal `8001:8000`).
-- **Semua service terasa sangat lambat / laptop panas / container ter-*kill***: kemungkinan besar alokasi RAM Docker Desktop kurang — lihat bagian Prasyarat di atas. Cek pemakaian resource real-time dengan `docker stats`. Beban RAM di module ini masih ringan (cuma `ollama`+`api`); ini jadi penting begitu `opensearch` (Module 12) dan `airflow` (Module 16) ikut menyala.
