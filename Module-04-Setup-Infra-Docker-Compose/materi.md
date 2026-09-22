@@ -185,7 +185,7 @@ Cara mengecek/mengubah (macOS & Windows): buka aplikasi **Docker Desktop** → k
 
 | Setting | Minimal | Direkomendasikan | Alasan |
 |---|---|---|---|
-| **Memory (RAM)** | 8 GB | 12–16 GB | `llama3.2:3b` butuh ~4-6GB saat dimuat; sisanya untuk FastAPI, OS container, dan buffer. Modul-modul selanjutnya (Module 15 dst.) nanti menambah OpenSearch/PostgreSQL yang juga butuh RAM. |
+| **Memory (RAM)** | 8 GB | 12–16 GB | `llama3.2:3b` butuh ~4-6GB saat dimuat; sisanya untuk FastAPI, OS container, dan buffer. Modul-modul selanjutnya (Module 16 dst.) nanti menambah OpenSearch/PostgreSQL yang juga butuh RAM. |
 | **CPUs** | 2 | 4+ | Inference LLM cukup CPU-intensive kalau tidak pakai GPU. |
 | **Disk image size** | 60 GB | 100 GB+ | Setiap image Docker (Python, Ollama, nanti OpenSearch/Airflow/PostgreSQL) + model Ollama (~2GB per model) menumpuk seiring modul training berjalan. |
 | **Swap** | 1 GB | 2 GB | Buffer tambahan kalau Memory limit sempat mepet. |
@@ -475,7 +475,7 @@ curl http://localhost:11434/api/ps
 curl http://localhost:11434/api/show -d '{"model": "llama3.2:3b"}'
 ```
 
-**`POST /api/embed`** — beda dari endpoint lain di atas: bukan menghasilkan teks jawaban, tapi mengubah teks menjadi **vector angka** (embedding), yang nanti dipakai untuk pencarian semantik di RAG (Module 12-13):
+**`POST /api/embed`** — beda dari endpoint lain di atas: bukan menghasilkan teks jawaban, tapi mengubah teks menjadi **vector angka** (embedding), yang nanti dipakai untuk pencarian semantik di RAG (Module 12-14):
 
 ```bash
 curl http://localhost:11434/api/embed -d '{
