@@ -52,7 +52,41 @@ Keduanya **saling tidak bisa** melakukan operasi milik peran lain — `nala_writ
 
 ## 3. Struktur Kode yang Ditambahkan
 
-Dua Tahap: **Tahap A** menyiapkan service PostgreSQL, skema, seed minimal, dan dua role. **Tahap B** membangun halaman `/data-operasional` (form + tabel daftar data).
+Dua Tahap, total **6 Langkah**: **Tahap A** (Langkah 1-2) menyiapkan service PostgreSQL, skema, seed minimal, dan dua role. **Tahap B** (Langkah 3-6) membangun halaman `/data-operasional` (form + tabel daftar data), lalu mengisinya dengan data sungguhan lewat form.
+
+### Prasyarat
+
+- Sudah menyelesaikan **Module 1-20** (`llama3.2:3b` sudah biasa dipakai, `Nala/` berjalan dengan hybrid search + reranking + evaluasi + Langfuse). Rangkaian Module 21-25 **menambah** lapisan data operasional/agent/tool/RBAC langsung di atas file-file yang sudah ada di folder `Nala/` yang sama sejak Module 1 — tidak ada folder baru dan tidak ada project Docker baru yang perlu disiapkan.
+- Docker Desktop sudah dialokasikan resource yang cukup:
+
+| Setting | Minimal rangkaian Module 21-25 | Direkomendasikan | Alasan |
+|---|---|---|---|
+| **Memory (RAM)** | 16 GB | 16 GB+ (32 GB+ kalau ingin coba `qwen2.5:7b`, lihat Module 24 Bagian 4.b) | PostgreSQL menambah beban kecil-menengah di atas stack Module 7-20 yang sudah berat; agent tool-calling (mulai Module 22) memanggil Ollama beberapa kali per pertanyaan, menambah beban CPU sesaat, bukan RAM tambahan besar. |
+| **CPUs** | 4 | 4+ | 5 service aktif sekaligus (ollama, opensearch, airflow, postgres, api), ditambah beberapa panggilan Ollama berurutan per request agent. |
+| **Disk image size** | 100 GB | 120 GB+ | Image `postgres:16` relatif kecil (~400MB), tapi menumpuk di atas seluruh image module-module sebelumnya yang sudah ada. |
+
+Kalau sudah di 16GB+ sejak Module 7-20, tidak perlu diubah lagi kecuali ingin mencoba `qwen2.5:7b` (Module 24 Bagian 4.b).
+
+**Verifikasi fondasi sebelum mulai** — pastikan salinan Module 1-20 masih berjalan identik sebelum Module 21 menambah apa pun:
+
+```bash
+cd Nala
+docker compose up --build --no-deps ollama api
+```
+
+Terminal baru, pastikan model sudah ada (kemungkinan sudah dari Module 2, tapi container storage terpisah per project):
+
+```bash
+docker compose exec ollama ollama pull llama3.2:3b
+```
+
+```bash
+curl -N -X POST http://localhost:8000/chat/stream \
+  -H "Content-Type: application/json" \
+  -d '{"messages": [{"role": "user", "content": "Apa saja syarat pengajuan kredit untuk nasabah perorangan?"}]}'
+```
+
+✅ **Indikator sukses**: jawaban streaming berbasis dokumen SOP seperti akhir Module 20 (kualitas hybrid search + reranking) — bukti fondasi berjalan identik sebelum Module 21 mulai menambah apa pun.
 
 ### Tahap A — Service PostgreSQL, skema, seed minimal, dua role
 
@@ -81,6 +115,38 @@ Dua Tahap: **Tahap A** menyiapkan service PostgreSQL, skema, seed minimal, dan d
 Tambah `postgres_data:` ke `volumes:` top-level, dan `postgres: {condition: service_healthy}` ke `depends_on` service `api` (bersama `ollama`/`opensearch` yang sudah ada dari module-module sebelumnya — kalau `depends_on` versi Anda masih bentuk list sederhana, ubah jadi bentuk mapping supaya bisa memakai `condition`).
 
 `POSTGRES_PASSWORD` sengaja pakai env var dengan default eksplisit `changeme_dev_only` — cukup untuk laptop training, **bukan** pola aman untuk deployment sungguhan (dibahas lagi soal secret management di Module 25). Image resmi `postgres` otomatis menjalankan file apa pun di `/docker-entrypoint-initdb.d/` **satu kali saat volume database masih kosong** — itu cara `db/seed.sql` (Langkah 2) ter-load otomatis tanpa langkah manual tambahan.
+
+<details>
+<summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 1</strong></summary>
+
+```
+Tambah service PostgreSQL di docker-compose.yml — Module 21, Langkah 1.
+
+GOAL:
+Di Nala/docker-compose.yml: tambah
+service baru "postgres" (image postgres:16, POSTGRES_DB=
+nala_operasional, POSTGRES_USER=nala_admin, POSTGRES_PASSWORD dari
+env var POSTGRES_ADMIN_PASSWORD default changeme_dev_only, port
+5432:5432, volume postgres_data:/var/lib/postgresql/data DAN
+./db/seed.sql:/docker-entrypoint-initdb.d/01-seed.sql, healthcheck
+pg_isready). Tambah postgres_data ke volumes: top-level. Tambah
+depends_on postgres (condition service_healthy) ke service api
+(ubah depends_on api ke bentuk mapping kalau masih list).
+
+CONTEXT:
+- Ini tabel BARU, terpisah dari OpenSearch/vector store Module 9-20.
+- db/seed.sql yang dirujuk di volumes belum ada — file itu dibuat di
+  Langkah 2 terpisah, jadi container postgres belum bisa dijalankan
+  sampai Langkah 2 selesai.
+
+GUARDRAIL:
+- JANGAN ubah service lain (ollama, opensearch, airflow, langfuse,
+  api) selain menambah depends_on di api.
+- JANGAN buat file db/seed.sql di langkah ini — itu Langkah 2
+  terpisah.
+```
+
+</details>
 
 **Langkah 2 — Buat `db/seed.sql`**
 
@@ -134,6 +200,45 @@ GRANT USAGE, SELECT ON SEQUENCE pengajuan_kredit_id_seq, klaim_asuransi_id_seq T
 
 Data awal cuma 2 baris `pengajuan_kredit` + 1 baris `klaim_asuransi` — **sengaja minimal**, bukan dataset lengkap (bandingkan dengan pendekatan seeder besar yang sempat dipertimbangkan tapi tidak dipakai, lihat Bagian 1). `GRANT USAGE, SELECT ON SEQUENCE ...` untuk `nala_writer` diperlukan supaya `INSERT` ke kolom `SERIAL` (auto-increment) bisa jalan — tanpa ini, PostgreSQL menolak `INSERT` walau sudah punya `GRANT INSERT` di tabelnya, karena `nextval()` pada sequence butuh izin terpisah.
 
+<details>
+<summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 2</strong></summary>
+
+```
+Buat db/seed.sql: skema data operasional minimal + dua role
+terpisah (read-only vs write-only) — Module 21, Langkah 2.
+
+GOAL:
+Buat Nala/db/seed.sql: CREATE TABLE
+pengajuan_kredit (id SERIAL PK, nasabah_id VARCHAR(10), nama_nasabah
+VARCHAR(100), jumlah_pengajuan NUMERIC(15,2), status VARCHAR(20)
+CHECK IN ('pending','disetujui','ditolak','pencairan'),
+tanggal_pengajuan DATE, alasan_penolakan TEXT nullable) dan CREATE
+TABLE klaim_asuransi (id SERIAL PK, nasabah_id VARCHAR(10),
+nama_nasabah VARCHAR(100), jenis_klaim VARCHAR(50), jumlah_klaim
+NUMERIC(15,2), status VARCHAR(20) CHECK IN
+('pending','diproses','disetujui','ditolak'), tanggal_klaim DATE).
+INSERT cuma 2 baris pengajuan_kredit + 1 baris klaim_asuransi
+(data fiktif minimal, BUKAN dataset besar). Lalu CREATE ROLE
+nala_readonly (LOGIN, GRANT CONNECT+USAGE+SELECT pada kedua tabel)
+dan CREATE ROLE nala_writer (LOGIN, GRANT CONNECT+USAGE+INSERT pada
+kedua tabel, plus GRANT USAGE,SELECT pada kedua SEQUENCE id-nya).
+
+CONTEXT:
+- Service postgres di docker-compose.yml (Langkah 1) sudah mount
+  file ini ke /docker-entrypoint-initdb.d/01-seed.sql — otomatis
+  dijalankan sekali oleh image Postgres saat container pertama kali
+  dibuat (volume masih kosong).
+- nala_readonly BELUM dipakai kode apa pun sampai Module 23 (SQL Tool)
+  — di module ini cuma dibuat role-nya saja.
+
+GUARDRAIL:
+- JANGAN isi data dummy lebih dari 2-3 baris per tabel — sengaja
+  minimal, sisanya ditambah lewat UI di Langkah 6.
+- JANGAN gunakan data nasabah sungguhan — harus dummy/fiktif.
+```
+
+</details>
+
 **▶️ Jalankan & lihat hasilnya**
 
 ```bash
@@ -158,53 +263,6 @@ docker compose exec postgres psql -U nala_writer -d nala_operasional -c "SELECT 
 ```
 
 ✅ **Indikator sukses**: **keduanya harus gagal** — `nala_readonly` ditolak dengan `permission denied for table pengajuan_kredit` saat `DELETE`, dan `nala_writer` **juga** ditolak `permission denied` saat `SELECT`. Kalau salah satu berhasil, berarti `GRANT` di `seed.sql` salah — cek ulang sebelum lanjut.
-
-<details>
-<summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 1-2</strong></summary>
-
-```
-Tambah service PostgreSQL, skema data operasional minimal, dan dua
-role terpisah (read-only vs write-only) — Module 21, Tahap A.
-
-GOAL:
-1. Di Nala/docker-compose.yml: tambah
-   service baru "postgres" (image postgres:16, POSTGRES_DB=
-   nala_operasional, POSTGRES_USER=nala_admin, POSTGRES_PASSWORD dari
-   env var POSTGRES_ADMIN_PASSWORD default changeme_dev_only, port
-   5432:5432, volume postgres_data:/var/lib/postgresql/data DAN
-   ./db/seed.sql:/docker-entrypoint-initdb.d/01-seed.sql, healthcheck
-   pg_isready). Tambah postgres_data ke volumes: top-level. Tambah
-   depends_on postgres (condition service_healthy) ke service api
-   (ubah depends_on api ke bentuk mapping kalau masih list).
-2. Buat Nala/db/seed.sql: CREATE TABLE
-   pengajuan_kredit (id SERIAL PK, nasabah_id VARCHAR(10), nama_nasabah
-   VARCHAR(100), jumlah_pengajuan NUMERIC(15,2), status VARCHAR(20)
-   CHECK IN ('pending','disetujui','ditolak','pencairan'),
-   tanggal_pengajuan DATE, alasan_penolakan TEXT nullable) dan CREATE
-   TABLE klaim_asuransi (id SERIAL PK, nasabah_id VARCHAR(10),
-   nama_nasabah VARCHAR(100), jenis_klaim VARCHAR(50), jumlah_klaim
-   NUMERIC(15,2), status VARCHAR(20) CHECK IN
-   ('pending','diproses','disetujui','ditolak'), tanggal_klaim DATE).
-   INSERT cuma 2 baris pengajuan_kredit + 1 baris klaim_asuransi
-   (data fiktif minimal, BUKAN dataset besar). Lalu CREATE ROLE
-   nala_readonly (LOGIN, GRANT CONNECT+USAGE+SELECT pada kedua tabel)
-   dan CREATE ROLE nala_writer (LOGIN, GRANT CONNECT+USAGE+INSERT pada
-   kedua tabel, plus GRANT USAGE,SELECT pada kedua SEQUENCE id-nya).
-
-CONTEXT:
-- Ini tabel BARU, terpisah dari OpenSearch/vector store Module 9-20.
-- nala_readonly BELUM dipakai kode apa pun sampai Module 23 (SQL Tool)
-  — di module ini cuma dibuat role-nya saja.
-
-GUARDRAIL:
-- JANGAN ubah service lain (ollama, opensearch, airflow, langfuse,
-  api) selain menambah depends_on di api.
-- JANGAN isi data dummy lebih dari 2-3 baris per tabel — sengaja
-  minimal, sisanya ditambah lewat UI di Tahap B.
-- JANGAN gunakan data nasabah sungguhan — harus dummy/fiktif.
-```
-
-</details>
 
 ### Tahap B — Halaman `/data-operasional`: form tambah data + tabel daftar
 
@@ -247,6 +305,61 @@ Dua fungsi terpisah, masing-masing pakai DSN role yang berbeda — `get_connecti
 - POSTGRES_READONLY_DSN=postgresql://nala_readonly:readonly_dev_only@postgres:5432/nala_operasional
 - POSTGRES_WRITER_DSN=postgresql://nala_writer:writer_dev_only@postgres:5432/nala_operasional
 ```
+
+⚠️ **Catatan**: default `POSTGRES_READONLY_DSN`/`POSTGRES_WRITER_DSN` di `app/db.py` menunjuk `localhost` — kalau dipanggil dari **dalam** container `api`, harus memakai nama service Docker Compose (`postgres`), bukan `localhost`. Env var di `docker-compose.yml` service `api` (di atas) sudah meng-override ke host `postgres` yang benar; pastikan kedua baris itu ditambahkan sebelum menjalankan verifikasi di bawah.
+
+<details>
+<summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 3</strong></summary>
+
+```
+Tambah dependency database (psycopg) dan dua fungsi koneksi
+terpisah (readonly vs writer) — Module 21, Langkah 3.
+
+GOAL:
+1. Di Nala/requirements.txt: tambah baris
+   psycopg[binary]==3.2.3
+2. Buat Nala/app/db.py: dua konstanta DSN
+   dari env var (POSTGRES_READONLY_DSN, POSTGRES_WRITER_DSN, dengan
+   default masing-masing memakai nala_readonly/nala_writer di
+   localhost), dua fungsi get_connection() dan get_write_connection()
+   yang psycopg.connect() ke DSN masing-masing (connect_timeout=5).
+3. Di Nala/docker-compose.yml service api: tambah dua environment
+   POSTGRES_READONLY_DSN dan POSTGRES_WRITER_DSN yang menunjuk host
+   "postgres" (nama service, BUKAN localhost).
+
+CONTEXT:
+- Role nala_readonly dan nala_writer sudah ada di database sejak
+  Langkah 2 (db/seed.sql).
+- Default DSN di app/db.py sengaja pakai localhost (memudahkan akses
+  dari luar container saat debugging) — env var di docker-compose.yml
+  service api yang meng-override ke host postgres saat kode berjalan
+  di dalam container.
+
+GUARDRAIL:
+- JANGAN tukar DSN readonly/writer — get_connection() harus memakai
+  DSN nala_readonly, get_write_connection() harus memakai DSN
+  nala_writer.
+```
+
+</details>
+
+**▶️ Jalankan & lihat hasilnya**
+
+```bash
+docker compose up --build --no-deps ollama api
+```
+
+```bash
+docker compose exec api python -c "
+from app.db import get_connection, get_write_connection
+with get_connection() as conn:
+    print('readonly ok')
+with get_write_connection() as conn:
+    print('writer ok')
+"
+```
+
+✅ **Indikator sukses**: `readonly ok` dan `writer ok` tercetak, tidak ada error.
 
 **Langkah 4 — Buat `app/templates/data_operasional.html`**
 
@@ -343,6 +456,39 @@ Mengikuti pola `upload.html` (Module 15) — form di atas, tabel daftar data di 
 ```
 
 Tambah juga link nav baru (`| <a href="/data-operasional">Data Operasional</a>`) ke `chat.html` dan `upload.html` yang sudah ada, dan sedikit CSS baru (`form`, `.data-table`) di `app/static/style.css` — lihat kode lengkap di akhir module ini.
+
+<details>
+<summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 4</strong></summary>
+
+```
+Buat halaman /data-operasional (template + nav + CSS) untuk staff
+menambah data pengajuan kredit dan klaim asuransi — Module 21,
+Langkah 4.
+
+GOAL:
+1. Buat Nala/app/templates/data_operasional.html:
+   dua form (pengajuan kredit, klaim asuransi) dengan field sesuai
+   kolom tabel masing-masing, plus dua tabel daftar data di bawah tiap
+   form (loop Jinja2 atas pengajuan_kredit/klaim_asuransi dari context).
+2. Tambah nav link baru "Data Operasional" (href="/data-operasional")
+   ke Nala/app/templates/chat.html dan Nala/app/templates/upload.html
+   yang sudah ada.
+3. Tambah CSS sederhana untuk form dan tabel (class .data-table) di
+   Nala/app/static/style.css.
+
+CONTEXT:
+- Mengikuti pola upload.html (Module 15) — form di atas, tabel daftar
+  data di bawah.
+- Endpoint yang merender template ini (GET /data-operasional) belum
+  ada — dibuat di Langkah 5 terpisah, jadi halaman ini belum bisa
+  diakses lewat browser sampai Langkah 5 selesai.
+
+GUARDRAIL:
+- JANGAN buat endpoint FastAPI apa pun di langkah ini — hanya file
+  template, nav link, dan CSS.
+```
+
+</details>
 
 **Langkah 5 — Tambah endpoint di `app/main.py`**
 
@@ -451,55 +597,27 @@ def add_klaim_asuransi(
 
 Perhatikan: `add_pengajuan_kredit`/`add_klaim_asuransi` memakai `get_write_connection()` (role `nala_writer`, cuma `INSERT`), sementara `fetch_*` (dipanggil di ketiga endpoint untuk menampilkan tabel) memakai `get_connection()` (role `nala_readonly`, cuma `SELECT`) — dua fungsi koneksi dari Langkah 3 masing-masing dipakai sesuai perannya, tidak pernah tertukar.
 
-**▶️ Jalankan & lihat hasilnya**
-
-```bash
-docker compose up --build -d postgres api
-```
-
-Buka `http://localhost:8000/data-operasional` di browser — halaman menampilkan 2 baris pengajuan kredit dan 1 baris klaim asuransi (seed dari Tahap A), dengan dua form di atasnya. Coba isi form "Tambah Pengajuan Kredit" dengan data baru, submit — baris baru harus langsung muncul di tabel di bawahnya tanpa reload manual kedua kalinya.
-
-✅ **Indikator sukses**: form berhasil menambah data (terlihat di tabel setelah submit), dan data tersimpan permanen — refresh halaman, data yang baru ditambahkan tetap ada.
-
 <details>
-<summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 3-5</strong></summary>
+<summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 5</strong></summary>
 
 ```
-Bangun halaman web /data-operasional untuk staff menambah data
-pengajuan kredit dan klaim asuransi secara manual — Module 21,
-Tahap B.
+Tambah endpoint GET/POST /data-operasional di app/main.py — Module
+21, Langkah 5.
 
 GOAL:
-1. Di Nala/requirements.txt: tambah baris
-   psycopg[binary]==3.2.3
-2. Buat Nala/app/db.py: dua konstanta DSN
-   dari env var (POSTGRES_READONLY_DSN, POSTGRES_WRITER_DSN, dengan
-   default masing-masing memakai nala_readonly/nala_writer), dua fungsi
-   get_connection() dan get_write_connection() yang psycopg.connect()
-   ke DSN masing-masing (connect_timeout=5).
-3. Buat Nala/app/templates/data_operasional.html:
-   dua form (pengajuan kredit, klaim asuransi) dengan field sesuai
-   kolom tabel masing-masing, plus dua tabel daftar data di bawah tiap
-   form (loop Jinja2 atas pengajuan_kredit/klaim_asuransi dari context).
-   Nav link baru "Data Operasional" ditambahkan juga ke chat.html dan
-   upload.html yang sudah ada.
-4. Di Nala/app/main.py: import Form dari
-   fastapi, dict_row dari psycopg.rows, get_connection/get_write_connection
-   dari app.db. Tambah fungsi fetch_pengajuan_kredit()/fetch_klaim_asuransi()
-   (SELECT via get_connection(), row_factory=dict_row). Tambah endpoint
-   GET /data-operasional (render halaman dengan kedua fetch), POST
-   /data-operasional/pengajuan-kredit dan POST /data-operasional/klaim-asuransi
-   (terima Form(...) sesuai kolom tabel, INSERT via get_write_connection(),
-   conn.commit(), lalu render ulang halaman dengan pesan sukses + data
-   terbaru).
-5. Tambah CSS sederhana untuk form/table di app/static/style.css.
+Di Nala/app/main.py: import Form dari
+fastapi, dict_row dari psycopg.rows, get_connection/get_write_connection
+dari app.db. Tambah fungsi fetch_pengajuan_kredit()/fetch_klaim_asuransi()
+(SELECT via get_connection(), row_factory=dict_row). Tambah endpoint
+GET /data-operasional (render data_operasional.html dengan kedua fetch),
+POST /data-operasional/pengajuan-kredit dan POST /data-operasional/klaim-asuransi
+(terima Form(...) sesuai kolom tabel, INSERT via get_write_connection(),
+conn.commit(), lalu render ulang halaman dengan pesan sukses + data
+terbaru).
 
 CONTEXT:
-- app/db.py (get_connection untuk readonly, get_write_connection untuk
-  writer) sudah dibuat di Tahap A sebelumnya — kalau belum, buat sesuai
-  Langkah 3.
-- Role nala_readonly dan nala_writer sudah ada di database sejak
-  Tahap A (db/seed.sql).
+- app/db.py (Langkah 3) dan app/templates/data_operasional.html
+  (Langkah 4) sudah dibuat sebelumnya.
 
 GUARDRAIL:
 - JANGAN pakai get_write_connection() untuk operasi SELECT/fetch —
@@ -512,7 +630,36 @@ GUARDRAIL:
 
 </details>
 
+**▶️ Jalankan & lihat hasilnya**
+
+```bash
+docker compose up --build -d postgres api
+```
+
+Buka `http://localhost:8000/data-operasional` di browser — halaman menampilkan 2 baris pengajuan kredit dan 1 baris klaim asuransi (seed dari Tahap A), dengan dua form di atasnya. Coba isi form "Tambah Pengajuan Kredit" dengan data baru, submit — baris baru harus langsung muncul di tabel di bawahnya tanpa reload manual kedua kalinya.
+
+✅ **Indikator sukses**: form berhasil menambah data (terlihat di tabel setelah submit), dan data tersimpan permanen — refresh halaman, data yang baru ditambahkan tetap ada.
+
+**Langkah 6 — Isi data operasional lewat form**
+
+Tambahkan data lewat kedua form di `/data-operasional` sampai datanya representatif untuk latihan module-module berikutnya — bukan lewat SQL manual atau seeder. Target yang dipakai di contoh-contoh Module 22-25 selanjutnya (lihat Bagian 4 "Hasil Uji Nyata" di bawah): total **7 baris** `pengajuan_kredit` (variasi status: `pending`×3, `disetujui`×1, `pencairan`×1, `ditolak`×2 — dua di antaranya sudah ada dari seed Langkah 2: `N-00231` `pending` dan `N-00305` `ditolak` dengan `alasan_penolakan` "Skor kredit di bawah ambang batas minimum", jadi tambahkan **5 baris lagi** lewat form) dan total **4 baris** `klaim_asuransi` (1 sudah ada dari seed — `N-00305`, jenis `kendaraan`, `disetujui` — tambahkan **3 baris lagi**), dengan minimal satu `nasabah_id` yang sengaja muncul di kedua tabel (mis. `N-00305`, yang kreditnya ditolak **dan** punya klaim asuransi — bahan uji skenario gabungan RAG+SQL di Module 24).
+
+```bash
+docker compose exec postgres psql -U nala_admin -d nala_operasional -c "SELECT COUNT(*) FROM pengajuan_kredit;"
+docker compose exec postgres psql -U nala_admin -d nala_operasional -c "SELECT COUNT(*) FROM klaim_asuransi;"
+```
+
+✅ **Indikator sukses**: `7` dan `4` (berbeda dari indikator `2`/`1` di Langkah 2 — itu memverifikasi seed awal, ini memverifikasi data hasil input manual lewat form sudah representatif), dan refresh halaman `/data-operasional` menunjukkan seluruh baris yang baru ditambahkan tetap ada (data tersimpan permanen). Langkah 6 ini murni input data manual lewat UI, bukan perubahan kode — tidak ada prompt Claude Code untuk langkah ini.
+
 **📄 Kode lengkap Module 21** (`docker-compose.yml` bagian `postgres`, `db/seed.sql`, `app/db.py`, `app/templates/data_operasional.html`, potongan relevan `app/main.py` — sudah ditampilkan utuh di Langkah 1-5 di atas).
+
+### Troubleshooting
+
+- **`psycopg.OperationalError: connection to server ... failed`**: kemungkinan besar DSN masih memakai `localhost` padahal dipanggil dari dalam container `api` — harus memakai nama service Docker Compose (`postgres`), lihat catatan di Langkah 3. Cek juga `postgres` sudah `healthy` (`docker compose ps`).
+- **`permission denied for table ...` padahal seharusnya diizinkan**: cek role/DSN yang dipakai — form `/data-operasional` (Module 21) harus memakai `nala_writer`, tool SQL (Module 23) harus memakai `nala_readonly`; tertukar salah satunya akan memicu `permission denied` untuk operasi yang seharusnya sah.
+- **Seed data tidak berubah setelah mengedit `db/seed.sql`**: script init PostgreSQL cuma jalan sekali saat volume database masih kosong — kalau volume `postgres_data` sudah ada dari percobaan sebelumnya, `docker compose up` **tidak** menjalankan ulang seed. Hapus volume dulu (`docker compose down && docker volume rm nala_postgres_data`) lalu `docker compose up -d --build postgres` lagi. Ini juga penyebab paling umum kalau tabel/role baru "tidak muncul" setelah mengikuti Langkah 2.
+- **`docker compose exec postgres psql -U nala_admin ...` minta password / gagal autentikasi**: pastikan env var `POSTGRES_ADMIN_PASSWORD` (kalau di-override di `.env` atau shell) konsisten dengan yang dipakai saat container `postgres` dibuat — kalau volume sudah lama ada dengan password lama, password baru di env var tidak otomatis berlaku sampai volume direset (sama seperti poin seed data di atas).
+- **Error umum lain** (`no configuration file provided`, `failed to read dockerfile`, port sudah dipakai, dsb.): lihat bagian Troubleshooting di materi.md module-module sebelumnya (Module 7-16) — penyebab dan solusinya sama, tidak spesifik rangkaian Module 21-25.
 
 ## 4. Hasil Uji Nyata
 
@@ -524,7 +671,7 @@ Setup ini sudah diuji langsung, bukan cuma teori:
 
 ## 5. Checkpoint Praktik
 
-Langkah eksekusi lengkap ada di bagian **Panduan Praktik** di bawah (Langkah 1-5). Yang perlu dipastikan sebelum lanjut ke Module 22:
+Langkah eksekusi lengkap ada di Bagian 3 di atas (Langkah 1-6). Yang perlu dipastikan sebelum lanjut ke Module 22:
 
 - [ ] Service `postgres` sehat (`healthy`), 2 tabel terbentuk dengan seed minimal (2 baris + 1 baris)
 - [ ] `nala_readonly` ditolak `INSERT`/`UPDATE`/`DELETE`, `nala_writer` ditolak `SELECT` — dua arah, bukan cuma satu
@@ -536,153 +683,6 @@ Langkah eksekusi lengkap ada di bagian **Panduan Praktik** di bawah (Langkah 1-5
 Module ini menyiapkan fondasi data operasional NALA dengan filosofi yang konsisten dengan Module 9 (Knowledge Base): sumber data baru diperkenalkan lewat halaman web yang staff pakai sendiri, bukan data yang tiba-tiba "sudah ada" lewat skrip seeder. Pemisahan role baca/tulis (`nala_readonly`/`nala_writer`) disiapkan sejak awal — supaya begitu Module 22 (LangGraph Agent) dan Module 23 (SQL Tool) dibangun di atasnya, fondasi keamanannya sudah teruji, bukan ditambal belakangan.
 
 Module 22 selanjutnya membangun agent LangGraph (fokus pada tool dokumen SOP dulu, melanjutkan RAG chain Module 9-20) — belum menyentuh data operasional yang baru disiapkan di module ini. Module 23 baru kembali ke data ini, membangun tool SQL yang membaca lewat `nala_readonly` yang sudah ada di sini, lalu mendaftarkannya ke agent yang sudah dibangun Module 22.
-
-## Panduan Praktik
-
-> Catatan penomoran: bagian ini memakai penomoran "Langkah" tersendiri (Langkah 1-5) yang berbeda dari "Langkah 1-5" di dalam Bagian 3 Tahap A/B di atas — keduanya kebetulan bernomor sama tapi berasal dari dua urutan yang terpisah. Penomoran "Langkah" di Panduan Praktik ini juga bersambung lintas-module (Module 22 melanjutkan dari Langkah 6, dst.) sebagai peninggalan dari saat panduan ini masih satu dokumen gabungan Module 21-25.
-
-**Panduan Praktik — Module 21: Setup Data Operasional — PostgreSQL & UI Form**
-
-#### Melanjutkan langsung di folder starter code yang sudah ada
-
-Semua kode dari Module 1-20 hidup di satu folder: `Nala/` (lihat Module 21 bagian Tujuan di atas). Langkah 1 di bawah **tidak** menyalin ke folder baru — rangkaian Module 21-25 di bagian Panduan Praktik berikutnya menambah lapisan data operasional/agent/tool/RBAC **langsung di atas file-file yang sudah ada** di folder ini, module demi module.
-
-Karena tidak ada folder referensi terpisah — satu-satunya kode adalah `Nala/` yang Anda edit langsung — setiap kali panduan ini menyebut "kode lengkap", itu merujuk ke bagian **"📄 Kode lengkap"** di `materi.md` module terkait.
-
-### Prasyarat
-- Sudah menyelesaikan **Module 1-20** (`llama3.2:3b` sudah biasa dipakai, `Nala/` berjalan dengan hybrid search + reranking + evaluasi + Langfuse)
-- Docker Desktop sudah dialokasikan resource yang cukup — lihat catatan RAM di bawah
-
-#### Container yang sama dipakai sepanjang Module 21-25
-
-Karena hanya ada satu folder kode (`Nala/`) yang dipakai sejak Module 1, seluruh service (`ollama`, `opensearch`, `airflow`) yang sudah berjalan dari module-module sebelumnya otomatis ikut terpakai di sini — tidak ada folder baru dan tidak ada project Docker baru yang perlu disiapkan; data yang sudah ada (index OpenSearch, model Ollama yang sudah di-pull) tetap tersedia tanpa langkah pemindahan apa pun.
-
-Setelah `docker-compose.yml` diperbarui (Langkah 1 menambah service `postgres`), jalankan `docker compose` seperti biasa **dari folder `Nala/`**:
-
-```bash
-cd Nala
-docker compose up --build -d
-```
-
-Folder ini memakai port yang sama (`8000` api, `11434` ollama, `9200` opensearch, `8080` airflow) plus port baru `5432` untuk PostgreSQL — semuanya otomatis ter-declare begitu compose dijalankan, tidak ada langkah "matikan dulu" yang diperlukan (compose merecreate container yang berubah definisinya, container lain yang tidak berubah tetap jalan apa adanya).
-
-#### Catatan penting: naikkan alokasi RAM Docker Desktop lagi
-
-Rangkaian Module 21-25 menambahkan **satu service baru**: **PostgreSQL** (data operasional). Dibanding OpenSearch/Airflow, PostgreSQL relatif ringan sendirian — tapi ia berjalan **bersamaan** dengan seluruh stack Module 7-20 yang sudah ada (Ollama, OpenSearch, Airflow, FastAPI) plus proses LangGraph agent yang memanggil Ollama berkali-kali per pertanyaan (multi-turn tool-calling, lihat Module 22-24).
-
-| Setting | Minimal rangkaian Module 21-25 | Direkomendasikan | Alasan |
-|---|---|---|---|
-| **Memory (RAM)** | 16 GB | 16 GB+ (32 GB+ kalau ingin coba `qwen2.5:7b`, lihat Module 24 Bagian 4.b) | PostgreSQL menambah beban kecil-menengah di atas stack Module 7-20 yang sudah berat; agent tool-calling memanggil Ollama beberapa kali per pertanyaan (bukan sekali seperti sebelumnya), menambah beban CPU sesaat, bukan RAM tambahan besar. |
-| **CPUs** | 4 | 4+ | 5 service aktif sekaligus (ollama, opensearch, airflow, postgres, api), ditambah beberapa panggilan Ollama berurutan per request agent. |
-| **Disk image size** | 100 GB | 120 GB+ | Image `postgres:16` relatif kecil (~400MB), tapi menumpuk di atas seluruh image module-module sebelumnya yang sudah ada. |
-
-Kalau sudah di 16GB+ sejak Module 7-20, tidak perlu diubah lagi kecuali ingin mencoba `qwen2.5:7b` (Module 24 Bagian 4.b).
-
-### Langkah 1: Masuk ke folder starter code
-
-```bash
-cd Nala
-```
-
-Folder ini sudah berisi seluruh kode dari Module 1-20 (`app/`, `docker-compose.yml`, `requirements.txt`, dan konfigurasi hybrid search/reranking/Langfuse dari Module 17-20) — rangkaian Module 21-25 **menambah** lapisan data operasional/agent/tool langsung di atas file-file yang sudah ada di sini, bukan menulis ulang dari nol dan bukan menyalin ke folder lain. Verifikasi dulu fondasinya masih utuh sebelum menambah apa pun:
-
-```bash
-docker compose up --build --no-deps ollama api
-```
-
-Terminal baru, pastikan model sudah ada (kemungkinan sudah dari Module 2, tapi container storage terpisah per project):
-
-```bash
-docker compose exec ollama ollama pull llama3.2:3b
-```
-
-```bash
-curl -X POST http://localhost:8000/chat \
-  -H "Content-Type: application/json" \
-  -d '{"message": "Apa saja syarat pengajuan kredit untuk nasabah perorangan?"}'
-```
-
-✅ **Indikator sukses**: jawaban berbasis dokumen SOP seperti akhir Module 20 (kualitas hybrid search + reranking) — bukti salinan berjalan identik sebelum Module 21 mulai menambah apa pun.
-
-### Langkah 2: Service PostgreSQL, skema, seed minimal, dua role (Module 21 Tahap A)
-
-Ikuti Module 21 Bagian 3 Tahap A Langkah 1-2 (service `postgres` di `docker-compose.yml`, `db/seed.sql` — skema `pengajuan_kredit`/`klaim_asuransi`, seed minimal 2-3 baris, dan **kedua** role `nala_readonly`/`nala_writer` dibuat sejak awal, sekaligus).
-
-```bash
-docker compose up -d --build postgres
-docker compose logs -f postgres
-```
-
-Tunggu sampai log menunjukkan `database system is ready to accept connections`, lalu `Ctrl+C`.
-
-```bash
-docker compose exec postgres psql -U nala_admin -d nala_operasional -c "SELECT COUNT(*) FROM pengajuan_kredit;"
-docker compose exec postgres psql -U nala_admin -d nala_operasional -c "SELECT COUNT(*) FROM klaim_asuransi;"
-```
-
-✅ **Indikator sukses**: `2` dan `1` (sesuai seed minimal — lihat Module 21 Bagian 3 Tahap A Langkah 2).
-
-Verifikasi juga pemisahan role bekerja **dua arah** (bukan cuma satu arah):
-
-```bash
-docker compose exec postgres psql -U nala_readonly -d nala_operasional -c "DELETE FROM pengajuan_kredit WHERE id = 1;"
-docker compose exec postgres psql -U nala_writer -d nala_operasional -c "SELECT COUNT(*) FROM pengajuan_kredit;"
-```
-
-✅ **Indikator sukses**: **keduanya harus gagal** — `nala_readonly` ditolak `permission denied` saat `DELETE`, dan `nala_writer` **juga** ditolak `permission denied` saat `SELECT`. Kalau salah satu berhasil, cek ulang `GRANT` di `db/seed.sql` sebelum lanjut.
-
-### Langkah 3: Koneksi database — `app/db.py` (Module 21 Tahap B Langkah 3)
-
-Ikuti Module 21 Bagian 3 Tahap B Langkah 3 (`psycopg[binary]` di `requirements.txt`, `app/db.py` dengan dua fungsi `get_connection()`/`get_write_connection()`).
-
-⚠️ Catatan: `POSTGRES_READONLY_DSN`/`POSTGRES_WRITER_DSN` default di `app/db.py` menunjuk `localhost` — dari dalam container `api`, tambahkan kedua env var ini di `docker-compose.yml` (service `api`) memakai host `postgres` (nama service, bukan `localhost`) sebelum menjalankan perintah di bawah.
-
-```bash
-docker compose up --build --no-deps ollama api
-```
-
-```bash
-docker compose exec api python -c "
-from app.db import get_connection, get_write_connection
-with get_connection() as conn:
-    print('readonly ok')
-with get_write_connection() as conn:
-    print('writer ok')
-"
-```
-
-✅ **Indikator sukses**: `readonly ok` dan `writer ok` tercetak, tidak ada error.
-
-### Langkah 4: Halaman `/data-operasional` — form + tabel daftar (Module 21 Tahap B Langkah 4-5)
-
-Ikuti Module 21 Bagian 3 Tahap B Langkah 4-5 (`app/templates/data_operasional.html`, endpoint `GET /data-operasional` + `POST /data-operasional/pengajuan-kredit` + `POST /data-operasional/klaim-asuransi` di `app/main.py`, plus nav link baru di `chat.html`/`upload.html`).
-
-```bash
-docker compose up --build -d postgres api
-```
-
-Buka `http://localhost:8000/data-operasional` di browser.
-
-✅ **Indikator sukses**: halaman menampilkan 2 baris pengajuan kredit dan 1 baris klaim asuransi (seed dari Langkah 2), dengan dua form di atasnya, tidak ada error render.
-
-### Langkah 5: Isi data operasional lewat form (bahan uji Module 23 dan seterusnya)
-
-Tambahkan data lewat kedua form di `/data-operasional` sampai datanya representatif untuk latihan module-module berikutnya — bukan lewat SQL manual atau seeder. Target yang dipakai di contoh-contoh Module 22-25 selanjutnya (lihat Module 21 Bagian 4 "Hasil Uji Nyata"): total **7 baris** `pengajuan_kredit` (variasi status: `pending`×3, `disetujui`×1, `pencairan`×1, `ditolak`×2 — dua di antaranya sudah ada dari seed Langkah 2: `N-00231` `pending` dan `N-00305` `ditolak` dengan `alasan_penolakan` "Skor kredit di bawah ambang batas minimum", jadi tambahkan **5 baris lagi** lewat form) dan total **4 baris** `klaim_asuransi` (1 sudah ada dari seed — `N-00305`, jenis `kendaraan`, `disetujui` — tambahkan **3 baris lagi**), dengan minimal satu `nasabah_id` yang sengaja muncul di kedua tabel (mis. `N-00305`, yang kreditnya ditolak **dan** punya klaim asuransi — bahan uji skenario gabungan RAG+SQL di Module 24).
-
-```bash
-docker compose exec postgres psql -U nala_admin -d nala_operasional -c "SELECT COUNT(*) FROM pengajuan_kredit;"
-docker compose exec postgres psql -U nala_admin -d nala_operasional -c "SELECT COUNT(*) FROM klaim_asuransi;"
-```
-
-✅ **Indikator sukses**: `7` dan `4`, dan refresh halaman `/data-operasional` menunjukkan seluruh baris yang baru ditambahkan tetap ada (data tersimpan permanen). Module 21 selesai — lanjut ke bagian Panduan Praktik di materi Module 22.
-
-### Troubleshooting
-
-- **`psycopg.OperationalError: connection to server ... failed`**: kemungkinan besar DSN masih memakai `localhost` padahal dipanggil dari dalam container `api` — harus memakai nama service Docker Compose (`postgres`), lihat catatan di Langkah 3. Cek juga `postgres` sudah `healthy` (`docker compose ps`).
-- **`permission denied for table ...` padahal seharusnya diizinkan**: cek role/DSN yang dipakai — form `/data-operasional` (Module 21) harus memakai `nala_writer`, tool SQL (Module 23) harus memakai `nala_readonly`; tertukar salah satunya akan memicu `permission denied` untuk operasi yang seharusnya sah.
-- **Seed data tidak berubah setelah mengedit `db/seed.sql`**: script init PostgreSQL cuma jalan sekali saat volume database masih kosong — kalau volume `postgres_data` sudah ada dari percobaan sebelumnya, `docker compose up` **tidak** menjalankan ulang seed. Hapus volume dulu (`docker compose down && docker volume rm nala_postgres_data`) lalu `docker compose up -d --build postgres` lagi. Ini juga penyebab paling umum kalau tabel/role baru "tidak muncul" setelah mengikuti Langkah 2.
-- **`docker compose exec postgres psql -U nala_admin ...` minta password / gagal autentikasi**: pastikan env var `POSTGRES_ADMIN_PASSWORD` (kalau di-override di `.env` atau shell) konsisten dengan yang dipakai saat container `postgres` dibuat — kalau volume sudah lama ada dengan password lama, password baru di env var tidak otomatis berlaku sampai volume direset (sama seperti poin seed data di atas).
-- **Error umum lain** (`no configuration file provided`, `failed to read dockerfile`, port sudah dipakai, dsb.): lihat bagian Panduan Praktik > Troubleshooting di materi.md module-module sebelumnya (Module 7-16) — penyebab dan solusinya sama, tidak spesifik rangkaian Module 21-25.
 
 ---
 
