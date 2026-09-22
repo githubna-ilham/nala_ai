@@ -1,12 +1,12 @@
-# Module 17: Hybrid Search (BM25 + Vector) via OpenSearch
+# Module 18: Hybrid Search (BM25 + Vector) via OpenSearch
 
 ## Tujuan
 
-Menambahkan BM25 (lexical) di samping vector search yang sudah ada sejak Module 12, digabung lewat Reciprocal Rank Fusion (RRF), untuk mengatasi kasus nyata di mana chunk jawaban yang benar kalah oleh chunk pendek yang cuma "mirip" secara makna.
+Menambahkan BM25 (lexical) di samping vector search yang sudah ada sejak Module 13, digabung lewat Reciprocal Rank Fusion (RRF), untuk mengatasi kasus nyata di mana chunk jawaban yang benar kalah oleh chunk pendek yang cuma "mirip" secara makna.
 
 ## Definisi
 
-**BM25** adalah algoritma *lexical search* — mencocokkan **kata** secara harfiah antara query dan dokumen, dibobot berdasarkan seberapa jarang/khas kata itu muncul di seluruh index (Bagian 1). Ini kebalikan dari **vector/semantic search** yang sudah dipakai sejak Module 12: vector search mencocokkan **makna**, bukan kata persis, lewat kemiripan embedding. Keduanya bukan dua pilihan yang saling menggantikan, melainkan **saling melengkapi** — BM25 kuat di istilah eksak ("KTP", "NPWP") yang justru sering "diencerkan" maknanya oleh vector search, sementara vector search kuat menangkap parafrase yang tidak pernah bisa ditangkap BM25 sama sekali (Bagian 1).
+**BM25** adalah algoritma *lexical search* — mencocokkan **kata** secara harfiah antara query dan dokumen, dibobot berdasarkan seberapa jarang/khas kata itu muncul di seluruh index (Bagian 1). Ini kebalikan dari **vector/semantic search** yang sudah dipakai sejak Module 13: vector search mencocokkan **makna**, bukan kata persis, lewat kemiripan embedding. Keduanya bukan dua pilihan yang saling menggantikan, melainkan **saling melengkapi** — BM25 kuat di istilah eksak ("KTP", "NPWP") yang justru sering "diencerkan" maknanya oleh vector search, sementara vector search kuat menangkap parafrase yang tidak pernah bisa ditangkap BM25 sama sekali (Bagian 1).
 
 Menggabungkan dua daftar hasil yang skornya beda skala (skor BM25 tidak berbatas, skor `knn` biasanya 0–1) ternyata bukan sekadar dijumlahkan — itu jebakan yang dibahas di Bagian 4. Solusinya di module ini adalah **Reciprocal Rank Fusion (RRF)**: teknik fusion yang sama sekali membuang skor mentah dan hanya melihat **posisi/rank** tiap dokumen di masing-masing daftar. Setiap dokumen dapat skor `1/(k + rank)` dari tiap daftar tempat ia muncul, lalu skor-skor itu dijumlahkan lintas daftar — dokumen yang sama-sama tinggi di kedua daftar akan menang, tanpa pernah perlu tahu "skor BM25 8.2 itu setara berapa skor vector" (Bagian 5).
 
@@ -39,11 +39,11 @@ flowchart LR
 - `/chat/stream` (satu-satunya endpoint chat NALA sejak Module 8) memanggil `search_hybrid()` (bukan `search()` murni) untuk retrieval
 - Untuk query kata kunci eksak ("KTP", "NPWP", "slip gaji"), hasil BM25/hybrid terbukti berbeda urutan dibanding vector murni
 - Kita paham kenapa `bool` query naif (skor BM25 + skor `knn` dijumlah langsung) salah, dan kenapa RRF (berbasis rank, bukan skor mentah) jadi solusinya
-- Diuji nyata dan dicatat jujur: hybrid search menaikkan recall di level kandidat, tapi untuk kasus keras "syarat kredit nasabah perorangan" chunk yang benar masih di posisi #8 — belum masuk `top_k=3`, motivasi langsung untuk Module 18 (reranking)
+- Diuji nyata dan dicatat jujur: hybrid search menaikkan recall di level kandidat, tapi untuk kasus keras "syarat kredit nasabah perorangan" chunk yang benar masih di posisi #8 — belum masuk `top_k=3`, motivasi langsung untuk Module 19 (reranking)
 
 ## 1. Kenapa Vector Search Murni Tidak Cukup
 
-Module 14 Bagian 9 sudah mendokumentasikan kasus nyata yang jadi motivasi module ini. Pertanyaan *"Apa saja syarat pengajuan kredit untuk nasabah perorangan?"* punya jawaban lengkap di `sop-pengajuan-kredit.md`, tepat di chunk `### 2.1 Untuk Nasabah Perorangan` — tapi chunk itu baru berperingkat **#11 dari 14 chunk** saat vector search murni dijalankan, jauh di luar jangkauan `top_k=6` yang dipakai Module 14 (Bagian 8 Langkah 4). Chunk heading pendek (`## 2. Syarat dan Ketentuan Pengajuan Kredit`) justru mendapat *similarity score* lebih tinggi, karena vektornya "tajam" (fokus ke satu makna singkat), sementara chunk jawaban yang panjang (berisi KTP, KK, slip gaji, NPWP, usia, dst) menghasilkan vektor yang "diencerkan" oleh banyak sub-konsep sekaligus.
+Module 15 Bagian 9 sudah mendokumentasikan kasus nyata yang jadi motivasi module ini. Pertanyaan *"Apa saja syarat pengajuan kredit untuk nasabah perorangan?"* punya jawaban lengkap di `sop-pengajuan-kredit.md`, tepat di chunk `### 2.1 Untuk Nasabah Perorangan` — tapi chunk itu baru berperingkat **#11 dari 14 chunk** saat vector search murni dijalankan, jauh di luar jangkauan `top_k=6` yang dipakai Module 15 (Bagian 8 Langkah 4). Chunk heading pendek (`## 2. Syarat dan Ketentuan Pengajuan Kredit`) justru mendapat *similarity score* lebih tinggi, karena vektornya "tajam" (fokus ke satu makna singkat), sementara chunk jawaban yang panjang (berisi KTP, KK, slip gaji, NPWP, usia, dst) menghasilkan vektor yang "diencerkan" oleh banyak sub-konsep sekaligus.
 
 NALA saat itu tidak salah menjawab — dengan `top_k=3` yang dipakai module ini, chunk jawaban yang tepat memang tidak pernah terlihat sama sekali. Menaikkan `top_k` ke 11 bukan solusi murah: mayoritas dari 11 chunk itu tidak relevan, dan mengirim itu semua ke `llama3.2:3b` (context window terbatas) berisiko mengencerkan fokus model, bukan membantunya.
 
@@ -53,7 +53,7 @@ NALA saat itu tidak salah menjawab — dengan `top_k=3` yang dipakai module ini,
 |---|---|---|
 | Kuat di | Makna yang mirip walau kata beda ("syarat kredit" ≈ "dokumen yang dibutuhkan") | Kecocokan istilah eksak ("KTP", "NPWP", nomor SOP) |
 | Lemah di | Chunk pendek/heading bisa "menang" dibanding chunk panjang yang relevan (kasus di atas) | Tidak paham sinonim atau parafrase sama sekali |
-| Butuh | Model embedding (`nomic-embed-text`) | Index teks biasa (sudah ada sejak Module 12 — field `text` di mapping `nala-docs`) |
+| Butuh | Model embedding (`nomic-embed-text`) | Index teks biasa (sudah ada sejak Module 13 — field `text` di mapping `nala-docs`) |
 
 **Hybrid search** menggabungkan keduanya: jalankan BM25 dan vector search secara paralel, lalu gabungkan (fusion) hasilnya jadi satu daftar peringkat. Ini bukan mengganti vector search — ini menambah satu sinyal lagi supaya chunk yang relevan secara kata kunci *maupun* makna sama-sama punya kesempatan naik ke atas.
 
@@ -69,7 +69,7 @@ flowchart LR
 
 ### Coba Langsung: Verifikasi Baseline Vector Search dengan Data Anda Sendiri
 
-Angka "**#11 dari 14** chunk" di atas berasal dari index dan isi dokumen tertentu — bisa berbeda di komputer Anda tergantung dokumen apa saja yang sudah ter-*ingest*. Sebelum menulis kode apa pun di Bagian 6, jalankan dulu `search()` murni (vector, sudah ada sejak Module 12) untuk query yang sama, dan catat di posisi keberapa chunk `### 2.1 Untuk Nasabah Perorangan` muncul — ini baseline yang nanti dibandingkan lagi setelah `search_hybrid()` ditulis di Bagian 6:
+Angka "**#11 dari 14** chunk" di atas berasal dari index dan isi dokumen tertentu — bisa berbeda di komputer Anda tergantung dokumen apa saja yang sudah ter-*ingest*. Sebelum menulis kode apa pun di Bagian 6, jalankan dulu `search()` murni (vector, sudah ada sejak Module 13) untuk query yang sama, dan catat di posisi keberapa chunk `### 2.1 Untuk Nasabah Perorangan` muncul — ini baseline yang nanti dibandingkan lagi setelah `search_hybrid()` ditulis di Bagian 6:
 
 ```bash
 docker compose exec api python -c "
@@ -118,7 +118,7 @@ flowchart LR
 
 ### Perbedaan Paling Mendasar dengan Vector Search
 
-BM25 menghitung skor dari **kehadiran kata secara literal** (setelah tokenisasi dasar — lihat Bagian 3 soal keterbatasan analyzer) — ia tidak tahu apa pun soal makna. Kata "kredit" dan "pinjaman" dianggap sepenuhnya berbeda oleh BM25, walau maknanya dekat; di sinilah **vector search justru unggul**, karena embedding menangkap kedekatan makna (Module 12). Tapi sebaliknya, BM25 kebal terhadap masalah "vektor diencerkan" yang jadi akar masalah di Bagian 1: skor BM25 untuk sebuah chunk naik proporsional dengan seberapa banyak kata **query** yang cocok persis di dalamnya, tidak peduli topik lain apa saja yang ikut dibahas di chunk itu — beda dengan vector search yang merangkum **seluruh** isi chunk jadi satu vektor tunggal.
+BM25 menghitung skor dari **kehadiran kata secara literal** (setelah tokenisasi dasar — lihat Bagian 3 soal keterbatasan analyzer) — ia tidak tahu apa pun soal makna. Kata "kredit" dan "pinjaman" dianggap sepenuhnya berbeda oleh BM25, walau maknanya dekat; di sinilah **vector search justru unggul**, karena embedding menangkap kedekatan makna (Module 13). Tapi sebaliknya, BM25 kebal terhadap masalah "vektor diencerkan" yang jadi akar masalah di Bagian 1: skor BM25 untuk sebuah chunk naik proporsional dengan seberapa banyak kata **query** yang cocok persis di dalamnya, tidak peduli topik lain apa saja yang ikut dibahas di chunk itu — beda dengan vector search yang merangkum **seluruh** isi chunk jadi satu vektor tunggal.
 
 **Contoh sederhana dulu**, sebelum kembali ke kasus NALA — bayangkan tiga kalimat pendek yang sudah di-index (bukan dari dokumen NALA, murni ilustrasi generik supaya intuisinya jelas lebih dulu):
 
@@ -136,7 +136,7 @@ Query: *"kucing hitam duduk"*
 
 Dokumen A cocok dengan **ketiga** kata query, termasuk kata paling langka "duduk" — BM25 kemungkinan besar memberi skor tertinggi ke Dokumen A. Dokumen C memang menyebut "kucing hitam" (bahkan "kucing" dua kali), tapi sama sekali tidak menyebut "duduk" — kata yang justru paling informatif di query ini, karena paling jarang muncul di seluruh koleksi. Inilah kenapa IDF penting: kecocokan pada kata langka "membayar" lebih dari sekadar kecocokan pada kata umum yang muncul di mana-mana.
 
-**Sekarang kembali ke kasus NALA** — intuisi yang sama persis berlaku, cuma skalanya lebih besar (belasan-puluhan potongan dokumen, bukan 3 kalimat) dan istilahnya spesifik domain finansial, bukan "kucing"/"anjing". Sebagai pengingat: dokumen SOP NALA sudah dipecah jadi beberapa **chunk** berdasarkan heading Markdown-nya (`chunk_markdown()`, Module 14) — satu chunk yang jadi contoh berulang di module ini berjudul `### 2.1 Untuk Nasabah Perorangan`, potongan dari `sop-pengajuan-kredit.md` yang berisi daftar syarat dokumen (KTP, KK, slip gaji, dst). Untuk query yang dipakai berulang di module ini — *"Apa saja syarat pengajuan kredit untuk nasabah perorangan?"* — begini token-token kuncinya cocok dengan chunk itu:
+**Sekarang kembali ke kasus NALA** — intuisi yang sama persis berlaku, cuma skalanya lebih besar (belasan-puluhan potongan dokumen, bukan 3 kalimat) dan istilahnya spesifik domain finansial, bukan "kucing"/"anjing". Sebagai pengingat: dokumen SOP NALA sudah dipecah jadi beberapa **chunk** berdasarkan heading Markdown-nya (`chunk_markdown()`, Module 15) — satu chunk yang jadi contoh berulang di module ini berjudul `### 2.1 Untuk Nasabah Perorangan`, potongan dari `sop-pengajuan-kredit.md` yang berisi daftar syarat dokumen (KTP, KK, slip gaji, dst). Untuk query yang dipakai berulang di module ini — *"Apa saja syarat pengajuan kredit untuk nasabah perorangan?"* — begini token-token kuncinya cocok dengan chunk itu:
 
 | Token dari query | Muncul di chunk `### 2.1`? | Kontribusi ke skor BM25 |
 |---|---|---|
@@ -150,7 +150,7 @@ Persis seperti "duduk" di contoh kucing tadi: "perorangan" dan "nasabah" adalah 
 
 ### Coba Langsung: Lihat Skor BM25 Mentah dari OpenSearch
 
-Tidak perlu menunggu sampai `search_bm25()` ditulis di Bagian 6 untuk melihat BM25 bekerja — OpenSearch sudah punya kemampuan ini sejak index `nala-docs` dibuat (Module 12), karena field `text` di mapping-nya bertipe `text` (bukan `knn_vector`). Query `match` di bawah ini langsung memanggil BM25 bawaan OpenSearch lewat REST API biasa, tanpa satu baris kode Python aplikasi pun:
+Tidak perlu menunggu sampai `search_bm25()` ditulis di Bagian 6 untuk melihat BM25 bekerja — OpenSearch sudah punya kemampuan ini sejak index `nala-docs` dibuat (Module 13), karena field `text` di mapping-nya bertipe `text` (bukan `knn_vector`). Query `match` di bawah ini langsung memanggil BM25 bawaan OpenSearch lewat REST API biasa, tanpa satu baris kode Python aplikasi pun:
 
 ```bash
 curl -s -X POST "http://localhost:9200/nala-docs/_search" \
@@ -181,13 +181,13 @@ for hit in response.json()['hits']['hits']:
 "
 ```
 
-✅ **Indikator sukses**: lima baris tercetak, terurut dari skor BM25 tertinggi ke terendah — bandingkan urutan ini dengan hasil `store.search()` (vector, Module 12) untuk query yang sama persis; urutannya kemungkinan besar berbeda, bukti konkret bahwa kedua metode benar-benar menilai relevansi dengan cara berbeda, persis seperti yang dijelaskan di atas.
+✅ **Indikator sukses**: lima baris tercetak, terurut dari skor BM25 tertinggi ke terendah — bandingkan urutan ini dengan hasil `store.search()` (vector, Module 13) untuk query yang sama persis; urutannya kemungkinan besar berbeda, bukti konkret bahwa kedua metode benar-benar menilai relevansi dengan cara berbeda, persis seperti yang dijelaskan di atas.
 
 ⚠️ Ini **query mentah langsung ke OpenSearch** — belum lewat `VectorStore`, belum jadi bagian alur `/chat/stream` mana pun. Tujuannya murni eksplorasi supaya konsep BM25 di atas terasa nyata sebelum masuk ke kode aplikasi yang sesungguhnya di Bagian 6 (`search_bm25()`, yang membungkus query yang sama ini jadi method Python yang bisa dipanggil ulang).
 
 ## 3. Catatan Penting: BM25 Tidak Butuh Reindex
 
-Kabar baik: mapping index `nala-docs` yang dibuat `VectorStore.ensure_index()` sejak Module 12 **sudah** punya field `"text": {"type": "text"}` di samping `"embedding": {"type": "knn_vector", ...}` (lihat `app/vector_store.py`, method `ensure_index()`). Field `text` bertipe `text` inilah yang otomatis bisa di-*query* dengan BM25 lewat query `match` — OpenSearch (seperti Elasticsearch) memakai BM25 sebagai algoritma scoring default untuk field bertipe `text`, tanpa konfigurasi tambahan apa pun. Artinya: **hybrid search di module ini murni penambahan, bukan migrasi** — index yang sudah terisi dari ingest sebelumnya (Module 16) tidak perlu di-*reindex* atau dihapus.
+Kabar baik: mapping index `nala-docs` yang dibuat `VectorStore.ensure_index()` sejak Module 13 **sudah** punya field `"text": {"type": "text"}` di samping `"embedding": {"type": "knn_vector", ...}` (lihat `app/vector_store.py`, method `ensure_index()`). Field `text` bertipe `text` inilah yang otomatis bisa di-*query* dengan BM25 lewat query `match` — OpenSearch (seperti Elasticsearch) memakai BM25 sebagai algoritma scoring default untuk field bertipe `text`, tanpa konfigurasi tambahan apa pun. Artinya: **hybrid search di module ini murni penambahan, bukan migrasi** — index yang sudah terisi dari ingest sebelumnya (Module 17) tidak perlu di-*reindex* atau dihapus.
 
 Satu keterbatasan yang jujur perlu disebut: mapping ini tidak menentukan *analyzer* khusus untuk field `text`, jadi OpenSearch memakai analyzer default (`standard`) — bukan analyzer Bahasa Indonesia dengan stemming (mis. memahami "mengajukan", "pengajuan", "diajukan" sebagai satu kata dasar yang sama). Konsekuensinya: BM25 di module ini menang di pencocokan **token eksak** ("KTP", "NPWP", "slip gaji" — persis kasus di Bagian 1), bukan karena ia memahami morfologi Bahasa Indonesia. Menambahkan analyzer `indonesian` (tersedia sebagai plugin analysis-nya OpenSearch) akan meningkatkan recall BM25 lebih jauh, tapi **butuh reindex total** (analyzer hanya berlaku untuk dokumen yang di-index setelah mapping diubah) — di luar cakupan module ini, dicatat di sini supaya tidak ada yang mengira ini sudah otomatis berjalan.
 
@@ -214,7 +214,7 @@ Ini **tampak** benar dan bahkan bisa dieksekusi tanpa error — masalahnya baru 
 
 Ini justru **alasan kenapa normalisasi skor itu penting** sebelum dua metode retrieval digabung — bukan detail teknis kecil, tapi inti dari kenapa hybrid search butuh desain lebih dari sekadar "gabungkan dua query".
 
-**Catatan produksi**: OpenSearch 2.11+ punya fitur bawaan untuk kasus ini — query khusus `hybrid` yang dipasangkan dengan *search pipeline* berisi `normalization-processor`, yang menormalisasi skor tiap sub-query (mis. min-max) sebelum digabung, dilakukan di sisi server. Ini pendekatan yang lebih efisien untuk skala produksi (satu request, bukan dua). Module ini tidak memakai jalur ini secara langsung — konfigurasi *search pipeline* butuh setup tambahan di luar `docker-compose.yml` yang sudah ada, dan detail parameternya bisa berbeda antar versi minor OpenSearch. Sebagai gantinya, module ini mengajarkan pendekatan yang lebih mudah diverifikasi dan version-proof: **fusion di sisi aplikasi (Python)**, memakai dua query terpisah yang masing-masing sudah dipakai sejak Module 12 (`search_bm25()` baru, dan `search()` yang sudah ada). Mekanismenya identik secara konsep, hanya lokasinya (aplikasi vs. server) yang berbeda — kalau nanti mau migrasi ke *search pipeline* bawaan OpenSearch di produksi, konsepnya (normalisasi sebelum fusion) sudah dipahami dari sini.
+**Catatan produksi**: OpenSearch 2.11+ punya fitur bawaan untuk kasus ini — query khusus `hybrid` yang dipasangkan dengan *search pipeline* berisi `normalization-processor`, yang menormalisasi skor tiap sub-query (mis. min-max) sebelum digabung, dilakukan di sisi server. Ini pendekatan yang lebih efisien untuk skala produksi (satu request, bukan dua). Module ini tidak memakai jalur ini secara langsung — konfigurasi *search pipeline* butuh setup tambahan di luar `docker-compose.yml` yang sudah ada, dan detail parameternya bisa berbeda antar versi minor OpenSearch. Sebagai gantinya, module ini mengajarkan pendekatan yang lebih mudah diverifikasi dan version-proof: **fusion di sisi aplikasi (Python)**, memakai dua query terpisah yang masing-masing sudah dipakai sejak Module 13 (`search_bm25()` baru, dan `search()` yang sudah ada). Mekanismenya identik secara konsep, hanya lokasinya (aplikasi vs. server) yang berbeda — kalau nanti mau migrasi ke *search pipeline* bawaan OpenSearch di produksi, konsepnya (normalisasi sebelum fusion) sudah dipahami dari sini.
 
 ## 5. Reciprocal Rank Fusion (RRF): Fusion Tanpa Perlu Menormalisasi Skor
 
@@ -256,12 +256,12 @@ Dua Tahap: **Tahap A** menambah kemampuan baru di `VectorStore` (`search_bm25()`
 
 ### Prasyarat & Setup Sebelum Mulai
 
-- Sudah menyelesaikan **Module 16** (`Nala/` berjalan lengkap: chat UI, streaming/multi-turn, upload, embedding/vector store, chunking, Airflow, RAG chain)
-- Docker Desktop sudah dialokasikan resource yang cukup — minimal 16GB RAM (sama seperti kebutuhan sejak Module 12-16); module ini sendiri tidak menambah service Docker baru, jadi belum perlu menaikkan alokasi lagi
+- Sudah menyelesaikan **Module 17** (`Nala/` berjalan lengkap: chat UI, streaming/multi-turn, upload, embedding/vector store, chunking, Airflow, RAG chain)
+- Docker Desktop sudah dialokasikan resource yang cukup — minimal 16GB RAM (sama seperti kebutuhan sejak Module 12-17); module ini sendiri tidak menambah service Docker baru, jadi belum perlu menaikkan alokasi lagi
 
-`Nala/` sudah dibangun bertahap sejak Module 1 dan berjalan lengkap sampai akhir Module 16 — module ini melanjutkan **edit langsung di folder yang sama** (`Nala/`), tidak ada folder baru yang perlu dibuat atau disalin. Sepanjang seluruh kurikulum (Module 1 sampai Module 29) hanya ada **satu** folder kode: `Nala/`.
+`Nala/` sudah dibangun bertahap sejak Module 1 dan berjalan lengkap sampai akhir Module 17 — module ini melanjutkan **edit langsung di folder yang sama** (`Nala/`), tidak ada folder baru yang perlu dibuat atau disalin. Sepanjang seluruh kurikulum (Module 1 sampai Module 30) hanya ada **satu** folder kode: `Nala/`.
 
-Container dan volume Docker (`ollama`, `opensearch`, `airflow`, dst) yang sudah berjalan sejak Module 7-16 tetap dipakai apa adanya di module ini — karena `docker-compose.yml` yang dipakai memang tetap sama satu-satunya, data yang sudah ada (index OpenSearch yang sudah terisi dari ingest sebelumnya, model Ollama yang sudah di-*pull*) otomatis ikut terbawa, tidak perlu diulang dari nol. Masuk ke folder dan jalankan service yang relevan:
+Container dan volume Docker (`ollama`, `opensearch`, `airflow`, dst) yang sudah berjalan sejak Module 7-17 tetap dipakai apa adanya di module ini — karena `docker-compose.yml` yang dipakai memang tetap sama satu-satunya, data yang sudah ada (index OpenSearch yang sudah terisi dari ingest sebelumnya, model Ollama yang sudah di-*pull*) otomatis ikut terbawa, tidak perlu diulang dari nol. Masuk ke folder dan jalankan service yang relevan:
 
 ```bash
 cd Nala
@@ -292,7 +292,7 @@ docker compose exec api python -c "from app.ingest import ingest_documents; prin
 
 **Langkah 1 — Tambah `_id` ke hasil `search()` yang sudah ada**
 
-RRF butuh identitas unik tiap dokumen untuk mencocokkan kemunculannya di dua daftar hasil (BM25 dan vector) — `search()` yang sudah ada sejak Module 12 belum mengembalikan `_id` (ID dokumen OpenSearch, bukan `metadata`). Tambahkan satu key ke setiap hasil:
+RRF butuh identitas unik tiap dokumen untuk mencocokkan kemunculannya di dua daftar hasil (BM25 dan vector) — `search()` yang sudah ada sejak Module 13 belum mengembalikan `_id` (ID dokumen OpenSearch, bukan `metadata`). Tambahkan satu key ke setiap hasil:
 
 ```python
 # app/vector_store.py — di dalam method search() yang sudah ada
@@ -321,14 +321,14 @@ def search(self, query_embedding: list[float], top_k: int = 3) -> list[dict]:
         ]
 ```
 
-Satu-satunya perubahan: baris `"_id": hit["_id"],` ditambahkan ke dict hasil. Ini **tidak** memutus pemanggil yang sudah ada — kode Module 12 yang memakai `r["text"]` atau `r["metadata"]` tetap berfungsi, `_id` cuma key tambahan.
+Satu-satunya perubahan: baris `"_id": hit["_id"],` ditambahkan ke dict hasil. Ini **tidak** memutus pemanggil yang sudah ada — kode Module 13 yang memakai `r["text"]` atau `r["metadata"]` tetap berfungsi, `_id` cuma key tambahan.
 
 <details>
 <summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 1</strong></summary>
 
 ```
 Tambah key _id ke hasil search() yang sudah ada di VectorStore
-(Module 17, Tahap A, Langkah 1) — belum dipakai method atau endpoint
+(Module 18, Tahap A, Langkah 1) — belum dipakai method atau endpoint
 baru apa pun.
 
 GOAL:
@@ -338,7 +338,7 @@ GOAL:
 
 CONTEXT:
 - File ini (`app/vector_store.py`) sudah ada di `Nala/` sejak
-  Module 12 — edit langsung di file yang sama, tidak ada folder
+  Module 13 — edit langsung di file yang sama, tidak ada folder
   lain yang perlu disalin.
 - _id ini dibutuhkan RRF (Langkah 3) untuk mencocokkan dokumen yang
   sama di dua daftar hasil (BM25 dan vector).
@@ -403,7 +403,7 @@ for r in results:
 <summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 2</strong></summary>
 
 ```
-Tambah method baru search_bm25() di VectorStore (Module 17, Tahap A,
+Tambah method baru search_bm25() di VectorStore (Module 18, Tahap A,
 Langkah 2) — belum dipakai endpoint apa pun.
 
 GOAL:
@@ -416,11 +416,11 @@ GOAL:
 
 CONTEXT:
 - File ini (`app/vector_store.py`) sudah ada di `Nala/` sejak
-  Module 12 — edit langsung di file yang sama, tidak ada folder lain
+  Module 13 — edit langsung di file yang sama, tidak ada folder lain
   yang perlu disalin.
 - Key _id di hasil search() sudah ditambahkan di Langkah 1.
 - Field "text" di mapping index nala-docs (dibuat ensure_index())
-  sudah bertipe "text" sejak Module 12 — BM25 bisa langsung dipakai
+  sudah bertipe "text" sejak Module 13 — BM25 bisa langsung dipakai
   tanpa reindex.
 
 GUARDRAIL:
@@ -464,7 +464,7 @@ def search_hybrid(
     ]
 ```
 
-- **`candidate_pool=20`**: jumlah kandidat yang diambil dari **masing-masing** metode (BM25 dan vector) sebelum fusion — bukan `top_k` final. Nilai ini dibuat lebih besar dari `top_k` supaya fusion punya cukup bahan untuk memilih dari kedua sisi; default `20` ini juga yang nanti dipakai apa adanya oleh Module 18 (reranking) sebagai ukuran *candidate set* sebelum cross-encoder menyortirnya ulang — bukan kebetulan, ini desain yang sengaja disiapkan untuk Module 18.
+- **`candidate_pool=20`**: jumlah kandidat yang diambil dari **masing-masing** metode (BM25 dan vector) sebelum fusion — bukan `top_k` final. Nilai ini dibuat lebih besar dari `top_k` supaya fusion punya cukup bahan untuk memilih dari kedua sisi; default `20` ini juga yang nanti dipakai apa adanya oleh Module 19 (reranking) sebagai ukuran *candidate set* sebelum cross-encoder menyortirnya ulang — bukan kebetulan, ini desain yang sengaja disiapkan untuk Module 19.
 - **`doc_lookup`**: dictionary bantu supaya isi dokumen (`text`, `metadata`, dst) tidak perlu dicari ulang — disimpan begitu pertama kali ditemui. `setdefault()` pada loop `vector_results` sengaja dipakai (bukan `=`) supaya versi BM25 yang tersimpan lebih dulu tidak tertimpa kalau dokumen yang sama muncul di kedua daftar (isinya identik, cuma untuk menghindari kerja dua kali).
 - **`rrf_k=60`**: konstanta standar RRF dari literatur information retrieval — meredam dominasi peringkat #1 supaya dokumen di peringkat #2-3 dari kedua daftar tetap kompetitif melawan dokumen yang cuma nomor #1 di satu daftar saja.
 - Hasil akhir diurutkan berdasarkan `fused_scores` (menurun), dipotong ke `top_k`, dan tiap dict hasil ditambah key `rrf_score` (skor fusion, berbeda dari `score` yang merupakan skor asli BM25/vector sebelum digabung).
@@ -490,14 +490,14 @@ for r in results:
 "
 ```
 
-✅ **Indikator sukses**: tidak ada error, dan chunk `### 2.1 Untuk Nasabah Perorangan` (yang di Module 14 Bagian 9 berperingkat #11 dari 14 lewat vector search murni) sekarang seharusnya muncul jauh lebih tinggi — idealnya masuk `top_k=5` — karena BM25 menangkap kecocokan kata "syarat", "perorangan" secara eksak, ditambah sinyal semantik dari vector search.
+✅ **Indikator sukses**: tidak ada error, dan chunk `### 2.1 Untuk Nasabah Perorangan` (yang di Module 15 Bagian 9 berperingkat #11 dari 14 lewat vector search murni) sekarang seharusnya muncul jauh lebih tinggi — idealnya masuk `top_k=5` — karena BM25 menangkap kecocokan kata "syarat", "perorangan" secara eksak, ditambah sinyal semantik dari vector search.
 
 <details>
 <summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 3</strong></summary>
 
 ```
 Tambah method search_hybrid() dengan Reciprocal Rank Fusion (RRF) di
-VectorStore (Module 17, Tahap A, Langkah 3) — belum dipakai endpoint
+VectorStore (Module 18, Tahap A, Langkah 3) — belum dipakai endpoint
 apa pun.
 
 GOAL:
@@ -519,7 +519,7 @@ GOAL:
 
 CONTEXT:
 - search_bm25() dan _id di search() sudah ditambahkan di Langkah 1-2.
-- top_k default 3 tapi Module 18 nanti akan memanggil method ini
+- top_k default 3 tapi Module 19 nanti akan memanggil method ini
   dengan top_k=20 (candidate set untuk reranking) — desain method ini
   sudah harus mendukung top_k besar tanpa perubahan lagi.
 
@@ -530,7 +530,7 @@ GUARDRAIL:
 
 </details>
 
-**📄 Kode lengkap Tahap A** (`app/vector_store.py`, versi setelah Module 17):
+**📄 Kode lengkap Tahap A** (`app/vector_store.py`, versi setelah Module 18):
 
 ```python
 from urllib.parse import quote
@@ -658,10 +658,10 @@ class VectorStore:
 
 **Langkah 4 — Ganti `vector_store.search()` jadi `vector_store.search_hybrid()`**
 
-Di `app/main.py`, endpoint `/chat/stream` (satu-satunya endpoint chat NALA sejak Module 8, dibangun sebagai RAG chain di Module 13) memanggil:
+Di `app/main.py`, endpoint `/chat/stream` (satu-satunya endpoint chat NALA sejak Module 8, dibangun sebagai RAG chain di Module 14) memanggil:
 
 ```python
-# SEBELUM (Module 13) — di dalam chat_stream()
+# SEBELUM (Module 14) — di dalam chat_stream()
 query_embedding = embed_text(last_user_message, base_url=OLLAMA_BASE_URL)
 results = vector_store.search(query_embedding, top_k=3)
 ```
@@ -669,7 +669,7 @@ results = vector_store.search(query_embedding, top_k=3)
 Ganti jadi:
 
 ```python
-# SESUDAH (Module 17) — di dalam chat_stream()
+# SESUDAH (Module 18) — di dalam chat_stream()
 query_embedding = embed_text(last_user_message, base_url=OLLAMA_BASE_URL)
 results = vector_store.search_hybrid(
     query_text=last_user_message,
@@ -678,7 +678,7 @@ results = vector_store.search_hybrid(
 )
 ```
 
-Tidak ada yang lain berubah — blok `try/except httpx.HTTPError` di sekitarnya (fallback ke `NALA_SYSTEM_PROMPT_NO_CONTEXT`, lihat Module 13 Bagian 2.d) tetap sama persis, karena `search_hybrid()` bisa melempar `httpx.HTTPError` yang sama seperti `search()` (dua-duanya memanggil OpenSearch lewat `httpx`). `top_k=3` di module ini **belum** memakai `candidate_pool=20` secara sengaja — itu baru relevan mulai Module 18 begitu ada reranker yang bisa memanfaatkan kandidat sebanyak itu. Dengan `top_k=3`, `search_hybrid()` tetap mengambil 20 kandidat dari masing-masing metode di baliknya (default `candidate_pool=20`), tapi langsung memotong ke 3 teratas via RRF sebelum dikembalikan — cukup untuk manfaat hybrid search saja, sebelum reranking ditambahkan.
+Tidak ada yang lain berubah — blok `try/except httpx.HTTPError` di sekitarnya (fallback ke `NALA_SYSTEM_PROMPT_NO_CONTEXT`, lihat Module 14 Bagian 2.d) tetap sama persis, karena `search_hybrid()` bisa melempar `httpx.HTTPError` yang sama seperti `search()` (dua-duanya memanggil OpenSearch lewat `httpx`). `top_k=3` di module ini **belum** memakai `candidate_pool=20` secara sengaja — itu baru relevan mulai Module 19 begitu ada reranker yang bisa memanfaatkan kandidat sebanyak itu. Dengan `top_k=3`, `search_hybrid()` tetap mengambil 20 kandidat dari masing-masing metode di baliknya (default `candidate_pool=20`), tapi langsung memotong ke 3 teratas via RRF sebelum dikembalikan — cukup untuk manfaat hybrid search saja, sebelum reranking ditambahkan.
 
 **▶️ Jalankan & lihat hasilnya**
 
@@ -692,16 +692,16 @@ curl -N -X POST http://localhost:8000/chat/stream \
   -d '{"messages": [{"role": "user", "content": "Apa saja syarat pengajuan kredit untuk nasabah perorangan?"}]}'
 ```
 
-✅ **Indikator sukses**: jawaban terasa lebih relevan dibanding sebelumnya, idealnya menyebut item konkret dari `### 2.1` (KTP, Kartu Keluarga, slip gaji, dst) — bandingkan dengan jawaban yang lebih umum/tidak lengkap yang didapat di Module 13 sebelum hybrid search ditambahkan, muncul bertahap seperti biasa (flag `-N`).
+✅ **Indikator sukses**: jawaban terasa lebih relevan dibanding sebelumnya, idealnya menyebut item konkret dari `### 2.1` (KTP, Kartu Keluarga, slip gaji, dst) — bandingkan dengan jawaban yang lebih umum/tidak lengkap yang didapat di Module 14 sebelum hybrid search ditambahkan, muncul bertahap seperti biasa (flag `-N`).
 
-Tapi untuk pertanyaan spesifik ini, jawaban **belum tentu** sudah menyebut keempat item itu secara lengkap — hybrid search terbukti menaikkan peringkat chunk yang benar (dari #11 di vector murni jadi sekitar #8, lihat Bagian 8), tapi belum cukup untuk selalu masuk `top_k=3` di kasus keras ini. Kalau jawabannya masih bilang "tidak ditemukan informasi spesifik", itu **bukan tanda ada yang salah** — itu justru bukti grounding masih bekerja jujur (Module 13 Bagian 2.d), dan alasan kenapa Module 18 (reranking) berikutnya diperlukan. Lihat Bagian 7 untuk checklist lengkap sebelum lanjut ke Module 18.
+Tapi untuk pertanyaan spesifik ini, jawaban **belum tentu** sudah menyebut keempat item itu secara lengkap — hybrid search terbukti menaikkan peringkat chunk yang benar (dari #11 di vector murni jadi sekitar #8, lihat Bagian 8), tapi belum cukup untuk selalu masuk `top_k=3` di kasus keras ini. Kalau jawabannya masih bilang "tidak ditemukan informasi spesifik", itu **bukan tanda ada yang salah** — itu justru bukti grounding masih bekerja jujur (Module 14 Bagian 2.d), dan alasan kenapa Module 19 (reranking) berikutnya diperlukan. Lihat Bagian 7 untuk checklist lengkap sebelum lanjut ke Module 19.
 
 <details>
 <summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 4</strong></summary>
 
 ```
 Ganti vector_store.search() jadi vector_store.search_hybrid() di
-/chat/stream (Module 17, Tahap B, Langkah 4).
+/chat/stream (Module 18, Tahap B, Langkah 4).
 
 GOAL:
 - Di Nala/app/main.py:
@@ -727,7 +727,7 @@ GUARDRAIL:
 
 </details>
 
-**📄 Kode lengkap Tahap B** (bagian relevan `app/main.py` setelah Module 17 — hanya menunjukkan fungsi yang berubah, sisanya identik dengan akhir Module 13):
+**📄 Kode lengkap Tahap B** (bagian relevan `app/main.py` setelah Module 18 — hanya menunjukkan fungsi yang berubah, sisanya identik dengan akhir Module 14):
 
 ```python
 # app/main.py
@@ -777,7 +777,7 @@ def chat_stream(request: ChatStreamRequest) -> StreamingResponse:
 
 ## 7. Checkpoint Praktik
 
-Langkah eksekusi lengkap ada di Bagian 6 di atas (Tahap A Langkah 1-3, Tahap B Langkah 4). Yang perlu dipastikan sebelum lanjut ke Module 18:
+Langkah eksekusi lengkap ada di Bagian 6 di atas (Tahap A Langkah 1-3, Tahap B Langkah 4). Yang perlu dipastikan sebelum lanjut ke Module 19:
 
 - [ ] `store.search_bm25()` mengembalikan hasil yang cocok kata kunci eksak dengan query
 - [ ] `store.search_hybrid()` mengembalikan hasil yang berbeda urutannya dibanding `store.search()` murni, untuk query yang sama, dan skor `rrf_score` untuk chunk `### 2.1 Untuk Nasabah Perorangan` naik dibanding peringkatnya di `store.search()` murni (lihat Bagian 8 di bawah — belum tentu masuk `top_k=3`, itu wajar di titik ini)
@@ -853,12 +853,12 @@ Ganti `query` dengan pertanyaan apa pun yang ingin dicoba, dan `'Fotokopi KTP'` 
 
 ⚠️ **Jebakan umum — dua argumen ini gampang tertukar**: `query` (baris `query = '...'`) adalah **pertanyaan** yang mau dicari, sedangkan argumen ketiga `cari_posisi(query, query_embedding, '...')` adalah **potongan isi dokumen** yang diharapkan muncul di jawaban — bukan pertanyaannya lagi. Kalau keduanya tertukar (misal argumen ketiga ikut diisi pertanyaan, bukan potongan isi dokumen), hasilnya akan selalu "tidak ditemukan di top-N" untuk ketiga metode sekaligus — bukan berarti retrieval-nya gagal, tapi karena `potongan_teks` yang dicocokkan (`if potongan_teks in r["text"]`) memang tidak pernah muncul persis sebagai substring di teks chunk manapun. Kalau ketiga metode kompak "tidak ditemukan", curigai dulu argumen yang tertukar, baru curigai retrieval-nya.
 
-Alat bantu yang sama ini juga berguna di Module 18 (mengecek apakah reranking benar-benar menaikkan posisi chunk yang diharapkan) dan Module 19 (dasar dari cara kerja framework evaluasi precision/recall/MRR) — jangan dihapus setelah dipakai di sini.
+Alat bantu yang sama ini juga berguna di Module 19 (mengecek apakah reranking benar-benar menaikkan posisi chunk yang diharapkan) dan Module 20 (dasar dari cara kerja framework evaluasi precision/recall/MRR) — jangan dihapus setelah dipakai di sini.
 
-Ini bukan bug, dan bukan berarti Module 17 gagal — dibanding vector murni, hybrid search tetap terbukti menaikkan peringkat chunk yang benar (walau untuk kasus ini, tidak sebesar yang BM25 sendirian capai). Yang perlu dipahami jujur: RRF adalah kompromi yang tidak selalu optimal per-kasus — ia menyeimbangkan dua sinyal secara umum, bukan memilih "yang terbaik" untuk tiap query. Kasus keras seperti ini (dokumen kuat di satu sinyal, lemah di sinyal lain) adalah motivasi nyata untuk Module 18 (reranking), yang menilai relevansi tiap kandidat secara langsung — bukan mengombinasikan dua rank secara membabi buta.
+Ini bukan bug, dan bukan berarti Module 18 gagal — dibanding vector murni, hybrid search tetap terbukti menaikkan peringkat chunk yang benar (walau untuk kasus ini, tidak sebesar yang BM25 sendirian capai). Yang perlu dipahami jujur: RRF adalah kompromi yang tidak selalu optimal per-kasus — ia menyeimbangkan dua sinyal secara umum, bukan memilih "yang terbaik" untuk tiap query. Kasus keras seperti ini (dokumen kuat di satu sinyal, lemah di sinyal lain) adalah motivasi nyata untuk Module 19 (reranking), yang menilai relevansi tiap kandidat secara langsung — bukan mengombinasikan dua rank secara membabi buta.
 
 ## Kesimpulan
 
-Module ini menutup celah yang secara eksplisit didokumentasikan sebagai keterbatasan di Module 14 Bagian 9: vector search murni bisa kalah oleh chunk pendek yang "kebetulan" mirip secara makna, padahal kecocokan kata kunci eksak justru menunjuk ke chunk yang benar. Hybrid search (BM25 + vector, digabung lewat RRF berbasis rank — bukan skor mentah yang rawan beda skala) memperbaiki ini **tanpa reindex** dan **tanpa mengubah kontrak endpoint** (`/chat/stream` tetap menerima/mengembalikan bentuk yang sama).
+Module ini menutup celah yang secara eksplisit didokumentasikan sebagai keterbatasan di Module 15 Bagian 9: vector search murni bisa kalah oleh chunk pendek yang "kebetulan" mirip secara makna, padahal kecocokan kata kunci eksak justru menunjuk ke chunk yang benar. Hybrid search (BM25 + vector, digabung lewat RRF berbasis rank — bukan skor mentah yang rawan beda skala) memperbaiki ini **tanpa reindex** dan **tanpa mengubah kontrak endpoint** (`/chat/stream` tetap menerima/mengembalikan bentuk yang sama).
 
-Yang belum diselesaikan (dan sudah dibuktikan langsung dengan angka di Bagian 8): hybrid search memperbaiki *recall* di level kandidat (dokumen yang benar kini punya peluang lebih besar masuk top-K yang lebih besar seperti `candidate_pool=20`), tapi belum tentu selalu menaruhnya di posisi #1-3 secara konsisten — kombinasi BM25+vector tetap heuristik berbasis rank, bukan penilaian relevansi langsung. Module 18 (Reranking) mengambil pool kandidat yang lebih besar (`candidate_pool=20`, sudah disiapkan di `search_hybrid()`) dan menyortirnya ulang pakai model yang secara khusus dilatih untuk menilai relevansi query-dokumen — dibahas berikutnya di Module 18.
+Yang belum diselesaikan (dan sudah dibuktikan langsung dengan angka di Bagian 8): hybrid search memperbaiki *recall* di level kandidat (dokumen yang benar kini punya peluang lebih besar masuk top-K yang lebih besar seperti `candidate_pool=20`), tapi belum tentu selalu menaruhnya di posisi #1-3 secara konsisten — kombinasi BM25+vector tetap heuristik berbasis rank, bukan penilaian relevansi langsung. Module 19 (Reranking) mengambil pool kandidat yang lebih besar (`candidate_pool=20`, sudah disiapkan di `search_hybrid()`) dan menyortirnya ulang pakai model yang secara khusus dilatih untuk menilai relevansi query-dokumen — dibahas berikutnya di Module 19.
