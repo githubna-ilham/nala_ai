@@ -31,7 +31,7 @@ flowchart TD
 
 ## 1. Kenapa "Routing" Bukan Fitur Baru yang Perlu Dibangun dari Nol
 
-Ini kemungkinan module paling ringan dari sisi kode baru di rangkaian Module 21-25, dan itu disengaja: graph LangGraph yang dibangun di Module 22 (`call_model` → `should_continue` → `call_tool`/`END`, dengan `call_tool` selalu kembali ke `call_model`) **sudah** mendukung dua tool tanpa perubahan struktural sejak Module 23 mendaftarkan `SQL_TOOL_SCHEMA` di samping `RAG_TOOL_SCHEMA`. "Routing" di sini bukan komponen kode terpisah yang harus ditulis — ia adalah **keputusan yang diambil model** setiap kali `call_model` dipanggil, berdasarkan `description` di skema tiap tool (Module 22 Bagian 4 Tahap B, Module 23 Bagian 3 Tahap C) dan isi percakapan sejauh itu.
+Ini kemungkinan module paling ringan dari sisi kode baru di rangkaian Module 21-25, dan itu disengaja: graph LangGraph yang dibangun di Module 22 (`call_model` → `should_continue` → `call_tool`/`END`, dengan `call_tool` selalu kembali ke `call_model`) **sudah** mendukung dua tool tanpa perubahan struktural sejak Module 23 mendaftarkan `SQL_TOOL_SCHEMA` di samping `RAG_TOOL_SCHEMA`. "Routing" di sini bukan komponen kode terpisah yang harus ditulis — ia adalah **keputusan yang diambil model** setiap kali `call_model` dipanggil, berdasarkan `description` di skema tiap tool (Module 22 Bagian 4 Tahap B, Module 23 Bagian 3 Tahap A) dan isi percakapan sejauh itu.
 
 Yang dibangun di module ini bukan mekanisme routing baru, tapi tiga hal yang justru lebih penting untuk sistem produksi: **memahami** bagaimana keputusan itu diambil, **menguji** dengan pertanyaan yang mewakili tiap skenario (termasuk yang seharusnya butuh dua tool sekaligus), dan **menambahkan pengaman** untuk kasus ketika keputusan itu meleset atau berulang tanpa henti.
 
@@ -172,7 +172,7 @@ GOAL:
 CONTEXT:
 - Tujuan: description tool adalah satu-satunya sinyal yang dibaca LLM
   untuk memilih antara tool RAG dan tool SQL (Module 22 Bagian 4 Tahap
-  B, Module 23 Bagian 3 Tahap C) — kalimat yang lebih spesifik
+  B, Module 23 Bagian 3 Tahap A) — kalimat yang lebih spesifik
   (termasuk kata "WAJIB"/"JANGAN") biasanya membantu model kecil
   memilih lebih tepat, meski bukan jaminan mutlak.
 - Struktur skema tool (nama parameter, tipe) TIDAK berubah, hanya teks

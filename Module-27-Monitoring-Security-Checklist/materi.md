@@ -304,7 +304,7 @@ Yang perlu dipastikan sebelum lanjut ke Module 28:
 - [ ] `/status/view` menampilkan halaman yang sama secara visual dan auto-refresh
 - [ ] Checklist keamanan Bagian 3 sudah dibahas per kelompok/peserta — untuk poin yang statusnya "belum ada"/"di luar cakupan", kita memahami **kenapa**, bukan menganggapnya sudah selesai
 
-Setelah semua poin di atas terpenuhi, lanjut ke **Module 28 materi.md, bagian Panduan Praktik** (`../Module-28-Polish-Frontend-Demo/materi.md`).
+Setelah semua poin di atas terpenuhi, lanjut ke **Module 28 materi.md, Tahap A — Loading/Typing Indicator** (`../Module-28-Polish-Frontend-Demo/materi.md`).
 
 ## Kesimpulan
 

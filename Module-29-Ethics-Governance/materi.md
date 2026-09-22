@@ -120,7 +120,7 @@ Organisasi yang sungguhan ingin men-deploy sistem seperti NALA **wajib** berkons
 
 ## 6. Diskusi Kelompok
 
-**Prasyarat**: Module 26-28 sudah selesai — stack full-stack sudah jalan dan lolos Uji Coba Menyeluruh (Module 28 materi.md, bagian Panduan Praktik, Langkah 2).
+**Prasyarat**: Module 26-28 sudah selesai — stack full-stack sudah jalan dan lolos Uji Coba Menyeluruh (Module 28 materi.md, Tahap D Langkah 5).
 
 Tidak ada kode atau perintah terminal di module ini — Module 29 murni sesi diskusi. Setelah membaca Bagian 1-5 di atas (security vs etika vs governance, bias dari kurasi dokumen, overreliance, transparansi, akuntabilitas/human-in-the-loop, peta risiko yang menyatukan temuan etika/governance/teknis dari seluruh training), sebelum lanjut ke persiapan capstone, diskusikan dalam kelompok (10-15 menit):
 
