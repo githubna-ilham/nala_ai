@@ -95,6 +95,16 @@ Sebelum menulis kode, dua hal ini **wajib** disiapkan supaya module ini benar-be
 
 Dua Tahap: **Tahap A** membuat file baru `app/reranker.py`, berdiri sendiri, belum dipakai siapa pun. **Tahap B** mengubah `/chat/stream` (satu-satunya endpoint chat NALA) supaya memanggil `search_hybrid(top_k=20)` lalu `reranker.rerank(..., top_k=3)`.
 
+**Prasyarat sebelum mulai:**
+- Sudah menyelesaikan **Module 17** — `Nala/` sudah punya `search_hybrid()` bekerja dan terhubung ke `/chat/stream`.
+- Naikkan alokasi RAM Docker Desktop untuk menampung reranker:
+
+| Setting | Minimal | Direkomendasikan | Alasan |
+|---|---|---|---|
+| **Memory (RAM)** | 16 GB | 20 GB+ jika tersedia | `sentence-transformers` + `torch` dimuat ke memori container `api` sepanjang ia berjalan — bobot model reranker (~80MB untuk default `ms-marco-MiniLM-L-6-v2`) ditambah overhead library `torch` yang cukup besar, di atas beban Ollama + OpenSearch + Airflow yang sudah ada. |
+| **CPUs** | 4 | 4+ | Reranking adalah beban CPU tambahan yang nyata — cross-encoder dihitung per pasangan query-dokumen setiap request. |
+| **Disk image size** | 100 GB | 120 GB+ | Dependency `torch` (dari `sentence-transformers`) menambah beberapa GB lagi ke image `api`. |
+
 ### Tahap A — Buat `app/reranker.py`
 
 **Langkah 1 — Tambah dependency ke `requirements.txt`**
@@ -108,6 +118,36 @@ sentence-transformers==3.2.1
 **Apa itu `torch`?** **PyTorch** (biasa disingkat `torch`) adalah library machine learning open-source dari Meta, salah satu yang paling banyak dipakai di dunia untuk menjalankan dan melatih model deep learning (neural network). `sentence-transformers` (library yang menyediakan `CrossEncoder`) dibangun di atas PyTorch — ia butuh PyTorch untuk benar-benar menjalankan model cross-encoder (memuat bobot model, menghitung skor relevansi tiap pasangan query-dokumen). Analoginya: Ollama yang sudah dipakai sejak Module 2 juga menjalankan model LLM lewat mesin inferensi internal (mirip cara kerja PyTorch) — bedanya Ollama membungkus semua itu jadi satu binary siap pakai, sementara `sentence-transformers` di Python butuh PyTorch sebagai library terpisah untuk melakukan hal serupa di dalam kode kita sendiri.
 
 ⚠️ **Jebakan umum — `torch` polos menarik varian GPU/CUDA secara default.** Kalau `torch` cuma ditulis sebagai dependency biasa dari `sentence-transformers` (tanpa baris `--extra-index-url` dan pin versi `+cpu` di atas), `pip` akan memasang varian **CUDA** secara default dari PyPI — menambah **~8GB** library NVIDIA (`nvidia-cusparselt`, `nvidia-cudnn`, dst) yang **tidak pernah dipakai**, karena container `api` di training ini tidak punya akses GPU sama sekali (`torch.cuda.is_available()` akan selalu `False`). Akibatnya image `api` bisa membengkak sampai **~9.6GB** — untuk peserta yang unduh bersamaan di kelas, ini pemborosan bandwidth dan disk yang signifikan, tanpa manfaat apa pun. Baris `--extra-index-url https://download.pytorch.org/whl/cpu` mengarahkan `pip` ke index PyTorch resmi yang cuma berisi build CPU-only, dan `torch==2.6.0+cpu` memastikan versi yang cocok benar-benar tersedia di index itu (versi lebih lama seperti `2.5.x+cpu` **tidak tersedia** di index CPU untuk beberapa arsitektur — cek dulu index-nya kalau ingin pin versi lain). Dengan perbaikan ini, image `api` yang tadinya ~9.6GB turun jadi **~1.6GB** — perbedaan besar untuk sesi training dengan banyak peserta men-download bersamaan.
+
+<details>
+<summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 1</strong></summary>
+
+```
+Tambah dependency reranker (torch CPU-only + sentence-transformers) ke
+requirements.txt (Module 18, Langkah 1).
+
+GOAL:
+Di Nala/requirements.txt, tambah persis 3 baris baru (jangan ubah
+dependency lain yang sudah ada):
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.6.0+cpu
+sentence-transformers==3.2.1
+
+CONTEXT:
+- requirements.txt ini dipakai Docker untuk build image `api`.
+- --extra-index-url + pin +cpu WAJIB supaya pip mengambil build
+  torch CPU-only, bukan varian CUDA default (~8GB lebih besar,
+  tidak pernah dipakai karena container tidak punya akses GPU).
+- app/reranker.py yang memakai sentence-transformers baru dibuat di
+  Langkah 3 — langkah ini cuma menyiapkan dependency-nya.
+
+GUARDRAIL:
+- JANGAN tulis torch tanpa baris --extra-index-url atau tanpa pin
+  +cpu — itu persis bug yang sedang dihindari module ini.
+- JANGAN ubah dependency lain di requirements.txt.
+```
+
+</details>
 
 **Langkah 2 — Siapkan volume cache HuggingFace dan pre-pull model**
 
@@ -132,7 +172,9 @@ volumes:
 
 `HF_HOME` memberi tahu `sentence-transformers`/HuggingFace di mana menyimpan model yang diunduh — dengan mengarahkannya ke volume bernama (`hf_cache`, bukan folder di dalam container yang hilang tiap `docker compose down`), model yang sudah diunduh sekali akan **tetap ada** walau container dihapus dan dibuat ulang (`docker compose up --build`).
 
-Setelah `docker compose up --build api` berjalan, pre-pull modelnya sekali secara eksplisit:
+⚠️ Jalankan `cd Nala && docker compose up --build api` untuk build ulang image dengan dependency baru sebelum lanjut — build ini akan terasa **jauh lebih lama** dari modul-modul sebelumnya, karena `sentence-transformers` menarik `torch` sebagai dependency (Bagian 4). Ini normal, bukan tanda ada yang salah; tunggu sampai selesai, jangan diinterupsi di tengah jalan (image yang setengah jadi bisa korup dan perlu diulang dari awal).
+
+Setelah build selesai, pre-pull modelnya sekali secara eksplisit — perintah ini butuh koneksi internet (mengunduh dari HuggingFace Hub), tapi begitu selesai model tersimpan di volume `hf_cache` dan **tidak** diunduh ulang walau container di-*rebuild* (selama volume tidak dihapus):
 
 ```bash
 docker compose exec api python -c "
@@ -141,6 +183,42 @@ CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2')
 print('Model reranker berhasil diunduh dan siap dipakai offline.')
 "
 ```
+
+✅ **Indikator sukses**: pesan konfirmasi tercetak tanpa error.
+
+<details>
+<summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 2</strong></summary>
+
+```
+Siapkan volume cache HuggingFace untuk reranker (Module 18, Langkah 2).
+
+GOAL:
+Di Nala/docker-compose.yml, service api:
+1. Tambah environment HF_HOME=/app/.cache/huggingface ke daftar
+   environment yang sudah ada (OLLAMA_BASE_URL, dst) — jangan hapus
+   yang lama.
+2. Tambah volume baru hf_cache:/app/.cache/huggingface ke daftar
+   volumes service api yang sudah ada (knowledge-base, dst) — jangan
+   hapus yang lama.
+3. Tambah hf_cache ke daftar top-level volumes (sejajar dengan
+   ollama_data, opensearch_data yang sudah ada).
+
+CONTEXT:
+- Volume ini menyimpan model cross-encoder yang di-pre-pull manual
+  lewat `docker compose exec api python -c "..."` — itu perintah
+  shell yang dijalankan manusia setelah build, BUKAN bagian dari
+  kode yang perlu ditulis di langkah ini.
+- Tanpa HF_HOME diarahkan ke volume bernama, model akan diunduh
+  ulang setiap kali container di-rebuild.
+
+GUARDRAIL:
+- JANGAN hapus environment/volume service api yang sudah ada dari
+  module-module sebelumnya — cuma tambah baris baru.
+- JANGAN jalankan perintah pre-pull atau docker compose apa pun —
+  langkah ini cuma mengubah docker-compose.yml.
+```
+
+</details>
 
 **Langkah 3 — Buat `app/reranker.py`**
 
@@ -174,6 +252,45 @@ class Reranker:
 - **`{**candidate, "rerank_score": ...}`**: setiap kandidat (dict hasil dari `search_hybrid()`, sudah punya `_id`, `text`, `score`, `metadata`, `rrf_score`) ditambah satu key baru `rerank_score` — key lama tidak hilang, jadi kalau perlu *debugging* nanti bisa dibandingkan `rrf_score` (skor sebelum reranking) dengan `rerank_score` (skor sesudah).
 - **`candidates=[]` → return `[]`**: dijaga eksplisit di baris pertama — kalau `search_hybrid()` sebelumnya mengembalikan list kosong (index kosong/OpenSearch tak terjangkau), `predict([])` pada `sentence-transformers` bisa berperilaku tidak terduga (tergantung versi) alih-alih meng-crash dengan jelas; mengecek lebih dulu jauh lebih aman.
 
+<details>
+<summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 3</strong></summary>
+
+```
+Buat app/reranker.py dengan class Reranker berbasis CrossEncoder
+(Module 18, Langkah 3) — belum dipakai endpoint apa pun.
+
+GOAL:
+Buat Nala/app/reranker.py:
+- import CrossEncoder dari sentence_transformers
+- class Reranker dengan __init__(self, model_name: str =
+  "cross-encoder/ms-marco-MiniLM-L-6-v2") yang menyimpan
+  self.model = CrossEncoder(model_name)
+- method rerank(self, query: str, candidates: list[dict], top_k:
+  int = 3) -> list[dict]: return [] kalau candidates kosong; kalau
+  tidak, bikin pairs = [(query, c["text"]) for c in candidates],
+  scores = self.model.predict(pairs), gabung tiap candidate dengan
+  key baru "rerank_score" (float(score)), sort menurun berdasarkan
+  rerank_score, return top_k pertama.
+
+CONTEXT:
+- requirements.txt dan docker-compose.yml (dependency + volume cache
+  model) sudah disiapkan Langkah 1-2 — langkah ini cuma menulis file
+  Python-nya.
+- Model akan di-pre-pull manual lewat docker compose exec (Langkah 2)
+  sebelum dipakai, bukan bagian dari kode ini.
+- Kandidat yang dikirim ke rerank() nanti berasal dari
+  vector_store.search_hybrid(top_k=20) (Module 17) — setiap dict
+  kandidat sudah punya key _id, text, score, metadata, rrf_score.
+
+GUARDRAIL:
+- JANGAN ubah app/vector_store.py atau app/main.py di langkah ini —
+  reranker.py berdiri sendiri dulu, wiring ke endpoint itu Langkah 4-5.
+- JANGAN hapus key lama (_id, text, score, metadata, rrf_score) dari
+  dict kandidat — cuma tambah rerank_score.
+```
+
+</details>
+
 **▶️ Jalankan & lihat hasilnya**
 
 ```bash
@@ -206,48 +323,6 @@ for r in reranked:
 
 ✅ **Indikator sukses**: tidak ada error, dan **urutan** hasil di dua bagian output kemungkinan besar berbeda — bukti cross-encoder menilai ulang relevansi, bukan sekadar mempertahankan urutan RRF. Perintah ini butuh waktu beberapa detik lebih lama dibanding `search_hybrid()` saja di Module 17 (20 pasangan query-dokumen dihitung satu per satu oleh cross-encoder) — ini normal, dibahas lebih lanjut di Bagian 6.
 
-<details>
-<summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 1-3</strong></summary>
-
-```
-Buat app/reranker.py dengan class Reranker berbasis CrossEncoder
-(Module 18, Tahap A) — belum dipakai endpoint apa pun.
-
-GOAL:
-1. Di Nala/requirements.txt: tambah
-   baris baru sentence-transformers==3.2.1.
-2. Di Nala/docker-compose.yml, service
-   api: tambah environment HF_HOME=/app/.cache/huggingface dan
-   volume baru hf_cache:/app/.cache/huggingface; tambah hf_cache ke
-   daftar top-level volumes.
-3. Buat Nala/app/reranker.py:
-   - import CrossEncoder dari sentence_transformers
-   - class Reranker dengan __init__(self, model_name: str =
-     "cross-encoder/ms-marco-MiniLM-L-6-v2") yang menyimpan
-     self.model = CrossEncoder(model_name)
-   - method rerank(self, query: str, candidates: list[dict], top_k:
-     int = 3) -> list[dict]: return [] kalau candidates kosong; kalau
-     tidak, bikin pairs = [(query, c["text"]) for c in candidates],
-     scores = self.model.predict(pairs), gabung tiap candidate dengan
-     key baru "rerank_score" (float(score)), sort menurun berdasarkan
-     rerank_score, return top_k pertama.
-
-CONTEXT:
-- Model akan di-pre-pull manual lewat docker compose exec sebelum
-  dipakai (bukan bagian dari kode ini) — lihat Langkah 2 di materi.
-- Kandidat yang dikirim ke rerank() nanti berasal dari
-  vector_store.search_hybrid(top_k=20) (Module 17) — setiap dict
-  kandidat sudah punya key _id, text, score, metadata, rrf_score.
-
-GUARDRAIL:
-- JANGAN ubah app/vector_store.py atau app/main.py di langkah ini —
-  reranker.py berdiri sendiri dulu, wiring ke endpoint itu Tahap B.
-- JANGAN hapus key lama (_id, text, score, metadata, rrf_score) dari
-  dict kandidat — cuma tambah rerank_score.
-```
-
-</details>
-
 ### Tahap B — Wiring ke `/chat/stream`
 
 **Langkah 4 — Tambah instance `Reranker` dan flag `RERANK_ENABLED` di `app/main.py`**
@@ -262,6 +337,37 @@ reranker = Reranker() if RERANK_ENABLED else None
 ```
 
 `RERANK_ENABLED` (default `"true"`) sengaja dibuat bisa dimatikan lewat environment variable — lihat Bagian 6 kenapa ini bukan sekadar fitur opsional kosmetik, tapi katup pengaman kalau alokasi RAM laptop peserta mulai mepet begitu Module 20 (Langfuse) menambah beban lagi di atas stack yang sudah ada.
+
+<details>
+<summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 4</strong></summary>
+
+```
+Tambah instance Reranker dan flag RERANK_ENABLED di app/main.py
+(Module 18, Langkah 4).
+
+GOAL:
+Di Nala/app/main.py:
+1. Tambah `from app.reranker import Reranker` ke import yang sudah
+   ada.
+2. Dekat instance vector_store yang sudah ada, tambah dua baris:
+   RERANK_ENABLED = os.environ.get("RERANK_ENABLED", "true").lower()
+   == "true", lalu reranker = Reranker() if RERANK_ENABLED else None.
+
+CONTEXT:
+- app/reranker.py sudah dibuat Langkah 3 dengan class Reranker dan
+  method rerank(query, candidates, top_k).
+- RERANK_ENABLED adalah katup pengaman lewat environment variable —
+  belum dipakai di chat_stream() sampai Langkah 5.
+
+GUARDRAIL:
+- JANGAN wiring ke chat_stream() di langkah ini — itu Langkah 5
+  terpisah.
+- JANGAN hardcode RERANK_ENABLED = True tanpa membaca env var —
+  harus bisa dimatikan lewat environment variable tanpa mengubah
+  kode.
+```
+
+</details>
 
 **Langkah 5 — Ubah alur retrieval di `/chat/stream`**
 
@@ -281,6 +387,36 @@ except httpx.HTTPError:
 
 Perubahan intinya: `search_hybrid()` sekarang dipanggil dengan `top_k=20` (bukan `3`) untuk mengambil **kandidat**, bukan hasil final — hasil final baru didapat setelah `reranker.rerank(..., top_k=3)` memangkasnya. Kalau `RERANK_ENABLED=false` (`reranker is None`), sistem tetap berjalan dengan mengambil 3 kandidat teratas versi RRF langsung (`candidates[:3]`) — bukan error, cuma kembali ke perilaku Module 17 tanpa reranking.
 
+<details>
+<summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 5</strong></summary>
+
+```
+Wiring Reranker ke /chat/stream (Module 18, Langkah 5).
+
+GOAL:
+Di fungsi chat_stream() Nala/app/main.py: ganti pemanggilan
+vector_store.search_hybrid() yang top_k=3 (dari Module 17) jadi
+top_k=20, simpan hasilnya ke variabel `candidates` (bukan `results`),
+lalu tambah baris `results = reranker.rerank(last_user_message,
+candidates, top_k=3) if reranker else candidates[:3]`.
+
+CONTEXT:
+- reranker dan RERANK_ENABLED sudah dibuat Langkah 4.
+- vector_store.search_hybrid() sudah ada sejak Module 17.
+- /chat/stream adalah satu-satunya endpoint chat NALA sejak Module 8
+  — tidak ada endpoint /chat lain untuk diubah.
+- Blok try/except httpx.HTTPError di sekitar retrieval TIDAK berubah
+  strukturnya — cuma isi di dalam try yang berubah.
+
+GUARDRAIL:
+- JANGAN ubah logika fallback NALA_SYSTEM_PROMPT_NO_CONTEXT (dipicu
+  kalau `results` kosong) — itu tetap sama persis dari Module 13.
+- JANGAN ubah top_k lain di luar retrieval (mis. HISTORY_WINDOW atau
+  system prompt building).
+```
+
+</details>
+
 **▶️ Jalankan & lihat hasilnya**
 
 ```bash
@@ -293,44 +429,7 @@ curl -N -X POST http://localhost:8000/chat/stream \
   -d '{"messages": [{"role": "user", "content": "Apa saja syarat pengajuan kredit untuk nasabah perorangan?"}]}'
 ```
 
-✅ **Indikator sukses**: jawaban tetap akurat (menyebut item dari `### 2.1`) seperti Module 17, muncul bertahap seperti biasa (flag `-N`), dan **response time terasa lebih lama** — 20 kandidat sekarang di-cross-encode setiap request, dibanding Module 17 yang langsung memotong ke 3 lewat RRF saja. Perlambatan ini nyata dan diharapkan — dibahas jujur di Bagian 6 sebagai trade-off, bukan bug.
-
-<details>
-<summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 4-5</strong></summary>
-
-```
-Wiring Reranker ke /chat/stream (Module 18, Tahap B).
-
-GOAL:
-1. Di Nala/app/main.py:
-   - Tambah `from app.reranker import Reranker` ke import.
-   - Tambah dekat instance vector_store: RERANK_ENABLED =
-     os.environ.get("RERANK_ENABLED", "true").lower() == "true", lalu
-     reranker = Reranker() if RERANK_ENABLED else None.
-   - Di fungsi chat_stream(): ganti pemanggilan
-     vector_store.search_hybrid() yang top_k=3 (dari Module 17) jadi
-     top_k=20, simpan hasilnya ke variabel `candidates` (bukan
-     `results`), lalu tambah baris `results =
-     reranker.rerank(last_user_message, candidates, top_k=3) if
-     reranker else candidates[:3]`.
-
-CONTEXT:
-- app/reranker.py sudah dibuat di Tahap A dengan class Reranker dan
-  method rerank(query, candidates, top_k).
-- vector_store.search_hybrid() sudah ada sejak Module 17.
-- /chat/stream adalah satu-satunya endpoint chat NALA sejak Module 8
-  Module 18 — tidak ada endpoint /chat lain untuk diubah.
-- Blok try/except httpx.HTTPError di sekitar retrieval TIDAK berubah
-  strukturnya — cuma isi di dalam try yang berubah.
-
-GUARDRAIL:
-- JANGAN ubah logika fallback NALA_SYSTEM_PROMPT_NO_CONTEXT (dipicu
-  kalau `results` kosong) — itu tetap sama persis dari Module 13.
-- JANGAN hardcode RERANK_ENABLED=true tanpa baca env var — harus bisa
-  dimatikan lewat environment variable tanpa mengubah kode.
-```
-
-</details>
+✅ **Indikator sukses**: jawaban tetap akurat (menyebut item dari `### 2.1`) seperti Module 17, muncul bertahap seperti biasa (flag `-N`), dan **response time terasa lebih lama** — 20 kandidat sekarang di-cross-encode setiap request, dibanding Module 17 yang langsung memotong ke 3 lewat RRF saja. Perlambatan ini nyata dan diharapkan — dibahas jujur di Bagian 6 sebagai trade-off, bukan bug. Untuk membandingkan langsung dengan reranking dimatikan (`RERANK_ENABLED=false`) — termasuk contoh nyata hasilnya dan kenapa perilakunya tidak konsisten — lihat Bagian 8.
 
 **📄 Kode lengkap Tahap B** (bagian relevan `app/main.py` setelah Module 18):
 
@@ -382,6 +481,14 @@ def chat_stream(request: ChatStreamRequest) -> StreamingResponse:
     )
 ```
 
+### Troubleshooting
+
+- **`ModuleNotFoundError: No module named 'sentence_transformers'`**: `requirements.txt` belum ditambah (Langkah 1) atau image belum di-*rebuild* setelah ditambah — jalankan `docker compose up --build api` (bukan cuma `docker compose up`, perubahan dependency butuh rebuild image).
+- **Build `api` terasa sangat lama / seperti macet setelah menambah `sentence-transformers`**: normal — `torch` adalah dependency besar (lihat Bagian 4). Tunggu, jangan interupsi build di tengah jalan (image yang setengah jadi bisa korup dan perlu diulang dari awal).
+- **`CrossEncoder(...)` gagal/timeout saat dipanggil pertama kali**: kemungkinan besar belum di-*pre-pull* (Langkah 2) dan koneksi internet ruangan lambat/putus saat container mencoba mengunduh otomatis. Jalankan ulang Langkah 2 secara manual dengan koneksi yang stabil.
+- **Model reranker diunduh ulang setiap kali `docker compose up --build`**: volume `hf_cache` belum ter-mount dengan benar, atau `HF_HOME` belum di-set — cek `docker-compose.yml` service `api` sesuai Langkah 2 di atas.
+- **Semua service terasa sangat lambat / laptop panas / container ter-*kill***: alokasi RAM Docker Desktop kurang — lihat bagian Prasyarat di awal Bagian 5, naikkan ke 20GB+ kalau tersedia.
+
 ## 6. Trade-off Reranking: Latensi dan Compute, Bukan Gratis
 
 Reranking **selalu** menambah latensi dan beban CPU — ini bukan detail kecil, tapi konsekuensi langsung dari cara kerjanya (Bagian 1): cross-encoder harus dihitung ulang untuk setiap pasangan, setiap request, karena tidak bisa di-precompute seperti bi-encoder.
@@ -399,7 +506,7 @@ Untuk NALA, trade-off ini diterima dengan kondisi: reranking aktif secara defaul
 
 ## 7. Checkpoint Praktik
 
-Langkah eksekusi lengkap (termasuk pre-pull model) ada di bagian **Panduan Praktik** di bawah, Langkah 1-3. Yang perlu dipastikan sebelum lanjut ke Module 19:
+Langkah eksekusi lengkap (termasuk pre-pull model) ada di Bagian 5, Langkah 1-5. Yang perlu dipastikan sebelum lanjut ke Module 19:
 
 - [ ] Model `cross-encoder/ms-marco-MiniLM-L-6-v2` sudah ter-*pre-pull* dan tersimpan di volume `hf_cache` (tidak diunduh ulang setiap `docker compose up --build`)
 - [ ] `reranker.rerank()` menghasilkan urutan yang bisa berbeda dari urutan RRF `search_hybrid()` untuk query yang sama
@@ -485,7 +592,7 @@ Berdasarkan dokumen internal tersebut, saya tidak menemukan informasi tentang sy
 Namun, untuk informasi yang lebih spesifik dan akurat..., saya tidak dapat memberikan jawaban yang lebih lanjut karena informasi tersebut tidak disertakan dalam dokumen internal yang tersedia.
 ```
 
-Kali ini modelnya justru **jujur ter-hedge** ("mungkin mencakup", lalu eksplisit mengaku tidak bisa menjawab lebih spesifik) — bukan mengarang lima poin seolah fakta seperti percobaan pertama. Dua percobaan, dua perilaku berbeda, dari kode dan data yang identik.
+Kali ini modelnya justru **jujur ter-hedge** ("mungkin mencakup", lalu eksplisit mengaku tidak bisa menjawab lebih spesifik) — bukan mengarang lima poin seolah fakta seperti percobaan pertama. Dua percobaan, dua perilaku berbeda, dari kode dan data yang identik. Coba beberapa kali sendiri kalau ingin melihat kedua perilaku ini — kirim pertanyaan yang sama berulang kali dengan `RERANK_ENABLED=false`, lalu bandingkan dengan reranking aktif.
 
 Ini persis konsekuensi dari cara kerja sampling LLM (`llama3.2:3b` tidak deterministik secara default — token demi token dipilih dengan sedikit keacakan, bukan selalu memilih token "terbaik" yang sama persis tiap kali). Kesimpulan yang **benar** untuk ditarik dari sini bukan "tanpa reranking pasti mengarang", tapi:
 
@@ -499,71 +606,3 @@ Ini persis konsekuensi dari cara kerja sampling LLM (`llama3.2:3b` tidak determi
 Module ini menambah satu tahap penyortiran ulang di atas fondasi hybrid search Module 17: alih-alih langsung mempercayai urutan RRF, sistem sekarang mengambil kandidat lebih besar (top-20) dan membiarkan model yang secara khusus dilatih menilai relevansi query-dokumen (cross-encoder) yang menentukan urutan akhir. Ini bukan penggantian hybrid search — keduanya bekerja berurutan: hybrid search memastikan dokumen yang benar **ada** di kandidat, reranking memastikan ia **naik ke posisi teratas**.
 
 Sejauh ini, klaim "reranking membuat retrieval lebih baik" masih berdasarkan pengamatan kualitatif (baca jawaban, bandingkan manual) — belum ada angka. Module 19 membangun framework evaluasi untuk mengukur ini secara kuantitatif, membandingkan kualitas retrieval **sebelum** dan **sesudah** reranking dengan metrik precision, recall, dan MRR — supaya klaim "lebih baik" di module ini bisa dibuktikan, bukan sekadar dirasakan.
-
-## Panduan Praktik
-
-> **Catatan penomoran**: "Langkah N" di bagian Panduan Praktik ini adalah urutan eksekusi tersendiri (langkah demi langkah menjalankan perintah), terpisah dari "Langkah N" yang sudah dipakai di bagian kode/struktur di atas (langkah menulis kode). Keduanya kebetulan memakai nomor yang sama tapi menghitung hal yang berbeda — jangan disamakan urutannya.
-
-### Prasyarat
-- Sudah menyelesaikan **Module 17** — `Nala/` sudah punya `search_hybrid()` bekerja dan terhubung ke `/chat/stream`
-- Docker Desktop dinaikkan alokasi RAM-nya untuk menampung reranker:
-
-| Setting | Minimal | Direkomendasikan | Alasan |
-|---|---|---|---|
-| **Memory (RAM)** | 16 GB | 20 GB+ jika tersedia | `sentence-transformers` + `torch` dimuat ke memori container `api` sepanjang ia berjalan — bobot model reranker (~80MB untuk default `ms-marco-MiniLM-L-6-v2`) ditambah overhead library `torch` yang cukup besar, di atas beban Ollama + OpenSearch + Airflow yang sudah ada. |
-| **CPUs** | 4 | 4+ | Reranking adalah beban CPU tambahan yang nyata — cross-encoder dihitung per pasangan query-dokumen setiap request. |
-| **Disk image size** | 100 GB | 120 GB+ | Dependency `torch` (dari `sentence-transformers`) menambah beberapa GB lagi ke image `api`. |
-
-### Langkah 1: Tambah dependency reranker dan volume cache HuggingFace
-
-Ikuti Module 18 Bagian 5 Tahap A Langkah 1-2 di `materi.md`: tambah `sentence-transformers` ke `requirements.txt`, tambah `HF_HOME` dan volume `hf_cache` ke service `api` di `docker-compose.yml`.
-
-```bash
-cd Nala
-docker compose up --build api
-```
-
-⚠️ Build ini akan terasa **jauh lebih lama** dari modul sebelumnya — `sentence-transformers` menarik `torch` sebagai dependency, menambah beberapa gigabyte ke image. Ini normal, bukan tanda ada yang salah (lihat Module 18 Bagian 4).
-
-### Langkah 2: Pre-pull model reranker sebelum dipakai
-
-```bash
-docker compose exec api python -c "
-from sentence_transformers import CrossEncoder
-CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2')
-print('Model reranker berhasil diunduh dan siap dipakai offline.')
-"
-```
-
-✅ **Indikator sukses**: pesan konfirmasi tercetak tanpa error. Perintah ini butuh koneksi internet (mengunduh dari HuggingFace Hub) — begitu selesai sekali, model tersimpan di volume `hf_cache` dan **tidak** diunduh ulang walau container di-*rebuild* (selama volume tidak dihapus).
-
-### Langkah 3: Tulis `app/reranker.py` dan wiring ke `/chat/stream`
-
-Ikuti Module 18 Bagian 5 Tahap A Langkah 3 (buat `app/reranker.py`) dan Tahap B Langkah 4-5 (wiring).
-
-```bash
-docker compose up --build api
-```
-
-```bash
-curl -N -X POST http://localhost:8000/chat/stream \
-  -H "Content-Type: application/json" \
-  -d '{"messages": [{"role": "user", "content": "Apa saja syarat pengajuan kredit untuk nasabah perorangan?"}]}'
-```
-
-✅ **Indikator sukses**: jawaban akurat dan lengkap (8 item, termasuk "maksimal 60 tahun" yang benar — bukan "65 tahun" yang pernah dikarang sebelum grounding aktif), response time terasa jauh lebih lama dibanding Module 17 (~30-40 detik di CPU laptop training — diharapkan, lihat Module 18 Bagian 6). Coba juga matikan sementara reranking untuk membandingkan — buka terminal baru untuk `curl`-nya:
-
-```bash
-docker compose stop api
-docker compose run --rm -e RERANK_ENABLED=false -p 8000:8000 api
-```
-
-Kirim pertanyaan yang sama dari terminal lain — responsnya **tetap muncul** (tidak error), tapi kualitasnya **tidak bisa diprediksi** kali ini: top-3 RRF tanpa reranking sering mengambil chunk yang "terasa berhubungan" tapi bukan yang sebenarnya menjawab, dan `llama3.2:3b` bisa bereaksi dua cara berbeda terhadap konteks yang ambigu seperti itu — kadang jujur mengaku tidak bisa menjawab spesifik (mirip Module 17 Bagian 8), kadang mengisi kekosongan itu dengan detail generik yang masuk akal tapi salah. Coba beberapa kali kalau ingin melihat kedua perilaku ini sendiri (lihat Module 18 Bagian 8 untuk kedua contoh nyata dan penjelasan lengkap kenapa ini terjadi). Setelah selesai membandingkan, `Ctrl+C` dan jalankan ulang `docker compose up --build api` (tanpa override env var) untuk melanjutkan dengan reranking aktif seperti biasa.
-
-### Troubleshooting
-
-- **`ModuleNotFoundError: No module named 'sentence_transformers'`**: `requirements.txt` belum ditambah (Langkah 1) atau image belum di-*rebuild* setelah ditambah — jalankan `docker compose up --build api` (bukan cuma `docker compose up`, perubahan dependency butuh rebuild image).
-- **Build `api` terasa sangat lama / seperti macet setelah menambah `sentence-transformers`**: normal — `torch` adalah dependency besar. Tunggu, jangan interupsi build di tengah jalan (image yang setengah jadi bisa korup dan perlu diulang dari awal).
-- **`CrossEncoder(...)` gagal/timeout saat dipanggil pertama kali**: kemungkinan besar belum di-*pre-pull* (Langkah 2) dan koneksi internet ruangan lambat/putus saat container mencoba mengunduh otomatis. Jalankan ulang Langkah 2 secara manual dengan koneksi yang stabil.
-- **Model reranker diunduh ulang setiap kali `docker compose up --build`**: volume `hf_cache` belum ter-mount dengan benar, atau `HF_HOME` belum di-set — cek `docker-compose.yml` service `api` sesuai Module 18 Bagian 5 Langkah 2.
-- **Semua service terasa sangat lambat / laptop panas / container ter-*kill***: alokasi RAM Docker Desktop kurang — lihat bagian Prasyarat di atas, naikkan ke 20GB+ kalau tersedia.
