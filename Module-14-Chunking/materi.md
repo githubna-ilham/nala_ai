@@ -26,13 +26,13 @@ flowchart LR
 - `ingest_documents()` ter-upgrade: sekarang mengembalikan jumlah **chunk** (bukan dokumen), lebih besar dari hasil Module 13
 - `/chat/stream` tetap menjawab dengan benar setelah `top_k` dinaikkan dan index diisi ulang dengan chunk
 - Kita memahami keterbatasan nyata retrieval semantic murni **level-chunk** (Bagian 9) sebagai motivasi jujur untuk hybrid search + reranking di Module 17
-- `/chat/stream` (Module 7, 7, 12) tetap berfungsi seperti sebelumnya
+- `/chat/stream` (Module 7) tetap berfungsi seperti sebelumnya
 
 ## 1. Kenapa Sekarang, Bukan dari Awal
 
 Module 13 sengaja membangun RAG **tanpa** chunking dulu — satu dokumen SOP di-embed utuh jadi satu vektor, supaya mesin RAG-nya cepat terbukti bekerja dengan langkah paling sedikit. Bagian 7 di Module 13 sudah menunjukkan **kenapa** pendekatan itu terbatas: satu vektor tidak bisa mewakili banyak sub-topik dokumen dengan baik, dan seluruh isi dokumen (bukan cuma bagian relevan) selalu ikut terkirim sebagai konteks.
 
-Sekarang saatnya mengatasi itu. Alasan yang sama juga berlaku ke depan untuk Module 15 (Upload): staff bisa saja mengupload dokumen yang jauh lebih panjang dari dua SOP contoh (Module 10 Bagian 2), atau PDF berhalaman banyak yang mendekati/melewati batas context window model embedding (Module 11 Bagian 3). Membangun chunking di module tersendiri, **sebelum** Upload dibangun, berarti begitu Module 15 datang, ia tinggal memanggil `ingest_documents()` yang sudah level-chunk — tidak perlu mikirkan chunking sebagai bagian dari alur upload itu sendiri.
+Sekarang saatnya mengatasi itu. Alasan yang sama juga berlaku ke depan untuk Module 15 (Upload): staff bisa saja mengupload dokumen yang jauh lebih panjang dari dua SOP contoh (Module 10 Bagian 2), atau PDF berhalaman banyak yang mendekati/melewati batas context window model embedding (Module 11 Bagian 2). Membangun chunking di module tersendiri, **sebelum** Upload dibangun, berarti begitu Module 15 datang, ia tinggal memanggil `ingest_documents()` yang sudah level-chunk — tidak perlu mikirkan chunking sebagai bagian dari alur upload itu sendiri.
 
 ```mermaid
 flowchart LR
@@ -411,6 +411,6 @@ Yang perlu dipastikan sebelum lanjut ke Module 15:
 - [ ] `ingest_documents()` sekarang mengembalikan jumlah chunk (jauh lebih besar dari jumlah dokumen di Module 13)
 - [ ] `top_k=6` sudah dipakai di `/chat/stream` (bukan lagi `top_k=2`)
 - [ ] Kita paham keterbatasan retrieval semantic murni level-chunk (Bagian 9) sebagai motivasi Module 17
-- [ ] `/chat/stream` (Module 7, 7, 12) masih berfungsi seperti sebelumnya, dengan jawaban yang sekarang berbasis chunk yang lebih fokus
+- [ ] `/chat/stream` (Module 7) masih berfungsi seperti sebelumnya, dengan jawaban yang sekarang berbasis chunk yang lebih fokus
 
 Begitu semua hal di atas terverifikasi, lanjut ke Module 15 — form upload web, cara staff menambahkan dokumen baru ke sistem yang **sudah hidup dan sudah level-chunk** ini.

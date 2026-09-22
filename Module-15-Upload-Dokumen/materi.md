@@ -24,7 +24,7 @@ flowchart LR
 - Link "Knowledge Base" dari halaman chat berfungsi menuju halaman ini
 - Upload file `.md`/`.pdf` langsung **tersimpan dan ter-index** (level-chunk) — pesan konfirmasi menyebut jumlah chunk, bukan cuma "tersimpan"
 - Dokumen yang baru diupload **langsung bisa ditanyakan** ke `/chat/stream` tanpa restart apa pun — bukti pipeline upload → index → retrieve end-to-end
-- `/chat/stream` (Module 7, 7, 12, 13) tetap berfungsi seperti sebelumnya
+- `/chat/stream` (Module 7) tetap berfungsi seperti sebelumnya
 
 ## 1. Kenapa Sekarang, Bukan Modul Pertama
 
@@ -389,6 +389,6 @@ Yang perlu dipastikan sebelum lanjut ke Module 16:
 - [ ] Upload file `.md`/`.pdf` menampilkan pesan "berhasil diunggah dan di-index (N chunk...)"
 - [ ] Dokumen yang baru diupload langsung muncul di daftar tanpa refresh manual kedua kalinya
 - [ ] Dokumen yang baru diupload **langsung bisa ditanyakan** ke `/chat/stream` tanpa restart apa pun
-- [ ] `/chat/stream` (Module 7, 7, 12, 13) masih berfungsi seperti sebelumnya
+- [ ] `/chat/stream` (Module 7) masih berfungsi seperti sebelumnya
 
 Begitu keenam hal ini terverifikasi, lanjut ke Module 16 — Airflow, cara **lain** memicu `ingest_documents()` yang sama, cocok untuk skenario batch/terjadwal yang tidak dicakup form upload satu-file ini.

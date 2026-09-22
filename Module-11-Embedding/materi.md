@@ -21,7 +21,7 @@ flowchart LR
 - Model `nomic-embed-text` ter-pull dan terdaftar di Ollama, sejajar dengan `llama3.2:3b`
 - `embed_text()` menghasilkan vektor 768 dimensi dari teks input
 - Kita paham kenapa embedding yang sama untuk teks yang sama selalu identik (tidak ada elemen acak, beda dengan `generate()`/`chat_stream()`)
-- `/chat/stream` (Module 7, 7) tetap berfungsi seperti sebelumnya
+- `/chat/stream` (Module 7) tetap berfungsi seperti sebelumnya
 
 ## 1. Apa itu Embedding
 
@@ -154,7 +154,7 @@ Yang perlu dipastikan sebelum lanjut ke Module 12:
 - [ ] `nomic-embed-text` ter-pull dan muncul di `docker compose exec ollama ollama list`
 - [ ] `embed_text()` menghasilkan vektor 768 dimensi
 - [ ] Embedding untuk teks yang sama selalu identik kalau dipanggil berulang kali
-- [ ] `/chat`, `/chat/stream` (Module 7, 7) masih berfungsi seperti sebelumnya
+- [ ] `/chat`, `/chat/stream` (Module 7) masih berfungsi seperti sebelumnya
 
 Begitu keempat hal ini terverifikasi, lanjut ke Module 12 — menyimpan vektor-vektor ini di OpenSearch supaya bisa dicari berdasarkan kemiripan makna, sekaligus membahas detail metrik kemiripan (L2, cosine similarity, dot product) yang jadi dasar pencarian semantik.
 

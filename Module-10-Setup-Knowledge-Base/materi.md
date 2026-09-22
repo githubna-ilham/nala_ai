@@ -24,7 +24,7 @@ flowchart LR
 
 - Folder `knowledge-base/` ada dan berisi minimal dua dokumen SOP contoh
 - `extract_text()` pada file `.md` mengembalikan isi file apa adanya, pada `.pdf` mengekstrak teks lewat `pypdf`
-- `/chat/stream` (Module 7, 7) tetap berfungsi seperti sebelumnya — module ini belum menyentuhnya sama sekali
+- `/chat/stream` (Module 7) tetap berfungsi seperti sebelumnya — module ini belum menyentuhnya sama sekali
 
 ## 1. Kenapa Data Dulu, Bukan UI Dulu
 
@@ -40,7 +40,7 @@ flowchart LR
 
 ## 2. Data Dasar Awal: Dua Dokumen SOP Contoh
 
-**Prasyarat**: sudah menyelesaikan Module 9 (Konsep RAG), dan container `ollama`+`api` dari `Nala/` masih berjalan (kalau tidak, ulangi Module 7 Langkah 2) — module ini belum butuh `opensearch`/`airflow`.
+**Prasyarat**: sudah menyelesaikan Module 9 (Konsep RAG), dan container `ollama`+`api` dari `Nala/` masih berjalan (kalau tidak, ulangi Module 7 Langkah 1) — module ini belum butuh `opensearch`/`airflow`.
 
 Sepanjang Module 7-16, kita memakai **dua dokumen SOP contoh** sebagai knowledge base untuk mendemonstrasikan sistem RAG. Contoh isi dokumennya juga tersedia langsung di folder module ini (`Module-10-Setup-Knowledge-Base/`) untuk dibaca — file yang sama persis dengan yang ada di `resources/sample-knowledge-base/`, yang dipakai `Nala/` saat runtime:
 
