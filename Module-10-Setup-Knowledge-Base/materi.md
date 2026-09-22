@@ -68,9 +68,9 @@ Dengan dua dokumen pendek ini, versi pertama RAG (Module 13) bisa meng-embed **m
 ls resources/sample-knowledge-base/
 ```
 
-Folder ini sudah disiapkan sejak awal training (bind mount `KNOWLEDGE_BASE_PATH`, lihat Module 4) — berisi kedua dokumen SOP di atas plus beberapa PDF latihan. Tidak ada kode yang ditulis di langkah ini, cuma verifikasi bahwa fondasi datanya sudah ada sebelum lanjut ke `extract_text()`.
+Folder ini sudah disiapkan sejak awal training (bind mount `KNOWLEDGE_BASE_PATH`, lihat Module 4) — berisi kedua dokumen SOP di atas, plus satu file PDF contoh untuk menguji cabang `.pdf` di `extract_text()` nanti. Tidak ada kode yang ditulis di langkah ini, cuma verifikasi bahwa fondasi datanya sudah ada sebelum lanjut ke `extract_text()`.
 
-✅ **Indikator sukses**: `sop-pengajuan-kredit.md`, `sop-klaim-asuransi.md`, dan beberapa file PDF muncul di listing.
+✅ **Indikator sukses**: `sop-pengajuan-kredit.md`, `sop-klaim-asuransi.md`, dan `sop-pembukaan-rekening-tabungan.pdf` muncul di listing.
 
 ## 3. Struktur Kode yang Ditambahkan: `extract_text()`
 
@@ -121,15 +121,14 @@ print(f'Panjang total: {len(text)} karakter')
 
 ✅ **Indikator sukses**: mengembalikan potongan teks awal `sop-pengajuan-kredit.md`, contohnya `'# SOP Pengajuan Kredit - PT Nusantara Finance\n\n## 1. Tujuan '`, dengan panjang total dokumen (bukan potongan) tercetak.
 
-Cabang `.pdf` juga bisa langsung dites karena beberapa file PDF latihan sudah ada di `knowledge-base/` (lihat Bagian 2):
+Cabang `.pdf` juga bisa langsung dites karena satu file PDF contoh (`sop-pembukaan-rekening-tabungan.pdf`) sudah ada di `knowledge-base/`:
 
 ```bash
 docker compose exec api python -c "
 from app.ingest import extract_text
-import os
-pdf_files = [f for f in os.listdir('/app/knowledge-base') if f.endswith('.pdf')]
-print(pdf_files)
-print(repr(extract_text(f'/app/knowledge-base/{pdf_files[0]}')[:60]))
+text = extract_text('/app/knowledge-base/sop-pembukaan-rekening-tabungan.pdf')
+print(repr(text[:60]))
+print(f'Panjang total: {len(text)} karakter')
 "
 ```
 
@@ -172,6 +171,6 @@ Yang perlu dipastikan sebelum lanjut ke Module 11:
 - [ ] Folder `knowledge-base/` berisi minimal dua dokumen SOP contoh
 - [ ] `extract_text()` pada file `.md` mengembalikan isi file apa adanya, utuh (bukan dipotong)
 - [ ] `extract_text()` pada file `.pdf` berhasil mengekstrak teks lewat `pypdf`
-- [ ] `/chat/stream` (Module 7, 7) masih berfungsi seperti sebelumnya
+- [ ] `/chat/stream` (Module 7) masih berfungsi seperti sebelumnya
 
 Begitu keempat hal ini terverifikasi, lanjut ke Module 11 — mengubah isi dokumen ini jadi vektor numerik (embedding).
