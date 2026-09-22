@@ -27,9 +27,9 @@ flowchart LR
 - Kita bisa menjelaskan apa itu halusinasi LLM dan kenapa itu risiko nyata untuk asisten internal PT Nusantara Finance, bukan sekadar kelemahan teoretis
 - Kita bisa menjelaskan RAG lewat analogi ujian *closed-book* vs *open-book* dengan kata-kata sendiri
 - Kita paham definisi RAG (*Retrieval-Augmented Generation*) dan dua komponen utamanya: retrieval dan generation
-- Kita bisa menggambarkan alur kerja RAG secara garis besar — dari pertanyaan user sampai jawaban ber-konteks — tanpa perlu tahu detail implementasi (itu Module 10-16)
+- Kita bisa menggambarkan alur kerja RAG secara garis besar — dari pertanyaan user sampai jawaban ber-konteks — tanpa perlu tahu detail implementasi (itu Module 10-17)
 - Kita paham RAG punya batasan: bisa menyebutkan minimal dua situasi di mana RAG bukan solusi yang tepat
-- **Tidak ada kode yang ditulis di module ini** — murni fondasi konsep untuk Module 10-16
+- **Tidak ada kode yang ditulis di module ini** — murni fondasi konsep untuk Module 10-17
 
 ## 1. Kelemahan LLM: Halusinasi
 
@@ -57,7 +57,7 @@ Cara paling intuitif memahami masalah ini dan solusinya: bayangkan LLM sebagai s
 |---|---|---|
 | Sumber jawaban | Ingatan/pengetahuan umum model | Dokumen relevan yang diambilkan tepat sebelum menjawab |
 | Kalau topiknya tidak pernah "diajarkan" | Menebak — berisiko halusinasi | Tetap bisa dijawab, selama dokumennya ada di knowledge base |
-| Kejujuran saat tidak tahu | Sering tetap menjawab dengan percaya diri | Bisa dirancang untuk mengaku "tidak ditemukan" kalau dokumennya memang tidak ada (Module 13 Bagian 4) |
+| Kejujuran saat tidak tahu | Sering tetap menjawab dengan percaya diri | Bisa dirancang untuk mengaku "tidak ditemukan" kalau dokumennya memang tidak ada (Module 14 Bagian 4) |
 
 RAG, secara sederhana, adalah cara **mengubah LLM dari siswa ujian closed-book jadi siswa ujian open-book** — bukan dengan melatih ulang modelnya (mahal, lambat, perlu data training baru tiap kali SOP berubah), tapi dengan **memberi rujukan yang relevan tepat sebelum ia menjawab**.
 
@@ -75,7 +75,7 @@ Poin penting yang perlu ditekankan: **RAG bukan model baru, bukan juga melatih u
 
 ## 4. Alur Kerja RAG
 
-Secara garis besar (detail teknis tiap panah di bawah ini adalah materi Module 10-14), begini alur RAG bekerja setiap kali ada pertanyaan masuk:
+Secara garis besar (detail teknis tiap panah di bawah ini adalah materi Module 10-15), begini alur RAG bekerja setiap kali ada pertanyaan masuk:
 
 ```mermaid
 sequenceDiagram
@@ -101,25 +101,25 @@ sequenceDiagram
 
 Perhatikan dua hal yang membedakan alur ini dari LLM murni: **STEP 1 (retrieval)** terjadi **sebelum** LLM pernah dipanggil sama sekali — LLM (`llama3.2:3b`) baru masuk di **STEP 3**, dan saat itu ia sudah dibekali konteks dari dokumen sungguhan (STEP 2), bukan mengandalkan ingatan internalnya. `Embedding Model` dan `LLM` di diagram ini **sama-sama Ollama**, cuma dipanggil dengan model berbeda untuk tugas berbeda (`nomic-embed-text` untuk mengubah teks jadi vektor pencarian, `llama3.2:3b` untuk menyusun jawaban akhir) — bukan dua sistem terpisah.
 
-Lima langkah ini, dan di module mana masing-masing dibangun sepanjang Module 7-16:
+Lima langkah ini, dan di module mana masing-masing dibangun sepanjang Module 7-17:
 
 1. **Pertanyaan user masuk** — sudah ada sejak Module 7 (`/chat`) dan Module 8 (`/chat/stream`), belum berubah bentuknya.
-2. **Retrieval** — sistem mencari dokumen mana yang relevan dengan pertanyaan itu, bukan dengan mencocokkan kata kunci secara harfiah, tapi lewat **kemiripan makna** (*semantic search*) — pertanyaan diubah jadi vektor (Module 11, "embedding"), lalu dicari kemiripannya di vector store (Module 12).
+2. **Retrieval** — sistem mencari dokumen mana yang relevan dengan pertanyaan itu, bukan dengan mencocokkan kata kunci secara harfiah, tapi lewat **kemiripan makna** (*semantic search*) — pertanyaan diubah jadi vektor (Module 11, "embedding"), lalu dicari kemiripannya di vector store (Module 13).
 3. **Ambil potongan (chunk) paling relevan** — dokumen sungguhan (SOP, kebijakan) biasanya panjang; potongan-potongan kecil ini sudah disiapkan lebih dulu saat proses indexing (Module 10, "chunking") — retrieval di langkah 2 tinggal mengembalikan potongan yang **paling relevan saja**, bukan seluruh dokumen.
-4. **Augmented** — potongan yang relevan itu digabungkan ke dalam prompt yang dikirim ke LLM, sebagai "konteks" tambahan sebelum pertanyaan asli (dibangun di Module 13, sekaligus menyatukan retrieval ke `/chat` dan `/chat/stream` — inilah titik RAG benar-benar "hidup" untuk pertama kalinya).
+4. **Augmented** — potongan yang relevan itu digabungkan ke dalam prompt yang dikirim ke LLM, sebagai "konteks" tambahan sebelum pertanyaan asli (dibangun di Module 14, sekaligus menyatukan retrieval ke `/chat` dan `/chat/stream` — inilah titik RAG benar-benar "hidup" untuk pertama kalinya).
 5. **Generation** — LLM (`llama3.2:3b`, model yang sama sejak Module 1-4) menghasilkan jawaban akhir, sekarang dengan konteks yang relevan sudah tersedia — persis siswa ujian *open-book* yang sudah membuka halaman yang tepat.
 
-Satu proses **tambahan** yang tidak terlihat di alur "tanya-jawab" di atas, tapi wajib terjadi lebih dulu: dokumen harus **masuk** ke knowledge base dan **ter-index** dulu sebelum bisa di-retrieve sama sekali. Itu tugas Module 10-13 (data seed, embedding, vector store, RAG chain pertama) untuk mengisi index awal, lalu Module 14 menambahkan chunking (retrieval jadi lebih presisi) sekaligus form upload web, dan Module 15 (Airflow, otomasi pipeline ingest) menambahkan cara lain data itu bisa terus bertambah — mengisi "rak buku" yang nanti dibuka siswa di langkah retrieval.
+Satu proses **tambahan** yang tidak terlihat di alur "tanya-jawab" di atas, tapi wajib terjadi lebih dulu: dokumen harus **masuk** ke knowledge base dan **ter-index** dulu sebelum bisa di-retrieve sama sekali. Itu tugas Module 10-14 (data seed, embedding, vector store, RAG chain pertama) untuk mengisi index awal, lalu Module 15 menambahkan chunking (retrieval jadi lebih presisi) sekaligus form upload web, dan Module 16 (Airflow, otomasi pipeline ingest) menambahkan cara lain data itu bisa terus bertambah — mengisi "rak buku" yang nanti dibuka siswa di langkah retrieval.
 
 ## 5. Kapan RAG Tidak Tepat
 
 Sama pentingnya dengan memahami kekuatan RAG: memahami **batasannya**. RAG bukan solusi universal untuk semua masalah LLM — ada situasi di mana RAG bukan pendekatan yang tepat, atau butuh pendekatan lain sebagai pelengkap:
 
-- **Data yang berubah sangat cepat / transaksional** — RAG mengandalkan dokumen yang sudah di-index sebelumnya (lewat upload atau Airflow). Untuk pertanyaan seperti *"berapa status pengajuan kredit nasabah N-00231 sekarang?"*, jawabannya ada di **database transaksi** yang berubah setiap saat, bukan di dokumen SOP yang statis — RAG terhadap dokumen tidak akan pernah bisa menjawab ini akurat, karena datanya memang bukan dokumen. Ini persis yang dibahas Module 21: NALA akan punya **tool SQL terpisah** untuk data operasional, dan agent yang memutuskan kapan pakai RAG vs kapan pakai SQL (Module 24, "Routing RAG vs SQL").
+- **Data yang berubah sangat cepat / transaksional** — RAG mengandalkan dokumen yang sudah di-index sebelumnya (lewat upload atau Airflow). Untuk pertanyaan seperti *"berapa status pengajuan kredit nasabah N-00231 sekarang?"*, jawabannya ada di **database transaksi** yang berubah setiap saat, bukan di dokumen SOP yang statis — RAG terhadap dokumen tidak akan pernah bisa menjawab ini akurat, karena datanya memang bukan dokumen. Ini persis yang dibahas Module 22: NALA akan punya **tool SQL terpisah** untuk data operasional, dan agent yang memutuskan kapan pakai RAG vs kapan pakai SQL (Module 25, "Routing RAG vs SQL").
 - **Pertanyaan yang butuh perhitungan/reasoning, bukan pencarian fakta** — RAG bagus untuk "cari fakta yang sudah tertulis di suatu tempat", tapi tidak secara otomatis membuat LLM lebih pintar berhitung atau bernalar kompleks. Kalau pertanyaannya "hitungkan estimasi bunga majemuk untuk pinjaman X selama Y tahun", RAG bisa membantu mencari *aturan* perhitungan kalau itu terdokumentasi, tapi eksekusi hitungannya tetap bergantung kemampuan reasoning model itu sendiri.
 - **Knowledge base yang sangat kecil** — kalau seluruh "pengetahuan" yang dibutuhkan cuma muat dalam beberapa paragraf, memasukkan semuanya langsung ke system prompt (tanpa retrieval sama sekali) bisa lebih sederhana dan lebih murah daripada membangun infrastruktur RAG penuh (OpenSearch, embedding, chunking, dst). RAG jadi bernilai justru ketika knowledge base-nya **terlalu besar** untuk muat sekaligus di context window model.
-- **Kebutuhan jawaban real-time dari sumber yang belum pernah di-ingest** — RAG hanya seakurat data yang **sudah** ter-index. Dokumen yang baru saja diubah tapi belum di-upload/di-ingest ulang tidak akan "diketahui" NALA, walau secara teori dokumennya sudah ada di suatu tempat. ⚠️ **Bukan berarti RAG "real-time"** — ada jeda antara dokumen berubah dan NALA benar-benar tahu perubahan itu (dibahas lebih lanjut trade-off Airflow vs upload manual di Module 15 Bagian 2).
-- **Kualitas retrieval yang belum sempurna tetap bisa jadi masalah** — bahkan dengan RAG terpasang, sistem retrieval yang naif (murni vector search, seperti yang dibangun Module 7-16 ini) bisa saja gagal menemukan chunk yang tepat kalau pertanyaannya ambigu atau chunk-nya "tenggelam" di antara chunk lain yang skor kemiripannya kebetulan lebih tinggi (preview masalah ini justru akan langsung ditemukan sendiri di Module 13 Bagian 7, sebagai motivasi nyata Module 17: hybrid search dan reranking).
+- **Kebutuhan jawaban real-time dari sumber yang belum pernah di-ingest** — RAG hanya seakurat data yang **sudah** ter-index. Dokumen yang baru saja diubah tapi belum di-upload/di-ingest ulang tidak akan "diketahui" NALA, walau secara teori dokumennya sudah ada di suatu tempat. ⚠️ **Bukan berarti RAG "real-time"** — ada jeda antara dokumen berubah dan NALA benar-benar tahu perubahan itu (dibahas lebih lanjut trade-off Airflow vs upload manual di Module 16 Bagian 2).
+- **Kualitas retrieval yang belum sempurna tetap bisa jadi masalah** — bahkan dengan RAG terpasang, sistem retrieval yang naif (murni vector search, seperti yang dibangun Module 7-17 ini) bisa saja gagal menemukan chunk yang tepat kalau pertanyaannya ambigu atau chunk-nya "tenggelam" di antara chunk lain yang skor kemiripannya kebetulan lebih tinggi (preview masalah ini justru akan langsung ditemukan sendiri di Module 14 Bagian 7, sebagai motivasi nyata Module 18: hybrid search dan reranking).
 
 **Intinya**: RAG mengurangi halusinasi untuk pertanyaan yang jawabannya memang ada di dokumen — RAG **bukan** jaminan jawaban selalu benar, dan RAG **bukan** pengganti untuk kasus yang butuh data transaksional, perhitungan, atau sumber yang belum ter-index. Memahami batasan ini sejak awal supaya ekspektasi terhadap NALA realistis — persis semangat kejujuran teknis yang dipegang sepanjang training ini.
 
@@ -131,10 +131,10 @@ Tidak ada checklist teknis di module ini (tidak ada kode yang ditulis) — sebag
 - [ ] Kita bisa menjelaskan analogi *closed-book* vs *open-book* dengan kata-kata sendiri (bukan menghafal definisi)
 - [ ] Kita bisa menyebutkan urutan garis besar alur RAG (retrieval → augmented → generation) tanpa perlu detail teknis
 - [ ] Kita bisa menyebutkan **minimal dua** situasi di mana RAG bukan solusi yang tepat
-- [ ] Kita paham bahwa Module 10-16 akan membangun, satu per satu, potongan-potongan yang membuat alur RAG di Bagian 4 benar-benar berfungsi
+- [ ] Kita paham bahwa Module 10-17 akan membangun, satu per satu, potongan-potongan yang membuat alur RAG di Bagian 4 benar-benar berfungsi
 
 ## Kesimpulan
 
-Module ini tidak menulis kode apa pun — tapi menjadi fondasi kenapa Module 10-16 layak dibangun sama sekali. Halusinasi adalah masalah nyata dan struktural pada LLM murni, terutama untuk pertanyaan spesifik perusahaan yang tidak pernah ada di data training model mana pun. RAG mengatasinya bukan dengan melatih ulang model, tapi dengan mengubah LLM dari "siswa ujian closed-book" jadi "siswa ujian open-book" — memberi rujukan yang relevan tepat sebelum menjawab. Alur kerjanya (retrieval → augmented → generation) akan dibangun bertahap, sesederhana mungkin dulu: Module 10 menyiapkan data seed (belum ada chunking), Module 11 mengenalkan cara teks diubah jadi sesuatu yang bisa dicari (embedding), Module 12 menyimpannya di vector store, Module 13 menyatukan semuanya jadi satu alur tanya-jawab yang benar-benar berfungsi — **RAG mulai hidup di sini**, memakai satu vektor per dokumen — sebelum akhirnya Module 14 menambahkan chunking (memecah dokumen jadi potongan yang lebih presisi) sekaligus form upload web, dan Module 15 (Airflow) menambahkan cara lain data terus bertambah di atas fondasi yang sudah bekerja. Tapi RAG bukan solusi ajaib untuk semua masalah — memahami kapan RAG tidak tepat (data transaksional, kebutuhan reasoning, sumber yang belum ter-index) sama pentingnya, dan akan terus relevan sampai Module 21 saat NALA belajar memutuskan sendiri kapan pakai RAG dan kapan pakai tool lain.
+Module ini tidak menulis kode apa pun — tapi menjadi fondasi kenapa Module 10-17 layak dibangun sama sekali. Halusinasi adalah masalah nyata dan struktural pada LLM murni, terutama untuk pertanyaan spesifik perusahaan yang tidak pernah ada di data training model mana pun. RAG mengatasinya bukan dengan melatih ulang model, tapi dengan mengubah LLM dari "siswa ujian closed-book" jadi "siswa ujian open-book" — memberi rujukan yang relevan tepat sebelum menjawab. Alur kerjanya (retrieval → augmented → generation) akan dibangun bertahap, sesederhana mungkin dulu: Module 10 menyiapkan data seed (belum ada chunking), Module 11 mengenalkan cara teks diubah jadi sesuatu yang bisa dicari (embedding), Module 12-13 menyimpannya di vector store, Module 14 menyatukan semuanya jadi satu alur tanya-jawab yang benar-benar berfungsi — **RAG mulai hidup di sini**, memakai satu vektor per dokumen — sebelum akhirnya Module 15 menambahkan chunking (memecah dokumen jadi potongan yang lebih presisi) sekaligus form upload web, dan Module 16 (Airflow) menambahkan cara lain data terus bertambah di atas fondasi yang sudah bekerja. Tapi RAG bukan solusi ajaib untuk semua masalah — memahami kapan RAG tidak tepat (data transaksional, kebutuhan reasoning, sumber yang belum ter-index) sama pentingnya, dan akan terus relevan sampai Module 22 saat NALA belajar memutuskan sendiri kapan pakai RAG dan kapan pakai tool lain.
 
 Tidak ada Troubleshooting untuk module ini — lanjut ke Module 10 begitu diskusi selesai.

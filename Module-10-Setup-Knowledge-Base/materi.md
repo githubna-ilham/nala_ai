@@ -4,13 +4,13 @@
 
 Menyiapkan **fondasi data** untuk RAG: folder `knowledge-base/` berisi dokumen SOP contoh, lalu membangun `extract_text()` — fungsi untuk membaca isi file `.md`/`.txt`/`.pdf` jadi string. Module ini **tidak menyentuh** Ollama atau OpenSearch sama sekali — murni operasi file, sebagai persiapan sebelum Module 11 (embedding) mengubah isi dokumen ini jadi vektor numerik.
 
-⚠️ **Perubahan urutan dari rencana awal**: draft pertama Module 7-16 membangun endpoint upload (form web) duluan sebagai "pintu masuk dokumen", baru belakangan membahas embedding/vector store/chunking secara terpisah dengan contoh teks bebas. Urutan ini diubah — kita bangun **mesin RAG dulu** (data → embedding → vector store → tersambung ke `/chat/stream`) sampai benar-benar bisa menjawab dari dokumen sungguhan, **baru** menambahkan chunking (Module 14) dan UI upload (Module 15) sebagai cara menambah dokumen baru ke sistem yang sudah hidup.
+⚠️ **Perubahan urutan dari rencana awal**: draft pertama Module 7-17 membangun endpoint upload (form web) duluan sebagai "pintu masuk dokumen", baru belakangan membahas embedding/vector store/chunking secara terpisah dengan contoh teks bebas. Urutan ini diubah — kita bangun **mesin RAG dulu** (data → embedding → vector store → tersambung ke `/chat/stream`) sampai benar-benar bisa menjawab dari dokumen sungguhan, **baru** menambahkan chunking (Module 15) dan UI upload (Module 16) sebagai cara menambah dokumen baru ke sistem yang sudah hidup.
 
-⚠️ **Belum ada chunking di module ini** — sengaja. Versi pertama RAG (Module 13) meng-embed **satu dokumen utuh** jadi satu vektor, bukan dipecah jadi potongan-potongan kecil dulu. Ini membuat mesin RAG-nya jauh lebih sederhana untuk pertama kali dibangun — cuma tiga langkah (baca dokumen → embed → simpan), tanpa perlu memahami konsep chunking sama sekali. **Chunking baru diperkenalkan di Module 14**, tepat pada momen alasannya jadi konkret: dokumen baru yang diupload staff bisa jauh lebih panjang dari dua SOP contoh di sini, dan di situlah keterbatasan "satu dokumen = satu vektor" mulai terasa nyata.
+⚠️ **Belum ada chunking di module ini** — sengaja. Versi pertama RAG (Module 14) meng-embed **satu dokumen utuh** jadi satu vektor, bukan dipecah jadi potongan-potongan kecil dulu. Ini membuat mesin RAG-nya jauh lebih sederhana untuk pertama kali dibangun — cuma tiga langkah (baca dokumen → embed → simpan), tanpa perlu memahami konsep chunking sama sekali. **Chunking baru diperkenalkan di Module 15**, tepat pada momen alasannya jadi konkret: dokumen baru yang diupload staff bisa jauh lebih panjang dari dua SOP contoh di sini, dan di situlah keterbatasan "satu dokumen = satu vektor" mulai terasa nyata.
 
 ## Definisi
 
-**Knowledge base** adalah kumpulan dokumen sumber — bisa berupa SOP, kebijakan, atau panduan internal — yang jadi satu-satunya bahan yang boleh dipakai NALA untuk menjawab pertanyaan staff. Di NALA, knowledge base ini diwakili folder `Nala/knowledge-base/` (di-bind mount ke dalam container) — sekumpulan file `.md`/`.txt`/`.pdf` biasa di disk, bukan database terstruktur dengan tabel dan kolom. Folder ini disiapkan di Langkah 1, lalu nanti bisa bertambah lewat fitur upload (Module 15).
+**Knowledge base** adalah kumpulan dokumen sumber — bisa berupa SOP, kebijakan, atau panduan internal — yang jadi satu-satunya bahan yang boleh dipakai NALA untuk menjawab pertanyaan staff. Di NALA, knowledge base ini diwakili folder `Nala/knowledge-base/` (di-bind mount ke dalam container) — sekumpulan file `.md`/`.txt`/`.pdf` biasa di disk, bukan database terstruktur dengan tabel dan kolom. Folder ini disiapkan di Langkah 1, lalu nanti bisa bertambah lewat fitur upload (Module 16).
 
 Isi awal folder itu disebut **data seed** — dokumen yang sudah disiapkan (lihat Bagian 2) sebelum ada jalur input dari user seperti form upload, supaya mesin RAG bisa langsung dites dari awal tanpa menunggu fitur upload selesai dibangun (Bagian 1-2). Untuk membaca isi tiap dokumen apa pun formatnya (Markdown, teks polos, atau PDF) jadi satu string teks polos yang siap diproses lebih lanjut, module ini membangun `extract_text()` — langkah pertama sebelum teks itu bisa diubah jadi vektor di Module 11.
 
@@ -30,7 +30,7 @@ flowchart LR
 
 Module 9 sudah menjelaskan **kenapa** RAG dibutuhkan (halusinasi, analogi *open-book*) dan **alur garis besarnya** (retrieval → augmented → generation). Sekarang saatnya mulai membangun — dan langkah pertama yang paling masuk akal secara teknis adalah **menyiapkan datanya**, sebelum satu baris kode pemrosesan pun ditulis. Tanpa dokumen yang ada di suatu tempat, tidak ada yang bisa di-embed, tidak ada yang bisa disimpan di vector store, tidak ada yang bisa di-retrieve.
 
-Alih-alih menunggu staff mengupload dokumen lewat form web (yang belum dibangun sampai Module 14), kita siapkan **data dasar awal** langsung: folder `Nala/knowledge-base/` di-*seed* dengan 1-2 dokumen SOP contoh yang sudah disiapkan. Ini bukan cara "curang" — ini pola umum di proyek RAG sungguhan: ada **data seed** untuk development/testing sebelum jalur input dari user (upload, sinkronisasi otomatis, dst) dibangun.
+Alih-alih menunggu staff mengupload dokumen lewat form web (yang belum dibangun sampai Module 16), kita siapkan **data dasar awal** langsung: folder `Nala/knowledge-base/` di-*seed* dengan 1-2 dokumen SOP contoh yang sudah disiapkan. Ini bukan cara "curang" — ini pola umum di proyek RAG sungguhan: ada **data seed** untuk development/testing sebelum jalur input dari user (upload, sinkronisasi otomatis, dst) dibangun.
 
 ```mermaid
 flowchart LR
@@ -42,7 +42,7 @@ flowchart LR
 
 **Prasyarat**: sudah menyelesaikan Module 9 (Konsep RAG), dan container `ollama`+`api` dari `Nala/` masih berjalan (kalau tidak, ulangi Module 7 Langkah 1) — module ini belum butuh `opensearch`/`airflow`.
 
-Sepanjang Module 7-16, kita memakai **dua dokumen SOP contoh** sebagai knowledge base untuk mendemonstrasikan sistem RAG. Kedua file-nya sudah disediakan siap pakai di folder module ini (`Module-10-Setup-Knowledge-Base/`) — tinggal disalin ke `Nala/knowledge-base/` di Langkah 1:
+Sepanjang Module 7-17, kita memakai **dua dokumen SOP contoh** sebagai knowledge base untuk mendemonstrasikan sistem RAG. Kedua file-nya sudah disediakan siap pakai di folder module ini (`Module-10-Setup-Knowledge-Base/`) — tinggal disalin ke `Nala/knowledge-base/` di Langkah 1:
 
 ### a. SOP Pengajuan Kredit (`sop-pengajuan-kredit.md`)
 - **Syarat Umum**: usia minimal 21 tahun, menjadi customer 6 bulan, memiliki rekening aktif
@@ -58,7 +58,7 @@ Dokumen ini jadi baseline untuk testing pertanyaan seperti *"Berapa lama approva
 - **Dokumen yang Diperlukan**: bukti asuransi aktif, medical report (untuk kesehatan), police report (untuk kendaraan)
 - **Estimasi Waktu**: 5-10 hari kerja untuk proses verifikasi dan pembayaran
 
-Dengan dua dokumen pendek ini, versi pertama RAG (Module 13) bisa meng-embed **masing-masing dokumen secara utuh** tanpa masalah — keduanya jauh di bawah batas context window model embedding. Nanti setelah Module 14 menambahkan chunking, kedua dokumen ini akan di-index ulang jadi beberapa chunk per dokumen — perbandingan sebelum/sesudah ini justru jadi cara paling konkret melihat kenapa chunking penting.
+Dengan dua dokumen pendek ini, versi pertama RAG (Module 14) bisa meng-embed **masing-masing dokumen secara utuh** tanpa masalah — keduanya jauh di bawah batas context window model embedding. Nanti setelah Module 15 menambahkan chunking, kedua dokumen ini akan di-index ulang jadi beberapa chunk per dokumen — perbandingan sebelum/sesudah ini justru jadi cara paling konkret melihat kenapa chunking penting.
 
 **Format dokumen yang didukung NALA**: Markdown, plain text, dan PDF. Markdown dan plain text mudah diparsing tanpa library eksternal; PDF ditambahkan karena di dunia nyata, SOP dan kebijakan perusahaan sering sudah dalam bentuk PDF (hasil ekspor Word, atau dokumen resmi) — mengabaikannya berarti NALA tidak bisa dipakai untuk sebagian besar dokumen yang sudah ada. Contoh filenya juga ada di folder module ini: `sop-pembukaan-rekening-tabungan.pdf`. ⚠️ **Tetap di luar scope training ini**: DOCX dan PDF hasil scan gambar (butuh OCR) — keduanya butuh library terpisah yang tidak dibahas di training ini.
 
@@ -117,7 +117,7 @@ Sekarang baca environment variable itu di `app/main.py`, mengikuti pola `os.envi
 KNOWLEDGE_BASE_PATH = os.environ.get("KNOWLEDGE_BASE_PATH", "/app/knowledge-base")
 ```
 
-Konstanta inilah yang dirujuk berulang kali di module-module berikutnya (Module 13, 15) — bukan path `/app/knowledge-base` yang di-hardcode ulang setiap kali dipakai.
+Konstanta inilah yang dirujuk berulang kali di module-module berikutnya (Module 14, 16) — bukan path `/app/knowledge-base` yang di-hardcode ulang setiap kali dipakai.
 
 **▶️ Jalankan & lihat hasilnya**
 
@@ -158,7 +158,7 @@ CONTEXT:
 - docker-compose.yml ada di Nala/, jadi ./knowledge-base menunjuk ke
   folder Nala/knowledge-base/ yang barusan dibuat.
 - KNOWLEDGE_BASE_PATH belum dipakai fungsi apa pun di langkah ini —
-  baru dipakai mulai Module 13/15.
+  baru dipakai mulai Module 14/16.
 
 GUARDRAIL:
 - JANGAN salin file PDF — itu opsional dan disiapkan manual oleh
@@ -175,7 +175,7 @@ GUARDRAIL:
 
 Model embedding (Module 11) menerima **string**, bukan path file — dan file `.pdf` adalah format biner, bukan teks polos. `extract_text()` menjembatani keduanya: baca isi file apa pun formatnya, kembalikan sebagai satu string utuh siap di-embed.
 
-File baru `app/ingest.py` — isinya akan terus bertambah: chunking di Module 14, lalu `ingest_documents()` yang menyatukan semuanya (Module 13, lalu di-upgrade lagi di Module 14).
+File baru `app/ingest.py` — isinya akan terus bertambah: chunking di Module 15, lalu `ingest_documents()` yang menyatukan semuanya (Module 14, lalu di-upgrade lagi di Module 15).
 
 **Langkah 2 — Tambah dependency `pypdf`, lalu `extract_text()`**
 
@@ -201,7 +201,7 @@ def extract_text(file_path: str) -> str:
 - **`PdfReader(file_path)`**: membuka file PDF dan mem-parsing strukturnya — tiap halaman diakses lewat `reader.pages`.
 - **`page.extract_text() or ""`**: `extract_text()` bisa mengembalikan `None` untuk halaman yang teksnya tidak bisa diekstrak — `or ""` mencegah `None` ikut ter-gabung ke `"\n".join(...)`, yang akan menyebabkan `TypeError`.
 - Untuk `.md`/`.txt`, cukup `open(path, "r").read()` — isi file dikembalikan **apa adanya, utuh, tidak dipecah**. Ini beda dengan yang akan terjadi setelah Module 14 — di situ hasil `extract_text()` baru dipecah jadi beberapa chunk sebelum di-embed.
-- Fungsi ini **belum dipanggil dari mana pun** — pemanggilnya (`ingest_documents()`) baru ditulis di Module 13.
+- Fungsi ini **belum dipanggil dari mana pun** — pemanggilnya (`ingest_documents()`) baru ditulis di Module 14.
 
 **▶️ Jalankan & lihat hasilnya**
 
@@ -252,8 +252,8 @@ GOAL:
 CONTEXT:
 - File baru, belum ada apa pun di app/ingest.py.
 - Fungsi ini belum dipanggil dari mana pun — pemanggilnya
-  (ingest_documents()) baru ditulis di Module 13. TIDAK ADA chunking
-  di module ini — itu baru masuk Module 14.
+  (ingest_documents()) baru ditulis di Module 14. TIDAK ADA chunking
+  di module ini — itu baru masuk Module 15.
 
 GUARDRAIL:
 - JANGAN tambah fungsi chunk_text()/chunk_markdown()/ingest_documents()

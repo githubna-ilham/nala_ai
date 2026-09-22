@@ -2,7 +2,7 @@
 
 ## Tujuan
 
-Mengubah teks jadi representasi vektor numerik yang menangkap makna semantiknya, memakai model embedding lokal `nomic-embed-text` lewat Ollama — fondasi yang dibutuhkan sebelum Module 12 (vector store) bisa menyimpan dan mencari berdasarkan kemiripan makna. Di Module 13, `embed_text()` ini akan dipanggil untuk **satu dokumen SOP utuh sekaligus** (belum ada chunking — itu baru masuk Module 14), jadi fungsinya sendiri tidak peduli apakah inputnya satu kalimat pendek atau satu dokumen penuh, selama masih di bawah batas context window model.
+Mengubah teks jadi representasi vektor numerik yang menangkap makna semantiknya, memakai model embedding lokal `nomic-embed-text` lewat Ollama — fondasi yang dibutuhkan sebelum Module 12 (vector store) bisa menyimpan vektor-vektor ini, dan Module 13 mencarinya berdasarkan kemiripan makna. Di Module 14, `embed_text()` ini akan dipanggil untuk **satu dokumen SOP utuh sekaligus** (belum ada chunking — itu baru masuk Module 15), jadi fungsinya sendiri tidak peduli apakah inputnya satu kalimat pendek atau satu dokumen penuh, selama masih di bawah batas context window model.
 
 ## Definisi
 
@@ -29,7 +29,7 @@ Embedding adalah proses mengubah teks menjadi representasi vektor numerik yang m
 
 - **Teks dengan makna mirip** akan memiliki vektor yang "berdekatan" dalam ruang vektor tersebut
 - **Teks dengan makna berbeda** akan memiliki vektor yang "jauh" satu sama lain
-- **Jarak/kesamaan antar vektor** bisa diukur dengan metrik seperti cosine similarity, Euclidean distance, atau dot product (dibahas detail di Module 12 Bagian 5, setelah vector store-nya sendiri dibangun)
+- **Jarak/kesamaan antar vektor** bisa diukur dengan metrik seperti cosine similarity, Euclidean distance, atau dot product (dibahas detail di Module 13 Bagian 2, setelah vector store-nya sendiri dibangun)
 
 Contoh: frasa "kucing domestik" dan "kucing rumahan" akan memiliki vektor yang sangat mirip karena maknanya serupa, meskipun kata-katanya berbeda.
 
@@ -41,7 +41,7 @@ Contoh: frasa "kucing domestik" dan "kucing rumahan" akan memiliki vektor yang s
 
 **Karakteristik**: output vektor 768 dimensi, ukuran model ~270 MB (jauh lebih kecil dari model chat), gratis, berjalan lokal tanpa biaya inference. Cara kerjanya sama seperti model chat lewat Ollama, tapi **output-nya vektor numerik**, bukan teks.
 
-⚠️ **Batas context window**: seperti model chat, model embedding juga punya batas panjang input (`nomic-embed-text` sekitar 8192 token). Kedua SOP contoh (Module 10 Bagian 2) masih jauh di bawah batas ini, jadi Module 13 aman meng-embed dokumen utuh. Tapi ini bukan batas yang aman diandalkan selamanya — dokumen SOP yang lebih panjang, atau hasil scan PDF berhalaman banyak, bisa saja melewatinya. Ini salah satu alasan konkret kenapa Module 14 menambahkan chunking: memecah dokumen panjang jadi potongan kecil otomatis menjaga tiap potongan tetap di bawah batas ini, terlepas dari seberapa panjang dokumen aslinya.
+⚠️ **Batas context window**: seperti model chat, model embedding juga punya batas panjang input (`nomic-embed-text` sekitar 8192 token). Kedua SOP contoh (Module 10 Bagian 2) masih jauh di bawah batas ini, jadi Module 14 aman meng-embed dokumen utuh. Tapi ini bukan batas yang aman diandalkan selamanya — dokumen SOP yang lebih panjang, atau hasil scan PDF berhalaman banyak, bisa saja melewatinya. Ini salah satu alasan konkret kenapa Module 15 menambahkan chunking: memecah dokumen panjang jadi potongan kecil otomatis menjaga tiap potongan tetap di bawah batas ini, terlepas dari seberapa panjang dokumen aslinya.
 
 ## 3. Instalasi Model Embedding
 
@@ -94,7 +94,7 @@ def embed_text(text: str, base_url: str, model: str = "nomic-embed-text") -> lis
 
 - Memanggil `/api/embed` Ollama (endpoint berbeda dari `/api/generate` yang dipakai `generate()` dan `/api/chat` yang dipakai `chat_stream()`) — dipilih Ollama karena curl test Bagian 3 juga memakai endpoint yang sama persis.
 - `response.json()["embeddings"][0]`: Ollama selalu mengembalikan `embeddings` sebagai **array of array** (mendukung banyak input sekaligus), meski di sini cuma kirim satu `text` — makanya diambil elemen `[0]`.
-- File terpisah (`app/embeddings.py`, bukan ditambahkan ke `ollama_client.py`) karena secara konsep ini bukan bagian dari "client chat" — ini utilitas embedding yang nanti dipakai `app/ingest.py` (Module 13) maupun `/chat`/`/chat/stream` (juga Module 13) untuk retrieval, bukan untuk chat langsung.
+- File terpisah (`app/embeddings.py`, bukan ditambahkan ke `ollama_client.py`) karena secara konsep ini bukan bagian dari "client chat" — ini utilitas embedding yang nanti dipakai `app/ingest.py` (Module 14) maupun `/chat`/`/chat/stream` (juga Module 14) untuk retrieval, bukan untuk chat langsung.
 
 **▶️ Jalankan & lihat hasilnya**
 
@@ -156,7 +156,7 @@ Yang perlu dipastikan sebelum lanjut ke Module 12:
 - [ ] Embedding untuk teks yang sama selalu identik kalau dipanggil berulang kali
 - [ ] `/chat`, `/chat/stream` (Module 7) masih berfungsi seperti sebelumnya
 
-Begitu keempat hal ini terverifikasi, lanjut ke Module 12 — menyimpan vektor-vektor ini di OpenSearch supaya bisa dicari berdasarkan kemiripan makna, sekaligus membahas detail metrik kemiripan (L2, cosine similarity, dot product) yang jadi dasar pencarian semantik.
+Begitu keempat hal ini terverifikasi, lanjut ke Module 12 — menyimpan vektor-vektor ini di OpenSearch, lalu Module 13 membahas detail metrik kemiripan (L2, cosine similarity, dot product) yang jadi dasar pencarian semantik dan cara mencarinya berdasarkan kemiripan makna.
 
 **Troubleshooting**
 
