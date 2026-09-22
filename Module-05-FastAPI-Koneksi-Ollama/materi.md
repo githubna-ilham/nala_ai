@@ -65,7 +65,7 @@ Daripada langsung ditunjukkan kode lengkap, mari bangun aplikasi FastAPI **secar
 2. **Tahap B — Hubungkan ke Ollama**, pakai system prompt generik dulu (misal "Kamu adalah asisten AI"). Fokus: memahami cara FastAPI memanggil layanan lain (Ollama) dan meneruskan hasilnya sebagai response.
 3. **Tahap C — Integrasikan system prompt NALA**, mengganti prompt generik dengan `NALA_SYSTEM_PROMPT` hasil latihan Module 3. Fokus: bagaimana satu baris konfigurasi (system prompt) mengubah kepribadian & batasan asisten, tanpa mengubah struktur endpoint sama sekali.
 
-**Target akhirnya tetap satu file yang sama: `Nala/app/main.py`.** File ini sudah tersedia lengkap di starter code (sebagai referensi/jawaban) — ikuti Langkah 1-7 berikut untuk menulis ulang isinya sendiri bertahap sesuai 3 tahap di atas, lalu cocokkan hasil akhirnya di Langkah 7.
+**Target akhirnya tetap satu file yang sama: `Nala/app/main.py`.** File ini sudah tersedia lengkap di starter code (sebagai referensi/jawaban) — ikuti Langkah 1-9 berikut untuk menulis ulang isinya sendiri bertahap sesuai 3 tahap di atas, lalu cocokkan hasil akhirnya di Langkah 9.
 
 ### Tahap A — FastAPI saja (belum ada Ollama)
 
@@ -88,7 +88,7 @@ Apa yang sebenarnya terjadi di dua baris ini?
 
 Kenapa butuh instance, bukan langsung pakai class-nya? Karena `app` inilah yang nanti jadi "wadah pusat" tempat semua endpoint didaftarkan (lihat Langkah 2), dan `app` juga yang nanti dirujuk oleh server saat menjalankan aplikasi (`uvicorn main:app` — dibahas di 1.2.6 — kata `app` di situ merujuk persis ke variabel ini). Nama variabelnya **harus** `app` (atau nama lain yang konsisten dipakai saat menjalankan server) — bukan aturan Python, tapi konvensi yang dipakai FastAPI/uvicorn untuk saling menemukan.
 
-Baru dua baris, belum ada endpoint apa pun — tapi ini sudah aplikasi FastAPI yang valid. Di file asli `app/main.py`, baris ini ditulis sedikit lebih lengkap: `app = FastAPI(title="NALA")` — `title` dipakai untuk mempercantik dokumentasi otomatis (Swagger UI, lihat 1.2.6), tapi konsepnya sama persis. Boleh dulu tulis `FastAPI()` polos, nanti ditambah `title` di Langkah 6.
+Baru dua baris, belum ada endpoint apa pun — tapi ini sudah aplikasi FastAPI yang valid. Di file asli `app/main.py`, baris ini ditulis sedikit lebih lengkap: `app = FastAPI(title="NALA")` — `title` dipakai untuk mempercantik dokumentasi otomatis (Swagger UI, lihat 1.2.6), tapi konsepnya sama persis. Boleh dulu tulis `FastAPI()` polos, nanti ditambah `title` di Langkah 8.
 
 **▶️ Jalankan & lihat hasilnya**
 
@@ -146,7 +146,7 @@ class ChatRequest(BaseModel):
 
 Baris `message: str` ini bukan sekadar komentar/dokumentasi seperti type hint biasa di Python murni — Pydantic benar-benar **membaca** anotasi tipe itu dan menegakkannya saat runtime. Kalau `message` tidak dikirim, atau dikirim sebagai angka bukan teks, Pydantic akan menolak data itu **sebelum** kode `def chat(...)` sempat dijalankan sama sekali.
 
-**Contoh konkret — apa yang terjadi kalau data yang dikirim salah bentuk** (baru bisa dicoba nanti setelah endpoint `/chat` aktif di Langkah 5, tapi perilakunya sudah ditentukan oleh `ChatRequest` yang ditulis di langkah ini):
+**Contoh konkret — apa yang terjadi kalau data yang dikirim salah bentuk** (baru bisa dicoba nanti setelah endpoint `/chat` aktif di Langkah 7, tapi perilakunya sudah ditentukan oleh `ChatRequest` yang ditulis di langkah ini):
 
 ```bash
 curl -X POST http://localhost:8000/chat \
@@ -200,7 +200,7 @@ class ChatRequest(BaseModel):
 
 Cara bacanya: **`ChatRequest`** ini nama "formulir"-nya (bebas dinamai apa saja, tapi dikasih nama yang menjelaskan isinya — "permintaan chat"). Di dalamnya cuma ada satu baris, `message: str` — artinya formulir ini punya **satu kolom wajib** bernama `message`, dan isinya **harus** berupa teks (`str`, singkatan dari *string*). Kalau nanti ada yang kirim data tanpa kolom `message`, atau isi `message` dengan angka, FastAPI akan **otomatis menolak** duluan sebelum kode Anda sempat dijalankan — Anda tidak perlu repot menulis pengecekan manual sendiri.
 
-Perhatikan: sejauh ini baru **bikin formulirnya saja**. Belum ditempel ke pintu (endpoint) mana pun — itu baru terjadi nanti di Langkah 5.
+Perhatikan: sejauh ini baru **bikin formulirnya saja**. Belum ditempel ke pintu (endpoint) mana pun — itu baru terjadi nanti di Langkah 7.
 
 **▶️ Jalankan & lihat hasilnya**
 
@@ -219,7 +219,7 @@ Polanya sama persis seperti Langkah 3: nama "formulir"-nya `ChatResponse`, dan c
 
 **▶️ Jalankan & lihat hasilnya**
 
-Sama seperti Langkah 3 — simpan, cek log `uvicorn` tidak error, `curl .../health` masih `{"status":"ok"}`. Setelah ini, `Ctrl+C` di terminal `uvicorn` untuk berhenti — mulai Langkah 5, cara menjalankannya berpindah ke Docker.
+Sama seperti Langkah 3 — simpan, cek log `uvicorn` tidak error, `curl .../health` masih `{"status":"ok"}`. Setelah ini, `Ctrl+C` di terminal `uvicorn` untuk berhenti — mulai Langkah 7, cara menjalankannya berpindah ke Docker.
 
 <details>
 <summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 1-4</strong></summary>
@@ -290,15 +290,87 @@ def health_check():
 
 Perhatikan: `ChatRequest` dan `ChatResponse` sudah ada, tapi **belum dipakai di endpoint mana pun** — belum ada `/chat`. Itu jugalah kenapa file ini masih bisa jalan hanya dengan `uvicorn`, tanpa Docker/Ollama sama sekali.
 
-⚠️ **Kenapa pindah ke Docker mulai Langkah 5:** `/chat` akan memanggil Ollama, dan Ollama di sini jalan sebagai **container terpisah** (service `ollama` di `docker-compose.yml`) — bukan proses yang bisa diakses `uvicorn` lokal. `docker compose up --build` di Langkah 5 akan **build image** service `api` dari `Dockerfile` (isinya persis `main.py` Anda + dependency di `requirements.txt`) dan menyambungkannya ke `ollama` lewat `docker-compose.yml` (`OLLAMA_BASE_URL=http://ollama:11434`).
+⚠️ **Kenapa pindah ke Docker mulai Langkah 7:** `/chat` akan memanggil Ollama, dan Ollama di sini jalan sebagai **container terpisah** (service `ollama` di `docker-compose.yml`) — bukan proses yang bisa diakses `uvicorn` lokal. `docker compose up --build` di Langkah 7 akan **build image** service `api` dari `Dockerfile` (isinya persis `main.py` Anda + dependency di `requirements.txt`) dan menyambungkannya ke `ollama` lewat `docker-compose.yml` (`OLLAMA_BASE_URL=http://ollama:11434`).
 
 ### Tahap B — Hubungkan ke Ollama (system prompt generik dulu)
 
-FastAPI-nya sudah siap (Tahap A). Ollama sendiri sudah dinyalakan & diverifikasi jalan di Docker sejak Module 4 — kalau belum, selesaikan dulu di sana sebelum lanjut. Sekarang keduanya disambungkan lewat `docker-compose.yml`.
+FastAPI-nya sudah siap (Tahap A). Ollama sendiri sudah dinyalakan & diverifikasi jalan di Docker sejak Module 4 — kalau belum, selesaikan dulu di sana sebelum lanjut. Sekarang keduanya disambungkan lewat Docker.
 
-**Langkah 4.5 — Tambahkan service `api` ke `docker-compose.yml`**
+**Langkah 5 — Buat `Dockerfile`**
 
-Buka `docker-compose.yml`, tambahkan blok `api` di samping `ollama`:
+Sebelum `docker-compose.yml` bisa mem-*build* service `api`, `Dockerfile`-nya harus **sudah ada duluan** — `docker-compose.yml` di Langkah 6 nanti cuma **merujuk** ke `Dockerfile` ini lewat `build: .`, bukan mendefinisikan isinya. Urutannya penting: menulis `build: .` di `docker-compose.yml` sebelum `Dockerfile`-nya ada akan menghasilkan error `failed to read dockerfile` begitu `docker compose up` dijalankan.
+
+Buat file baru `Nala/Dockerfile` (persis nama itu, tanpa ekstensi apa pun):
+
+```dockerfile
+FROM python:3.11-slim
+
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY app ./app
+
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+```
+
+**Penjelasan tiap baris:**
+- **`FROM python:3.11-slim`** — base image: mulai dari image resmi Python 3.11 versi "slim" (lebih kecil dari image Python biasa, cuma berisi yang perlu untuk menjalankan Python). Ini instruksi **wajib jadi baris pertama** setiap Dockerfile — menentukan image dasar yang jadi titik tolak.
+- **`WORKDIR /app`** — menetapkan `/app` sebagai working directory **di dalam container**; semua instruksi `COPY`/`RUN` setelah ini berjalan relatif terhadap folder ini.
+- **`COPY requirements.txt .`** — salin `requirements.txt` dari `Nala/` (di laptop Anda) ke `/app/` (di dalam image). Sengaja **cuma file ini dulu**, bukan seluruh folder — alasannya di catatan layer caching di bawah.
+- **`RUN pip install --no-cache-dir -r requirements.txt`** — install semua dependency Python (FastAPI, `httpx`, dll) ke dalam image, persis saat image di-*build* (bukan saat container dijalankan).
+- **`COPY app ./app`** — baru sekarang folder `app/` (kode `main.py`, `ollama_client.py`, dst) disalin ke image.
+- **`CMD [...]`** — perintah yang dijalankan **saat container start** (bukan saat build): menyalakan `uvicorn` untuk serve `app.main:app` di `0.0.0.0:8000` — pola yang sama seperti `uvicorn app.main:app --reload` yang Anda jalankan manual di Langkah 1, cuma tanpa `--reload` (reload otomatis cuma berguna untuk development lokal, bukan container production) dan `--host 0.0.0.0` (supaya bisa diakses dari luar container, bukan cuma `127.0.0.1` di dalamnya sendiri).
+
+**Kenapa `requirements.txt` di-*copy* dan di-*install* terpisah, sebelum `COPY app ./app`?** Ini pola *layer caching* Docker: tiap instruksi (`COPY`, `RUN`) jadi satu "layer" yang di-cache. Kalau cuma kode di `app/` yang berubah (skenario paling sering selama Anda coding), Docker bisa **memakai ulang** layer `pip install` yang sudah di-cache — tidak perlu install ulang semua dependency dari nol setiap kali `main.py` diedit. Rebuild jadi jauh lebih cepat (detik, bukan menit) — inilah yang membuat `docker compose up --build api` di langkah-langkah berikutnya terasa ringan setelah build pertama.
+
+**▶️ Jalankan & lihat hasilnya**
+
+Belum ada `docker-compose.yml` yang merujuk ke `Dockerfile` ini (itu Langkah 6), jadi belum bisa langsung di-build sendiri lewat `docker compose`. Cukup pastikan filenya tersimpan dengan nama & isi yang benar:
+
+```bash
+cd Nala
+cat Dockerfile
+```
+
+<details>
+<summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 5</strong></summary>
+
+```
+Buat Dockerfile untuk service api NALA — BELUM mengubah
+docker-compose.yml sama sekali di langkah ini.
+
+GOAL:
+- Buat/timpa Nala/Dockerfile persis isinya:
+
+  FROM python:3.11-slim
+
+  WORKDIR /app
+
+  COPY requirements.txt .
+  RUN pip install --no-cache-dir -r requirements.txt
+
+  COPY app ./app
+
+  CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+
+CONTEXT:
+- Ini Dockerfile untuk service `api` yang akan dirujuk lewat `build: .`
+  di docker-compose.yml pada Langkah 6 — belum dipakai di langkah ini.
+
+GUARDRAIL:
+- JANGAN ubah docker-compose.yml — itu Langkah 6.
+- JANGAN ubah urutan instruksi (COPY requirements.txt sebelum RUN pip
+  install, sebelum COPY app ./app) — urutan ini sengaja untuk layer
+  caching Docker.
+```
+
+</details>
+
+**Langkah 6 — Tambahkan service `api` ke `docker-compose.yml`**
+
+`Dockerfile` sudah ada dari Langkah 5. Sekarang buka `docker-compose.yml`, tambahkan blok `api` di samping `ollama` — blok ini yang akan **merujuk** ke `Dockerfile` itu lewat `build: .`:
 
 ```yaml
 services:
@@ -324,7 +396,7 @@ volumes:
 ```
 
 **Penjelasan blok `api`:**
-- **`build: .`** — beda dari `ollama` yang pakai `image:` (image jadi dari Docker Hub), `api` di-**build** dari `Dockerfile` lokal (dibahas sekilas di section 1) — sehingga dependency Python (FastAPI, `httpx`, dll di `requirements.txt`) ter-install ke dalam image custom ini.
+- **`build: .`** — beda dari `ollama` yang pakai `image:` (image jadi dari Docker Hub), `api` di-**build** dari `Dockerfile` yang baru dibuat di Langkah 5 — sehingga dependency Python (FastAPI, `httpx`, dll di `requirements.txt`) ter-install ke dalam image custom ini.
 - **`environment: OLLAMA_BASE_URL=http://ollama:11434`** — perhatikan host-nya `ollama`, **bukan** `localhost`. Di dalam jaringan internal Docker Compose, tiap service bisa saling memanggil pakai **nama service**-nya sebagai hostname — `api` memanggil `ollama` lewat nama itu, bukan lewat `localhost:11434` seperti kalau Anda mengetes dari laptop langsung (section 3.4 Langkah D).
 - **`depends_on: - ollama`** — memberi tahu Docker Compose untuk menyalakan `ollama` **lebih dulu** sebelum `api`. Ini cuma menjamin urutan start container, **bukan** menjamin Ollama sudah selesai loading model saat `api` mulai menerima request — itu sebabnya Ollama diverifikasi sehat dulu secara terpisah di section 3.4, bukan diandalkan ke `depends_on` saja.
 
@@ -369,14 +441,14 @@ ls app/
 >             return response.json()["response"]
 > ```
 > **Penjelasan Singkat**
-> - **`__init__(self, base_url, model)`**: ini *constructor* — kode yang otomatis jalan sekali, tepat saat `OllamaClient(...)` dipanggil (lihat Langkah 5, `ollama_client = OllamaClient(...)`). Tugasnya cuma menyimpan `base_url` (alamat server Ollama, misal `http://ollama:11434`) dan `model` (nama model, misal `llama3.2:3b`) ke dalam objeknya sendiri (`self.base_url`, `self.model`), supaya nanti bisa dipakai lagi di method lain — tanpa perlu diketik ulang tiap kali.
-> - **`generate(self, system_prompt, user_message)`**: ini method yang **benar-benar mengirim pertanyaan ke Ollama** dan menunggu jawabannya. Alurnya: (1) susun request HTTP `POST` ke `{base_url}/api/generate` — endpoint bawaan Ollama — berisi `model`, `system` (system prompt), dan `prompt` (pertanyaan user); (2) `response.raise_for_status()` melempar error kalau Ollama merespons gagal (misal model belum di-pull); (3) `response.json()["response"]` mengambil teks jawabannya saja dari balasan Ollama, lalu dikembalikan sebagai string biasa. Inilah yang dipanggil `main.py` lewat `ollama_client.generate(system_prompt=..., user_message=...)` di Langkah 5.
+> - **`__init__(self, base_url, model)`**: ini *constructor* — kode yang otomatis jalan sekali, tepat saat `OllamaClient(...)` dipanggil (lihat Langkah 7, `ollama_client = OllamaClient(...)`). Tugasnya cuma menyimpan `base_url` (alamat server Ollama, misal `http://ollama:11434`) dan `model` (nama model, misal `llama3.2:3b`) ke dalam objeknya sendiri (`self.base_url`, `self.model`), supaya nanti bisa dipakai lagi di method lain — tanpa perlu diketik ulang tiap kali.
+> - **`generate(self, system_prompt, user_message)`**: ini method yang **benar-benar mengirim pertanyaan ke Ollama** dan menunggu jawabannya. Alurnya: (1) susun request HTTP `POST` ke `{base_url}/api/generate` — endpoint bawaan Ollama — berisi `model`, `system` (system prompt), dan `prompt` (pertanyaan user); (2) `response.raise_for_status()` melempar error kalau Ollama merespons gagal (misal model belum di-pull); (3) `response.json()["response"]` mengambil teks jawabannya saja dari balasan Ollama, lalu dikembalikan sebagai string biasa. Inilah yang dipanggil `main.py` lewat `ollama_client.generate(system_prompt=..., user_message=...)` di Langkah 7.
 >
 > Kalau `__init__.py` juga tidak ada, buat file kosong dengan nama itu — tanpa file ini, `from app.ollama_client import ...` gagal dengan `ModuleNotFoundError: No module named 'app.ollama_client'` (persis error kalau `ollama_client.py` sendiri yang hilang). Error yang sama padahal kedua file sudah ada → cek `python3 -m pip show httpx`.
 
 > ⚠️ **Kalau muncul `ModuleNotFoundError: No module named 'httpx'` saat Anda coba jalankan dengan `uvicorn` lokal**: itu tandanya `httpx` belum ter-install di Python lokal Anda — wajar, karena `httpx` cuma otomatis ter-install **di dalam container** lewat `requirements.txt`, bukan di komputer Anda langsung. Kalau sekadar mau membetulkan error importnya: `python3 -m pip install httpx` (atau `pip3 install httpx`). Tapi ingat: **mulai Tahap B ini seharusnya dijalankan pakai `docker compose up --build`, bukan `uvicorn` lokal** — walau error `httpx` sudah beres, `uvicorn` lokal tetap akan gagal manggil `/chat` karena tidak ada Ollama yang bisa dihubungi di `http://localhost:11434` dari luar container.
 
-**Langkah 5 — Tambahkan koneksi ke Ollama dengan system prompt generik**
+**Langkah 7 — Tambahkan koneksi ke Ollama dengan system prompt generik**
 
 1. Tambah import di baris atas: `import os` dan `from app.ollama_client import OllamaClient`.
 2. Buat instance-nya di bawah `app = FastAPI()`:
@@ -433,10 +505,10 @@ curl -X POST http://localhost:8000/chat \
   -d '{"message": "Halo, kamu siapa?"}'
 ```
 
-✅ **Indikator sukses**: `/health` → `{"status":"ok"}`. `/chat` → jawaban **generik** ("saya asisten AI..."), belum berkarakter NALA — wajar, system prompt-nya masih placeholder. Biarkan `docker compose up` tetap berjalan, lanjut ke Langkah 6.
+✅ **Indikator sukses**: `/health` → `{"status":"ok"}`. `/chat` → jawaban **generik** ("saya asisten AI..."), belum berkarakter NALA — wajar, system prompt-nya masih placeholder. Biarkan `docker compose up` tetap berjalan, lanjut ke Langkah 8.
 
 <details>
-<summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 4.5-5</strong></summary>
+<summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 6-7</strong></summary>
 
 ```
 Sambungkan NALA ke Ollama — tambah service api ke docker-compose.yml,
@@ -512,7 +584,7 @@ CONTEXT:
 - `ChatRequest`/`ChatResponse` sudah ada di main.py dari Tahap A —
   JANGAN didefinisikan ulang, cukup dipakai di endpoint baru.
 - System prompt di langkah ini SENGAJA masih string generik — draft
-  `NALA_SYSTEM_PROMPT` baru dipasang di Langkah 6 (Tahap C).
+  `NALA_SYSTEM_PROMPT` baru dipasang di Langkah 8 (Tahap C).
 
 GUARDRAIL:
 - JANGAN pakai `NALA_SYSTEM_PROMPT` atau import
@@ -582,9 +654,9 @@ Dibandingkan **Kode lengkap Tahap A**, yang berubah cuma 3 hal: (1) tambah `impo
 
 ### Tahap C — Integrasikan system prompt NALA
 
-**Langkah 6 — Ganti system prompt generik dengan `NALA_SYSTEM_PROMPT`**
+**Langkah 8 — Ganti system prompt generik dengan `NALA_SYSTEM_PROMPT`**
 
-Di Langkah 5, asisten AI-nya sudah tersambung, tapi "kepribadiannya" masih generik — cuma dibisiki "kamu asisten AI yang menjawab singkat dan jelas". **System prompt** itu ibarat **briefing** yang diberikan ke asisten sebelum dia mulai kerja: siapa dia, tugasnya apa, batasannya apa. Sekarang briefing generik itu diganti dengan briefing yang sesungguhnya, khusus untuk NALA.
+Di Langkah 7, asisten AI-nya sudah tersambung, tapi "kepribadiannya" masih generik — cuma dibisiki "kamu asisten AI yang menjawab singkat dan jelas". **System prompt** itu ibarat **briefing** yang diberikan ke asisten sebelum dia mulai kerja: siapa dia, tugasnya apa, batasannya apa. Sekarang briefing generik itu diganti dengan briefing yang sesungguhnya, khusus untuk NALA.
 
 File tetangga kedua yang dibutuhkan adalah `app/system_prompt.py` — isinya satu konstanta, `NALA_SYSTEM_PROMPT = "..."`, yaitu **hasil latihan Module 3** (Prompt Engineering Dasar) yang sudah Anda susun sendiri di sana. File ini cuma "membungkus" teks briefing itu jadi konstanta Python.
 
@@ -601,10 +673,10 @@ Aturan:
 """
 ```
 
-Ganti isi teksnya sesuai hasil latihan Module 3 Anda sendiri — contoh di atas cuma template kalau filenya hilang/belum dibuat. Kalau nanti mau bereksperimen ulang dengan isi prompt-nya, edit file ini (lihat bagian Panduan Praktik di bawah, Langkah 6) — bukan tulis ulang `main.py`.
+Ganti isi teksnya sesuai hasil latihan Module 3 Anda sendiri — contoh di atas cuma template kalau filenya hilang/belum dibuat. Kalau nanti mau bereksperimen ulang dengan isi prompt-nya, edit file ini (lihat bagian Panduan Praktik di bawah, Langkah 8) — bukan tulis ulang `main.py`.
 
 1. Tambahkan import: `from app.system_prompt import NALA_SYSTEM_PROMPT`
-2. Di endpoint `/chat`, ganti string generik dari Langkah 5 dengan `NALA_SYSTEM_PROMPT`:
+2. Di endpoint `/chat`, ganti string generik dari Langkah 7 dengan `NALA_SYSTEM_PROMPT`:
 
 ```python
 @app.post("/chat", response_model=ChatResponse)
@@ -616,17 +688,17 @@ def chat(request: ChatRequest) -> ChatResponse:
     return ChatResponse(reply=reply)
 ```
 
-Perhatikan: **struktur endpoint sama sekali tidak berubah** dari Langkah 5 — cuma satu argumen yang diganti. Ini poin pentingnya: system prompt adalah *konfigurasi kepribadian & batasan* asisten, terpisah total dari *struktur* endpoint-nya. Ganti isi `NALA_SYSTEM_PROMPT` kapan pun tanpa perlu menyentuh `main.py`.
+Perhatikan: **struktur endpoint sama sekali tidak berubah** dari Langkah 7 — cuma satu argumen yang diganti. Ini poin pentingnya: system prompt adalah *konfigurasi kepribadian & batasan* asisten, terpisah total dari *struktur* endpoint-nya. Ganti isi `NALA_SYSTEM_PROMPT` kapan pun tanpa perlu menyentuh `main.py`.
 
 **▶️ Jalankan & lihat hasilnya**
 
-`docker compose up` dari Langkah 5 masih boleh tetap jalan. Simpan file, lalu rebuild `api` supaya kode terbaru terbaca — cukup cepat karena cuma `system_prompt.py`/`main.py` yang berubah, bukan `requirements.txt` (lihat tabel "Kapan pakai command Docker yang mana" di atas: `restart` saja **tidak cukup**, kode di-`COPY` ke image cuma sekali saat `build`):
+`docker compose up` dari Langkah 7 masih boleh tetap jalan. Simpan file, lalu rebuild `api` supaya kode terbaru terbaca — cukup cepat karena cuma `system_prompt.py`/`main.py` yang berubah, bukan `requirements.txt` (lihat tabel "Kapan pakai command Docker yang mana" di atas: `restart` saja **tidak cukup**, kode di-`COPY` ke image cuma sekali saat `build`):
 
 ```bash
 docker compose up --build api
 ```
 
-Ulangi tes `/chat` yang **sama persis** seperti di Langkah 5:
+Ulangi tes `/chat` yang **sama persis** seperti di Langkah 7:
 
 ```bash
 curl -X POST http://localhost:8000/chat \
@@ -634,10 +706,10 @@ curl -X POST http://localhost:8000/chat \
   -d '{"message": "Halo, kamu siapa?"}'
 ```
 
-Bandingkan jawabannya dengan Langkah 5: sekarang harus terasa lebih spesifik sesuai aturan di `NALA_SYSTEM_PROMPT` (jawab dalam Bahasa Indonesia, tidak mengarang jawaban, dsb) — bukan lagi jawaban generik "saya asisten AI...".
+Bandingkan jawabannya dengan Langkah 7: sekarang harus terasa lebih spesifik sesuai aturan di `NALA_SYSTEM_PROMPT` (jawab dalam Bahasa Indonesia, tidak mengarang jawaban, dsb) — bukan lagi jawaban generik "saya asisten AI...".
 
 <details>
-<summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 6</strong></summary>
+<summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 8</strong></summary>
 
 ```
 Ganti system prompt generik di /chat dengan NALA_SYSTEM_PROMPT hasil
@@ -680,9 +752,9 @@ GUARDRAIL:
 
 **📄 Kode lengkap Tahap C** dibandingkan **Kode lengkap Tahap B**: hanya 2 baris yang berubah — `system_prompt="Kamu adalah asisten AI..."` (string generik) diganti `system_prompt=NALA_SYSTEM_PROMPT` (import dari `app/system_prompt.py`), plus satu baris import tambahan di atas. **Tidak ada satu pun baris struktur endpoint yang berubah** — itulah inti pelajaran Tahap C.
 
-**Langkah 7 — Bandingkan dengan file aslinya**
+**Langkah 9 — Bandingkan dengan file aslinya**
 
-Setelah Langkah 1-6 (Tahap A-C), file `main.py` Anda seharusnya berisi ini — ini juga sekaligus **Kode lengkap Tahap C**, versi final (susunan file boleh sedikit beda, isinya yang harus sama):
+Setelah Langkah 1-9 (Tahap A-C), file `main.py` Anda seharusnya berisi ini — ini juga sekaligus **Kode lengkap Tahap C**, versi final (susunan file boleh sedikit beda, isinya yang harus sama):
 
 ```python
 import os
@@ -905,7 +977,7 @@ async def agent_ask(query: str):
 
 ## Panduan Praktik
 
-> 📌 Langkah di bagian ini (Langkah 1-4) bernomor terpisah dari Langkah pembangunan kode `main.py` di section 1.2 di atas (Langkah 1-7, Tahap A-C) — keduanya adalah dua urutan "Langkah" yang berbeda dan tidak saling melanjutkan satu sama lain.
+> 📌 Langkah di bagian ini (Langkah 1-4) bernomor terpisah dari Langkah pembangunan kode `main.py` di section 1.2 di atas (Langkah 1-9, Tahap A-C) — keduanya adalah dua urutan "Langkah" yang berbeda dan tidak saling melanjutkan satu sama lain.
 
 ### Prasyarat
 - Sudah menyelesaikan Module 4 (Setup Infra Docker Compose) — service `ollama` sudah berjalan & terverifikasi di Docker
