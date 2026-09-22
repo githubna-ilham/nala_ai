@@ -26,7 +26,7 @@ flowchart LR
 - Kita bisa menjelaskan perbedaan cosine similarity, Euclidean distance (L2), dan dot product — termasuk kapan hasilnya identik dan kapan berbeda
 - `VectorStore.ensure_index()`, `.index_document()`, dan `.search()` berjalan tanpa error
 - Query dengan kata berbeda dari dokumen asli tapi makna serupa tetap menemukan dokumen yang di-index — bukti pencarian semantik, bukan keyword matching
-- Kita paham metrik mana yang **benar-benar** dipakai `VectorStore` NALA (default OpenSearch) dan kenapa itu tetap valid untuk `nomic-embed-text`
+- Kita paham metrik mana yang **benar-benar** dipakai `VectorStore` NALA — **cosine similarity, di-set eksplisit** (bukan default OpenSearch) — dan kenapa pilihan itu tetap valid untuk `nomic-embed-text`
 - `/chat/stream` (Module 7) tetap berfungsi seperti sebelumnya
 
 ## 1. Apa itu Vector Search / Vector Store
@@ -141,7 +141,7 @@ Dot product **memperhitungkan magnitude** (sama seperti L2, beda dengan cosine) 
 - **Cosine similarity vs dot product**: untuk vektor ternormalisasi, keduanya **identik secara matematis** (Bagian 5.c) — tidak ada bedanya secara hasil, cuma beda cara hitung (dot product sedikit lebih murah secara komputasi karena tidak perlu menghitung ulang normalisasi).
 - **Cosine similarity vs L2 (Euclidean)**: untuk vektor ternormalisasi, **urutan ranking dari keduanya identik** — walau nilai mentahnya beda (satu naik saat mirip, satu turun saat mirip), keduanya jadi fungsi **monoton** dari sudut antar vektor. Secara matematis: `L2(A, B)² = 2 - 2 × cosine_similarity(A, B)` ketika `‖A‖ = ‖B‖ = 1` — semakin tinggi cosine similarity, semakin kecil L2 distance, **selalu**, tanpa pengecualian. Jadi urutan dokumen dari yang paling mirip ke paling tidak mirip **sama persis**, apa pun metriknya dipakai.
 
-**Konsekuensi praktis untuk NALA**: karena `nomic-embed-text` menghasilkan vektor ternormalisasi, **tidak masalah** metrik mana yang dipakai OpenSearch — hasil pencarian (urutan dokumen relevan) akan sama saja. Ini penting dipahami **sebelum** melihat kode `ensure_index()` di Bagian 6 — mapping index NALA **tidak** menyetel metrik secara eksplisit, memakai default OpenSearch (**L2**), dan itu bukan kelalaian, itu keputusan sadar yang aman justru karena fakta normalisasi ini.
+**Konsekuensi praktis untuk NALA**: karena `nomic-embed-text` menghasilkan vektor ternormalisasi, secara ranking **tidak masalah** metrik mana yang dipakai OpenSearch — hasil pencarian (urutan dokumen relevan) akan sama saja, entah cosine, L2, atau dot product. Ini pembahasan **konseptual** dulu — ketiga metrik ditimbang di Bagian 5 ini sebelum ada keputusan final apa pun. Keputusan sebenarnya baru diambil di kode `ensure_index()` (Bagian 6): mapping index NALA **menyetel metrik secara eksplisit** ke **cosine similarity** (`space_type: "cosinesimil"`) — bukan dibiarkan memakai default OpenSearch (L2). Karena fakta normalisasi ini, memilih cosine secara eksplisit sama validnya dengan membiarkan default L2 dari sisi hasil ranking — tapi cosine tetap dipilih karena **paling menyampaikan maksud** secara langsung untuk kasus semantic search teks (alasan lengkapnya di Bagian 5.f).
 
 ### e. Contoh Kasus: Menghitung Ketiganya pada Data yang Sama
 
@@ -432,7 +432,7 @@ print(results)
 "
 ```
 
-✅ **Indikator sukses**: tidak ada error, dan `results` menampilkan list berisi minimal satu dict dengan `text` yang sama dengan yang baru di-index, muncul **seketika** (bukan kosong `[]`) berkat `params={"refresh": "true"}` di `index_document()` — membuktikan pencarian semantik bekerja walau kata-kata query ("kapan", "beroperasi") berbeda dari kata-kata dokumen ("buka"), memakai metrik L2 di balik layar (Bagian 5.d).
+✅ **Indikator sukses**: tidak ada error, dan `results` menampilkan list berisi minimal satu dict dengan `text` yang sama dengan yang baru di-index, muncul **seketika** (bukan kosong `[]`) berkat `params={"refresh": "true"}` di `index_document()` — membuktikan pencarian semantik bekerja walau kata-kata query ("kapan", "beroperasi") berbeda dari kata-kata dokumen ("buka"), memakai metrik cosine similarity yang di-set eksplisit (Bagian 6).
 
 **Troubleshooting**
 
