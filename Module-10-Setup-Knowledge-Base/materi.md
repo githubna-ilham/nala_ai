@@ -42,7 +42,7 @@ flowchart LR
 
 **Prasyarat**: sudah menyelesaikan Module 9 (Konsep RAG), dan container `ollama`+`api` dari `Nala/` masih berjalan (kalau tidak, ulangi Module 7 Langkah 2) — module ini belum butuh `opensearch`/`airflow`.
 
-Sepanjang Module 7-16, kita memakai **dua dokumen SOP contoh** sebagai knowledge base untuk mendemonstrasikan sistem RAG:
+Sepanjang Module 7-16, kita memakai **dua dokumen SOP contoh** sebagai knowledge base untuk mendemonstrasikan sistem RAG. Contoh isi dokumennya juga tersedia langsung di folder module ini (`Module-10-Setup-Knowledge-Base/`) untuk dibaca — file yang sama persis dengan yang ada di `resources/sample-knowledge-base/`, yang dipakai `Nala/` saat runtime:
 
 ### a. SOP Pengajuan Kredit (`sop-pengajuan-kredit.md`)
 - **Syarat Umum**: usia minimal 21 tahun, menjadi customer 6 bulan, memiliki rekening aktif
@@ -60,7 +60,7 @@ Dokumen ini jadi baseline untuk testing pertanyaan seperti *"Berapa lama approva
 
 Dengan dua dokumen pendek ini, versi pertama RAG (Module 13) bisa meng-embed **masing-masing dokumen secara utuh** tanpa masalah — keduanya jauh di bawah batas context window model embedding. Nanti setelah Module 14 menambahkan chunking, kedua dokumen ini akan di-index ulang jadi beberapa chunk per dokumen — perbandingan sebelum/sesudah ini justru jadi cara paling konkret melihat kenapa chunking penting.
 
-**Format dokumen yang didukung NALA**: Markdown, plain text, dan PDF. Markdown dan plain text mudah diparsing tanpa library eksternal; PDF ditambahkan karena di dunia nyata, SOP dan kebijakan perusahaan sering sudah dalam bentuk PDF (hasil ekspor Word, atau dokumen resmi) — mengabaikannya berarti NALA tidak bisa dipakai untuk sebagian besar dokumen yang sudah ada. ⚠️ **Tetap di luar scope training ini**: DOCX dan PDF hasil scan gambar (butuh OCR) — keduanya butuh library terpisah yang tidak dibahas di training ini.
+**Format dokumen yang didukung NALA**: Markdown, plain text, dan PDF. Markdown dan plain text mudah diparsing tanpa library eksternal; PDF ditambahkan karena di dunia nyata, SOP dan kebijakan perusahaan sering sudah dalam bentuk PDF (hasil ekspor Word, atau dokumen resmi) — mengabaikannya berarti NALA tidak bisa dipakai untuk sebagian besar dokumen yang sudah ada. Contoh filenya juga ada di folder module ini: `sop-pembukaan-rekening-tabungan.pdf`. ⚠️ **Tetap di luar scope training ini**: DOCX dan PDF hasil scan gambar (butuh OCR) — keduanya butuh library terpisah yang tidak dibahas di training ini.
 
 **Langkah 1 — Pastikan folder `knowledge-base/` ada dan berisi data seed**
 
