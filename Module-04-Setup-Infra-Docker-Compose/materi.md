@@ -425,6 +425,27 @@ curl http://localhost:11434/api/ps
 curl http://localhost:11434/api/show -d '{"model": "llama3.2:3b"}'
 ```
 
+**`POST /api/embed`** — beda dari endpoint lain di atas: bukan menghasilkan teks jawaban, tapi mengubah teks menjadi **vector angka** (embedding), yang nanti dipakai untuk pencarian semantik di RAG (Module 12-13):
+
+```bash
+curl http://localhost:11434/api/embed -d '{
+  "model": "nomic-embed-text",
+  "input": "Suku bunga acuan Bank Indonesia"
+}'
+```
+
+Response (dipotong):
+```json
+{
+  "model": "nomic-embed-text",
+  "embeddings": [[0.017, -0.034, 0.128, ...]]
+}
+```
+
+Field `embeddings` berisi array angka (panjangnya tergantung model — `nomic-embed-text` menghasilkan 768 angka) yang merepresentasikan **makna** teks input tersebut, bukan teksnya sendiri. Inilah yang dipanggil `embed_text()` NALA di Module 10: teks dokumen (atau pertanyaan user) dikirim ke `/api/embed`, hasil `embeddings[0]`-nya disimpan/dicocokkan di vector store (Module 12) untuk mencari dokumen yang **maknanya mirip**, bukan sekadar cocok kata per kata seperti pencarian teks biasa.
+
+Catatan: `input` bisa juga berupa array string (`["teks 1", "teks 2"]`) untuk generate beberapa embedding sekaligus dalam satu request — `embeddings` yang dikembalikan akan berisi satu array angka per elemen `input`.
+
 ### 4.4 Kenapa `OllamaClient` (Module 6) Nanti Cuma Membungkus Satu Endpoint
 
 Dari daftar di atas, `OllamaClient.generate()` yang dibangun Module 6 sengaja **tidak** membungkus semua endpoint Ollama — cuma `/api/generate`, karena itulah satu-satunya yang dibutuhkan endpoint `/chat` NALA saat itu. Ini konsisten dengan pola yang berulang sepanjang training: tambahkan kemampuan **tepat saat dibutuhkan**, bukan diborong di awal. Kalau nanti NALA butuh riwayat percakapan multi-turn, `OllamaClient` akan diperluas dengan method baru yang memanggil `/api/chat` — bukan mengganti `generate()` yang sudah ada.
