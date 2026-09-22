@@ -118,9 +118,9 @@ Dari Bagian 2, Anda sudah membuktikan sendiri dua keterbatasan mendasar model LL
 1. **Knowledge cutoff** — model tidak tahu kejadian/data setelah tanggal training-nya.
 2. **Tidak ada akses ke data privat/internal** — model dasar dari `ollama pull` dilatih dari data publik di internet, bukan dokumen SOP atau data operasional PT Nusantara Finance. Model tidak mungkin tahu isi dokumen internal perusahaan hanya dengan bertanya langsung.
 
-Kedua keterbatasan ini adalah alasan utama kenapa modul-modul berikutnya (mulai Module 8) akan memperkenalkan **RAG (Retrieval-Augmented Generation)**.
+Kedua keterbatasan ini adalah alasan utama kenapa modul-modul berikutnya (mulai Module 9) akan memperkenalkan **RAG (Retrieval-Augmented Generation)**.
 
-**Konsep singkat RAG** (akan dibahas detail mulai Module 8 dst.):
+**Konsep singkat RAG** (akan dibahas detail mulai Module 9 dst.):
 - Alih-alih berharap model "sudah tahu" jawabannya dari hasil training, sistem **mencari (retrieve)** potongan dokumen relevan terlebih dahulu (misalnya dari SOP internal PT Nusantara Finance yang disimpan di knowledge base).
 - Potongan dokumen itu kemudian **disisipkan ke dalam prompt** sebagai konteks tambahan, sebelum dikirim ke model.
 - Model menjawab **berdasarkan konteks yang diberikan**, bukan hanya dari memori training-nya — sehingga jawaban bisa akurat untuk data yang baru atau bersifat privat/internal, tanpa perlu melatih ulang (fine-tune) model.
@@ -134,7 +134,7 @@ Bayangkan Anda bertanya ke NALA: *"Apa syarat pengajuan restrukturisasi kredit u
 1. Kenapa `llama3.2:3b` tanpa RAG kemungkinan besar akan menjawab ngasal atau generik untuk pertanyaan ini?
 2. Dokumen apa yang menurut Anda perlu di-retrieve terlebih dahulu supaya NALA bisa menjawab dengan akurat?
 
-Jawaban Anda di sini akan jadi bekal masuk ke Module 8 (Konsep RAG).
+Jawaban Anda di sini akan jadi bekal masuk ke Module 9 (Konsep RAG).
 
 ---
 

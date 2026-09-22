@@ -2,7 +2,7 @@
 
 ## Tujuan
 
-Kita memahami konsep dasar Docker/Docker Compose, lalu membangun `docker-compose.yml` NALA secara bertahap — dimulai dari service `ollama` sendirian, diverifikasi benar-benar sehat di dalam container — sekaligus mengenal permukaan lengkap REST API Ollama, sebelum Module 5 menambahkan service `api` (FastAPI) di atasnya.
+Kita memahami konsep dasar Docker/Docker Compose, lalu membangun `docker-compose.yml` NALA secara bertahap — dimulai dari service `ollama` sendirian, diverifikasi benar-benar sehat di dalam container — sekaligus mengenal permukaan lengkap REST API Ollama, sebelum Module 5 membangun FastAPI dan Module 6 menyambungkannya ke Ollama.
 
 ## Hasil Akhir yang Diharapkan
 
@@ -10,7 +10,7 @@ Kita memahami konsep dasar Docker/Docker Compose, lalu membangun `docker-compose
 - Service `ollama` berhasil dijalankan & diverifikasi sendirian di Docker — model ter-pull, `ollama list`/`curl .../api/tags` merespons, dan bisa diajak tanya-jawab langsung lewat `docker compose exec`
 - Kita kenal permukaan lengkap REST API Ollama (`generate`, `chat`, `tags`, `show`, `pull`, `embed`, `ps`, dst) — bukan cuma satu endpoint yang nanti dipakai `OllamaClient`
 - Kita paham kapan menggunakan `docker compose up --build` vs `up` vs `down`
-- Kita siap lanjut ke Module 5 untuk menambahkan service `api` (FastAPI) di atas fondasi Ollama yang sudah terverifikasi ini
+- Kita siap lanjut ke Module 5 untuk membangun FastAPI, lalu Module 6 untuk menyambungkannya ke Ollama yang sudah terverifikasi ini
 
 ## 1. Apa itu Docker?
 
@@ -148,7 +148,7 @@ services:       # Mulai definisi service
 
 ### 3.3 Contoh Konkret untuk NALA — Mulai dari Ollama Saja
 
-Docker itu sendiri konsep baru, Ollama-di-dalam-container juga baru, dan FastAPI-di-dalam-container juga baru — kalau ketiganya dinyalakan bersamaan lewat satu `docker compose up` dan ada yang error, sulit menebak biang keladinya yang mana. Karena itu `docker-compose.yml` NALA dibangun **bertahap**: dulu cuma service `ollama` sendirian, dipastikan jalan, baru service `api` ditambahkan di Module 5.
+Docker itu sendiri konsep baru, Ollama-di-dalam-container juga baru, dan FastAPI-di-dalam-container juga baru — kalau ketiganya dinyalakan bersamaan lewat satu `docker compose up` dan ada yang error, sulit menebak biang keladinya yang mana. Karena itu `docker-compose.yml` NALA dibangun **bertahap**: dulu cuma service `ollama` sendirian, dipastikan jalan, baru service `api` ditambahkan di Module 6.
 
 Berikut isi `docker-compose.yml` di tahap pertama ini (`Nala/docker-compose.yml`) — baru berisi satu service:
 
@@ -214,11 +214,11 @@ Langkah D tadi baru membuktikan modelnya **ada**, belum membuktikan modelnya **b
 docker compose exec ollama ollama run llama3.2:3b "Halo, siapa kamu?"
 ```
 
-`docker compose exec ollama ...` menjalankan perintah **di dalam** container `ollama` — persis seperti masuk terminal container itu lalu mengetik `ollama run` biasa. Kalau muncul jawaban (walau masih generik, belum berkarakter NALA — system prompt baru masuk di Module 5), berarti Ollama di dalam container ini benar-benar berfungsi penuh, bukan cuma "kelihatan menyala".
+`docker compose exec ollama ...` menjalankan perintah **di dalam** container `ollama` — persis seperti masuk terminal container itu lalu mengetik `ollama run` biasa. Kalau muncul jawaban (walau masih generik, belum berkarakter NALA — system prompt baru masuk di Module 6), berarti Ollama di dalam container ini benar-benar berfungsi penuh, bukan cuma "kelihatan menyala".
 
 ✅ **Checkpoint sebelum lanjut**: `docker compose ps` menunjukkan `ollama` running, `ollama list` di dalam container menampilkan `llama3.2:3b`, `curl http://localhost:11434/api/tags` dari luar container juga berhasil, **dan** `docker compose exec ollama ollama run llama3.2:3b "..."` menghasilkan jawaban nyata. Kalau salah satu belum terpenuhi, selesaikan dulu di sini — menambah service `api` di atas fondasi Ollama yang belum stabil cuma akan mempersulit debugging nanti.
 
-Biarkan container `ollama` tetap berjalan (tidak perlu `docker compose down`) — Module 5 menambahkan service `api` ke `docker-compose.yml` yang sama, dan Module 5 nanti akan menyalakan `api` sekaligus tetap memakai `ollama` yang sudah berjalan ini.
+Biarkan container `ollama` tetap berjalan (tidak perlu `docker compose down`) — Module 6 menambahkan service `api` ke `docker-compose.yml` yang sama, dan Module 6 nanti akan menyalakan `api` sekaligus tetap memakai `ollama` yang sudah berjalan ini.
 
 <details>
 <summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi section 3.3</strong></summary>
@@ -245,11 +245,11 @@ GOAL:
 CONTEXT:
 - Ini docker-compose.yml paling awal project NALA — sengaja cuma
   satu service supaya Ollama bisa diverifikasi sendirian dulu
-  sebelum service api ditambahkan di Module 5.
+  sebelum service api ditambahkan di Module 6.
 
 GUARDRAIL:
 - JANGAN tambahkan service api, build, depends_on, atau environment
-  apa pun — itu semua baru masuk di Module 5 (Tahap B).
+  apa pun — itu semua baru masuk di Module 6.
 - JANGAN buat file lain (Dockerfile, app/, requirements.txt) — itu
   bagian Tahap A/B, bukan langkah ini.
 ```
@@ -287,13 +287,13 @@ docker-compose exec api bash
 
 ## 4. Referensi Lengkap: Ollama REST API
 
-Bagian 3.4 tadi sudah memanggil satu endpoint Ollama lewat `curl` (`/api/tags`) untuk verifikasi. Tapi Ollama sendiri, begitu servicenya menyala di port `11434`, sudah menyediakan **seluruh** REST API ini — hampir semua yang bisa dilakukan lewat CLI `ollama <sesuatu>` punya endpoint HTTP yang setara di baliknya. Mengenal permukaan lengkapnya berguna supaya kita tahu apa lagi yang tersedia, sebelum Module 5 membangun `OllamaClient` yang cuma membungkus satu endpoint tertentu.
+Bagian 3.4 tadi sudah memanggil satu endpoint Ollama lewat `curl` (`/api/tags`) untuk verifikasi. Tapi Ollama sendiri, begitu servicenya menyala di port `11434`, sudah menyediakan **seluruh** REST API ini — hampir semua yang bisa dilakukan lewat CLI `ollama <sesuatu>` punya endpoint HTTP yang setara di baliknya. Mengenal permukaan lengkapnya berguna supaya kita tahu apa lagi yang tersedia, sebelum Module 6 membangun `OllamaClient` yang cuma membungkus satu endpoint tertentu.
 
 ### 4.1 Endpoint yang Sudah Dipakai/Akan Dipakai NALA
 
 | Endpoint | Fungsi | Dipakai di NALA |
 |---|---|---|
-| `POST /api/generate` | Single-prompt completion — kirim satu prompt, terima satu jawaban | `OllamaClient.generate()` (dibangun Module 5, Tahap B) — inti dari endpoint `/chat` NALA |
+| `POST /api/generate` | Single-prompt completion — kirim satu prompt, terima satu jawaban | `OllamaClient.generate()` (dibangun Module 6) — inti dari endpoint `/chat` NALA |
 | `POST /api/chat` | Sama seperti `/api/generate`, tapi menerima `messages[]` (riwayat percakapan multi-turn dengan role `system`/`user`/`assistant`) alih-alih satu `prompt` string | Belum dipakai sampai module ini — relevan begitu NALA butuh riwayat percakapan multi-turn |
 | `GET /api/tags` | Daftar model yang sudah ter-*pull* (setara `ollama list`) | Dipakai untuk verifikasi manual di Bagian 3.4 di atas (`curl http://localhost:11434/api/tags`) |
 | `POST /api/show` | Detail satu model (parameter, template, system prompt bawaan) | Belum dipakai langsung dari kode NALA, tapi berguna untuk debugging manual |
@@ -327,9 +327,9 @@ curl http://localhost:11434/api/ps
 curl http://localhost:11434/api/show -d '{"model": "llama3.2:3b"}'
 ```
 
-### 4.4 Kenapa `OllamaClient` (Module 5) Nanti Cuma Membungkus Satu Endpoint
+### 4.4 Kenapa `OllamaClient` (Module 6) Nanti Cuma Membungkus Satu Endpoint
 
-Dari daftar di atas, `OllamaClient.generate()` yang dibangun Module 5 sengaja **tidak** membungkus semua endpoint Ollama — cuma `/api/generate`, karena itulah satu-satunya yang dibutuhkan endpoint `/chat` NALA saat itu. Ini konsisten dengan pola yang berulang sepanjang training: tambahkan kemampuan **tepat saat dibutuhkan**, bukan diborong di awal. Kalau nanti NALA butuh riwayat percakapan multi-turn, `OllamaClient` akan diperluas dengan method baru yang memanggil `/api/chat` — bukan mengganti `generate()` yang sudah ada.
+Dari daftar di atas, `OllamaClient.generate()` yang dibangun Module 6 sengaja **tidak** membungkus semua endpoint Ollama — cuma `/api/generate`, karena itulah satu-satunya yang dibutuhkan endpoint `/chat` NALA saat itu. Ini konsisten dengan pola yang berulang sepanjang training: tambahkan kemampuan **tepat saat dibutuhkan**, bukan diborong di awal. Kalau nanti NALA butuh riwayat percakapan multi-turn, `OllamaClient` akan diperluas dengan method baru yang memanggil `/api/chat` — bukan mengganti `generate()` yang sudah ada.
 
 ---
 
@@ -381,7 +381,7 @@ docker stats
 cd Nala
 ```
 
-Prinsipnya: pastikan fondasi (Ollama di Docker) benar-benar sehat sebelum Module 5 menambahkan kompleksitas kedua (FastAPI) di atasnya — debug di sini dulu kalau ada masalah, karena akan jauh lebih sulit membedakan "Ollama-nya yang bermasalah" vs "FastAPI-nya yang bermasalah" kalau keduanya dinyalakan bersamaan.
+Prinsipnya: pastikan fondasi (Ollama di Docker) benar-benar sehat sebelum Module 6 menyambungkannya ke FastAPI — debug di sini dulu kalau ada masalah, karena akan jauh lebih sulit membedakan "Ollama-nya yang bermasalah" vs "FastAPI-nya yang bermasalah" kalau keduanya dinyalakan bersamaan.
 
 ### Langkah 2: Nyalakan service `ollama` saja
 
@@ -418,12 +418,12 @@ curl http://localhost:11434/api/tags
 
 `llama3.2:3b` harus muncul di kedua output — yang pertama dari **dalam** container, yang kedua dari **luar** container (lewat port `11434` yang sudah di-mapping ke laptop Anda).
 
-✅ **Checkpoint "aman" — jangan lanjut ke Module 5 kalau salah satu berikut belum terpenuhi:**
+✅ **Checkpoint "aman" — jangan lanjut ke Module 6 kalau salah satu berikut belum terpenuhi:**
 - [ ] `docker compose ps` menunjukkan `ollama` berstatus `running`
 - [ ] `docker compose exec ollama ollama list` menampilkan `llama3.2:3b`
 - [ ] `curl http://localhost:11434/api/tags` dari luar container berhasil dan menampilkan `llama3.2:3b`
 
-Biarkan container `ollama` tetap berjalan (tidak perlu `docker compose down`) — Module 5 melanjutkan dari sini dengan menambahkan service `api` ke `docker-compose.yml` yang sama.
+Biarkan container `ollama` tetap berjalan (tidak perlu `docker compose down`) — Module 6 melanjutkan dari sini dengan menambahkan service `api` ke `docker-compose.yml` yang sama.
 
 ### Troubleshooting
 
@@ -446,4 +446,5 @@ Anda telah memahami:
 **Next Steps:**
 - **Praktik langsung**: lihat bagian Panduan Praktik di atas — setup docker-compose.yml, jalankan container `ollama`
 - **Starter code**: `Nala/` — docker-compose NALA (baru berisi service `ollama`)
-- **Module 5**: Menambahkan service `api` (FastAPI), membangun `app/main.py`, dan menyambungkannya ke Ollama yang sudah terverifikasi di module ini
+- **Module 5**: Membangun FastAPI murni (`app/main.py`, endpoint `/health`, Pydantic models) — belum terhubung ke Ollama
+- **Module 6**: Menambahkan service `api` (FastAPI) ke docker-compose.yml dan menyambungkannya ke Ollama yang sudah terverifikasi di module ini

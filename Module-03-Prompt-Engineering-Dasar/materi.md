@@ -497,14 +497,14 @@ Setelah masuk prompt `>>>`, coba dua jenis pertanyaan:
 
 Kalau kedua jawaban sudah sesuai, berarti Modelfile bekerja dengan benar — system prompt dan parameter sudah persisten di `nala-v1` tanpa perlu `/set system` manual lagi. Keluar dengan `/bye`.
 
-### 7.3 Hubungannya dengan Module 4
+### 7.3 Hubungannya dengan Module 6
 
-Kedua cara di atas adalah **cara uji manual**, bukan cara production dipakai NALA. Di Module 4, draft yang sudah divalidasi dengan `/set system` (atau Modelfile) ini akan dipindahkan menjadi konstanta Python `NALA_SYSTEM_PROMPT` (`app/system_prompt.py`), lalu dikirim otomatis lewat API (field `system` di request `/api/generate` atau role `system` di `/api/chat`) setiap ada request masuk ke endpoint `/chat` — tidak perlu diketik ulang oleh siapa pun setiap kali NALA dipakai.
+Kedua cara di atas adalah **cara uji manual**, bukan cara production dipakai NALA. Di Module 6, draft yang sudah divalidasi dengan `/set system` (atau Modelfile) ini akan dipindahkan menjadi konstanta Python `NALA_SYSTEM_PROMPT` (`app/system_prompt.py`), lalu dikirim otomatis lewat API (field `system` di request `/api/generate` atau role `system` di `/api/chat`) setiap ada request masuk ke endpoint `/chat` — tidak perlu diketik ulang oleh siapa pun setiap kali NALA dipakai.
 
 | Tahap | Tempat | Cara |
 |---|---|---|
 | Draft & uji cepat (Module 3, sekarang) | Terminal | `/set system` atau Modelfile |
-| Produksi (Module 4) | Kode FastAPI | Konstanta `NALA_SYSTEM_PROMPT`, dikirim via API `system` field |
+| Produksi (Module 6) | Kode FastAPI | Konstanta `NALA_SYSTEM_PROMPT`, dikirim via API `system` field |
 
 ---
 
@@ -723,7 +723,7 @@ Panduan hands-on module ini sudah terintegrasi langsung di bagian-bagian di atas
 - **Bagian 5 — Latihan: Menyusun System Prompt NALA v1**: menyusun draft system prompt.
 - **Bagian 7 — Menguji System Prompt Anda Sekarang**: mengetes draft tersebut lewat `ollama create -f Modelfile` dan `ollama run`, tanpa perlu menunggu Docker/FastAPI.
 
-Setelah system prompt v1 ini diuji manual di module ini, langkah selanjutnya (menyambungkannya ke aplikasi FastAPI + Docker Compose NALA, termasuk eksperimen rebuild-nya) ada di **Module 4** (`Module-04-Setup-Infra-Docker-Compose/materi.md`, bagian Panduan Praktik, Langkah 6).
+Setelah system prompt v1 ini diuji manual di module ini, langkah selanjutnya (menyambungkannya ke aplikasi FastAPI + Docker Compose NALA, termasuk eksperimen rebuild-nya) ada di **Module 6** (`Module-06-Integrasi-Ollama/materi.md`, bagian Panduan Praktik, Langkah 4).
 
 **Praktik tambahan (gabungan Module 2 + Module 3):** setelah draft system prompt dan `nala-v1` siap, kerjakan **[WORKSHEET-Evaluasi-Dampak-Prompt-Engineering.md](./WORKSHEET-Evaluasi-Dampak-Prompt-Engineering.md)** — menggabungkan metodologi evaluasi manual Module 2 dengan teknik prompt engineering module ini, untuk **mengukur** (bukan menduga) dampak system prompt terhadap kualitas dan konsistensi jawaban.
 

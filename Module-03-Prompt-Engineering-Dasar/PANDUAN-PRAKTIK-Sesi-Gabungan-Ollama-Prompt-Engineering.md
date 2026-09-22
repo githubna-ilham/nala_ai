@@ -1,6 +1,6 @@
 # Panduan Praktik Sesi Gabungan — Ollama dari Nol sampai Prompt Engineering (Module 2 + Module 3)
 
-Ini adalah panduan praktik **berdiri sendiri** (terpisah dari `Module-02-Setup-Ollama-Evaluasi-Model/materi.md` bagian Panduan Praktik, `Module-02-Setup-Ollama-Evaluasi-Model/WORKSHEET-Percobaan-Ollama.md`, `Module-03-Prompt-Engineering-Dasar/materi.md` bagian Panduan Praktik, dan `WORKSHEET-Evaluasi-Dampak-Prompt-Engineering.md`) yang menggabungkan **seluruh** praktik Module 2 dan Module 3 jadi satu sesi hands-on berurutan, mulai dari instalasi Ollama di laptop yang masih kosong sampai eksplorasi lengkap semua parameter generasi, perbandingan multi-model, environment variable konfigurasi service, dan pemanggilan REST API Ollama langsung (persis yang akan dipakai kode Python di Module 4). Dirancang untuk dikerjakan dalam **satu sesi sangat panjang (8-9 jam, sangat disarankan dipecah jadi beberapa sesi)**, dengan estimasi waktu di tiap Langkah supaya Anda bisa mengatur ritme dan istirahat.
+Ini adalah panduan praktik **berdiri sendiri** (terpisah dari `Module-02-Setup-Ollama-Evaluasi-Model/materi.md` bagian Panduan Praktik, `Module-02-Setup-Ollama-Evaluasi-Model/WORKSHEET-Percobaan-Ollama.md`, `Module-03-Prompt-Engineering-Dasar/materi.md` bagian Panduan Praktik, dan `WORKSHEET-Evaluasi-Dampak-Prompt-Engineering.md`) yang menggabungkan **seluruh** praktik Module 2 dan Module 3 jadi satu sesi hands-on berurutan, mulai dari instalasi Ollama di laptop yang masih kosong sampai eksplorasi lengkap semua parameter generasi, perbandingan multi-model, environment variable konfigurasi service, dan pemanggilan REST API Ollama langsung (persis yang akan dipakai kode Python di Module 6). Dirancang untuk dikerjakan dalam **satu sesi sangat panjang (8-9 jam, sangat disarankan dipecah jadi beberapa sesi)**, dengan estimasi waktu di tiap Langkah supaya Anda bisa mengatur ritme dan istirahat.
 
 **Kenapa digabung jadi satu file terpisah?** Module 2 dan Module 3 masing-masing punya materi & worksheet sendiri yang bisa dikerjakan terpisah di hari/sesi berbeda. Panduan ini untuk skenario sebaliknya: kalau kita punya blok waktu panjang (misal workshop setengah hari) dan ingin mengerjakan instalasi sampai prompt engineering **tanpa jeda**, dengan satu alur Langkah yang mengalir dari awal ke akhir.
 
@@ -70,7 +70,7 @@ Sama seperti di atas, biarkan berjalan di terminal terpisah.
 ollama pull llama3.2:3b
 ```
 
-Model ini berukuran ~1.87GB — proses download akan menampilkan progress bar. Sambil menunggu, baca sekilas kenapa model ini yang dipilih: model 3B parameter, sudah mendukung tool-calling (dipakai nanti di Module 21), cukup kecil untuk berjalan nyaman di laptop 16GB RAM sekaligus menjalankan service lain (OpenSearch, PostgreSQL, dst di modul-modul berikutnya).
+Model ini berukuran ~1.87GB — proses download akan menampilkan progress bar. Sambil menunggu, baca sekilas kenapa model ini yang dipilih: model 3B parameter, sudah mendukung tool-calling (dipakai nanti di Module 22), cukup kecil untuk berjalan nyaman di laptop 16GB RAM sekaligus menjalankan service lain (OpenSearch, PostgreSQL, dst di modul-modul berikutnya).
 
 **Checkpoint:**
 ```bash
@@ -206,7 +206,7 @@ Dari Langkah 9, Anda sudah membuktikan sendiri dua keterbatasan mendasar LLM lok
 1. **Knowledge cutoff** — tidak tahu kejadian setelah tanggal training
 2. **Tidak ada akses ke data privat/internal** — model dasar dilatih dari data publik, bukan dokumen SOP PT Nusantara Finance
 
-Kedua keterbatasan ini adalah alasan utama kenapa Module 8 dan seterusnya memperkenalkan **RAG (Retrieval-Augmented Generation)**: alih-alih berharap model "sudah tahu" dari hasil training, sistem **mencari (retrieve)** potongan dokumen relevan lebih dulu, menyisipkannya ke prompt sebagai konteks tambahan, baru model menjawab berdasarkan konteks itu — bukan hanya dari memori training-nya.
+Kedua keterbatasan ini adalah alasan utama kenapa Module 9 dan seterusnya memperkenalkan **RAG (Retrieval-Augmented Generation)**: alih-alih berharap model "sudah tahu" dari hasil training, sistem **mencari (retrieve)** potongan dokumen relevan lebih dulu, menyisipkannya ke prompt sebagai konteks tambahan, baru model menjawab berdasarkan konteks itu — bukan hanya dari memori training-nya.
 
 **Refleksi:** Bayangkan Anda bertanya ke NALA: *"Apa syarat pengajuan restrukturisasi kredit untuk nasabah yang telat bayar 3 bulan?"* — kenapa `llama3.2:3b` tanpa RAG kemungkinan besar akan menjawab ngasal atau generik untuk pertanyaan ini? Dokumen apa yang perlu di-retrieve lebih dulu supaya NALA bisa menjawab akurat?
 
@@ -430,7 +430,7 @@ ollama run nala-v1 "Siapa kamu?"
 | Menolak pertanyaan di luar topik (kue coklat)? | ☐ | ☐ | ☐ |
 | Perlu diketik ulang tiap sesi baru? | — | ☐ Ya | ☐ Tidak (persisten) |
 
-**Refleksi:** dari ketiga kondisi, mana yang paling siap dipakai sebagai fondasi `NALA_SYSTEM_PROMPT` di kode Python (Module 4)?
+**Refleksi:** dari ketiga kondisi, mana yang paling siap dipakai sebagai fondasi `NALA_SYSTEM_PROMPT` di kode Python (Module 6)?
 
 ### Langkah 20: Eksperimen Konsistensi — Efek `temperature` (~20 menit)
 
@@ -623,7 +623,7 @@ Verifikasi parameter tersimpan sesuai yang ditulis, untuk salah satu model:
 ollama show nala-rp --parameters
 ```
 
-**Bersih-bersih** — hapus semua model eksperimen (kecuali `nala-v1` dari Langkah 18, yang masih dipakai sampai Module 4):
+**Bersih-bersih** — hapus semua model eksperimen (kecuali `nala-v1` dari Langkah 18, yang masih dipakai sampai Module 6):
 ```bash
 ollama rm nala-topk nala-topp nala-minp nala-rp nala-rp-ekstrem nala-rln nala-np nala-stop nala-seed
 ```
@@ -677,7 +677,7 @@ time ollama run qwen2.5:7b "Tuliskan contoh singkat Python script untuk load mod
 | Overfitting | ___ detik | | | ___ detik |
 | Kode Python | ___ detik | | | ___ detik |
 
-**Refleksi:** model mana yang lebih cepat? Model mana yang jawabannya lebih baik dalam Bahasa Indonesia? Untuk kasus NALA (asisten internal, RAM laptop kita saat training dibatasi 16GB total termasuk service lain di Module 25+), apakah selisih kualitas ini sepadan dengan selisih kebutuhan RAM (~6GB vs ~8GB) dan kecepatan?
+**Refleksi:** model mana yang lebih cepat? Model mana yang jawabannya lebih baik dalam Bahasa Indonesia? Untuk kasus NALA (asisten internal, RAM laptop kita saat training dibatasi 16GB total termasuk service lain di Module 26+), apakah selisih kualitas ini sepadan dengan selisih kebutuhan RAM (~6GB vs ~8GB) dan kecepatan?
 
 ### Langkah 32: Baca Log KV Cache — Komponen Memori yang Sering Terlewat (~10-15 menit)
 
@@ -700,7 +700,7 @@ llama_kv_cache: size = XXXX.XX MiB (XXXXX cells, XX layers, 1 seqs)
 
 Bandingkan dengan contoh `llama3.2:3b` di `materi.md` Module 2 Bagian 4.1: KV cache-nya ~3.5GB — **hampir dua kali lipat** ukuran file model itu sendiri (~1.87GB). Ini kenapa rule of thumb `(ukuran file × 2) + 1GB` (dipakai di Langkah 11) sudah memperhitungkan KV cache, bukan cuma ukuran file model.
 
-**Refleksi penutup Bagian F:** kalau nanti di Module 4 (Docker Compose) atau Module 25 (Full-Stack Deployment) Anda perlu menjalankan Ollama **bersamaan** dengan banyak service lain, komponen memori mana yang paling penting diperhitungkan — ukuran file model, atau KV cache? Kenapa?
+**Refleksi penutup Bagian F:** kalau nanti di Module 4 (Docker Compose) atau Module 26 (Full-Stack Deployment) Anda perlu menjalankan Ollama **bersamaan** dengan banyak service lain, komponen memori mana yang paling penting diperhitungkan — ukuran file model, atau KV cache? Kenapa?
 
 **Bersih-bersih (opsional):** kalau tidak ingin menyimpan model besar ini, hapus setelah selesai:
 ```bash
@@ -711,7 +711,7 @@ ollama rm qwen2.5:7b
 
 ## Bagian G: Konfigurasi Lanjutan — Environment Variables & REST API Langsung (Langkah 33-40, ~110 menit)
 
-Sejauh ini Anda berinteraksi dengan Ollama lewat CLI (`ollama run`, `/set system`). Tapi aplikasi NALA (mulai Module 4) **tidak** memanggil CLI — ia memanggil **REST API** Ollama langsung lewat HTTP. Bagian ini menjembatani keduanya: mengenal environment variable yang mengatur perilaku service, lalu memanggil endpoint API yang sama persis yang akan dipakai kode Python nanti.
+Sejauh ini Anda berinteraksi dengan Ollama lewat CLI (`ollama run`, `/set system`). Tapi aplikasi NALA (mulai Module 6) **tidak** memanggil CLI — ia memanggil **REST API** Ollama langsung lewat HTTP. Bagian ini menjembatani keduanya: mengenal environment variable yang mengatur perilaku service, lalu memanggil endpoint API yang sama persis yang akan dipakai kode Python nanti.
 
 ### Langkah 33: Environment Variables — Mengatur Perilaku Ollama Service (~20 menit)
 
@@ -787,11 +787,11 @@ curl http://localhost:11434/api/generate -d '{
 | Pada mode non-streaming, apa yang terlihat di terminal selama menunggu? | |
 | Pada mode streaming, bagaimana bentuk output-nya berbeda? (petunjuk: banyak baris JSON kecil-kecil berturut-turut, satu per token, field `"done": false` sampai baris terakhir `"done": true`) | |
 
-**Refleksi:** Module 2 membangun `/chat` (non-streaming), lalu Module 7 menggantinya total dengan `/chat/stream`. Sekarang Anda sudah melihat **langsung** di level API mentah kenapa keduanya butuh cara handling berbeda di kode Python — `stream: false` cukup satu `response.json()`, sedangkan `stream: true` butuh membaca response baris-per-baris selagi data mengalir masuk.
+**Refleksi:** Module 2 membangun `/chat` (non-streaming), lalu Module 8 menggantinya total dengan `/chat/stream`. Sekarang Anda sudah melihat **langsung** di level API mentah kenapa keduanya butuh cara handling berbeda di kode Python — `stream: false` cukup satu `response.json()`, sedangkan `stream: true` butuh membaca response baris-per-baris selagi data mengalir masuk.
 
 ### Langkah 36: `/api/chat` — Percakapan Multi-Turn via API (~20 menit)
 
-Berbeda dari `/api/generate` (satu prompt string), `/api/chat` menerima **riwayat percakapan** sebagai list `messages` — ini yang dipakai NALA untuk percakapan multi-turn (Module 4 dan seterusnya).
+Berbeda dari `/api/generate` (satu prompt string), `/api/chat` menerima **riwayat percakapan** sebagai list `messages` — ini yang dipakai NALA untuk percakapan multi-turn (Module 8 dan seterusnya).
 
 ```bash
 curl http://localhost:11434/api/chat -d '{
@@ -821,7 +821,7 @@ curl http://localhost:11434/api/chat -d '{
 
 **Checkpoint:** apakah model menjawab pertanyaan kedua dengan benar memahami bahwa "-nya" merujuk ke Jakarta (konteks dari riwayat), bukan bertanya balik "penduduk apa"?
 
-**Refleksi:** field `role` di tiap elemen `messages` ada tiga: `system`, `user`, `assistant`. Anda sudah menyusun `System Prompt NALA v1` di Bagian C — sekarang Anda tahu **persis** field mana di JSON request yang akan diisi draft itu nanti di kode FastAPI (`app/system_prompt.py`, Module 4).
+**Refleksi:** field `role` di tiap elemen `messages` ada tiga: `system`, `user`, `assistant`. Anda sudah menyusun `System Prompt NALA v1` di Bagian C — sekarang Anda tahu **persis** field mana di JSON request yang akan diisi draft itu nanti di kode FastAPI (`app/system_prompt.py`, Module 6).
 
 ### Langkah 37: `keep_alive` per-Request (~10 menit)
 
@@ -863,11 +863,11 @@ ollama ps
 
 **Checkpoint:** apakah **kedua** model muncul di `ollama ps` secara bersamaan? Berapa total SIZE gabungan keduanya — apakah mendekati/melebihi RAM laptop Anda?
 
-**Refleksi:** ini relevan langsung untuk Module 25 (Full-Stack Deployment) — kalau NALA production nanti perlu menjalankan model utama (`llama3.2:3b`) sekaligus model reranker (Module 17, lewat `sentence-transformers`, bukan Ollama) atau model embedding (`nomic-embed-text`, Module 10) **bersamaan**, `OLLAMA_MAX_LOADED_MODELS` dan total RAM tersedia jadi constraint nyata, bukan cuma teori.
+**Refleksi:** ini relevan langsung untuk Module 26 (Full-Stack Deployment) — kalau NALA production nanti perlu menjalankan model utama (`llama3.2:3b`) sekaligus model reranker (Module 18, lewat `sentence-transformers`, bukan Ollama) atau model embedding (`nomic-embed-text`, Module 11) **bersamaan**, `OLLAMA_MAX_LOADED_MODELS` dan total RAM tersedia jadi constraint nyata, bukan cuma teori.
 
 ### Langkah 39: Custom Bind Address — `OLLAMA_HOST` (~10 menit)
 
-Secara default, Ollama cuma bisa diakses dari `localhost` (komputer yang sama). Ini penting dipahami karena nanti di Module 4, aplikasi FastAPI NALA berjalan **di dalam container Docker terpisah** — container itu perlu mengakses Ollama lewat alamat selain `localhost`.
+Secara default, Ollama cuma bisa diakses dari `localhost` (komputer yang sama). Ini penting dipahami karena nanti di Module 6, aplikasi FastAPI NALA berjalan **di dalam container Docker terpisah** — container itu perlu mengakses Ollama lewat alamat selain `localhost`.
 
 Matikan Ollama yang berjalan, nyalakan ulang dengan bind address berbeda:
 ```bash
@@ -883,11 +883,11 @@ curl http://127.0.0.1:11434/api/tags
 
 Matikan lagi (`Ctrl+C`), nyalakan ulang **tanpa** `OLLAMA_HOST` custom (kembali ke default) sebelum melanjutkan.
 
-### Langkah 40: Refleksi Penutup Bagian G — Menghubungkan ke Module 4 (~10 menit)
+### Langkah 40: Refleksi Penutup Bagian G — Menghubungkan ke Module 6 (~10 menit)
 
-1. Kode Python di Module 4 (`OllamaClient`, dibahas di `Module-04-Setup-Infra-Docker-Compose/materi.md`) pada dasarnya adalah **pembungkus** di atas `curl` yang baru saja Anda jalankan manual — memanggil `/api/generate` atau `/api/chat` lewat library `httpx`/`requests`, bukan lewat CLI `ollama`. Endpoint mana (`/api/generate` atau `/api/chat`) yang menurut Anda lebih cocok dipakai NALA, yang harus mengingat riwayat percakapan multi-turn (Module 7)?
-2. Dari environment variable di Langkah 33, mana yang menurut Anda **wajib** di-set eksplisit saat NALA di-deploy di Docker Compose (Module 4 dan Module 25), dan mana yang aman dibiarkan default?
-3. `stream: true` vs `stream: false` (Langkah 35) — hubungkan dengan keputusan desain yang sudah dibahas: Module 2 sengaja membangun `/chat` non-streaming dulu (sederhana), baru Module 7 mengganti total ke `/chat/stream`. Sekarang setelah melihat perbedaan bentuk response JSON-nya langsung, menurut Anda kenapa tim menunda streaming ke modul terpisah, bukan langsung di Module 2?
+1. Kode Python di Module 6 (`OllamaClient`, dibahas di `Module-06-Integrasi-Ollama/materi.md`) pada dasarnya adalah **pembungkus** di atas `curl` yang baru saja Anda jalankan manual — memanggil `/api/generate` atau `/api/chat` lewat library `httpx`/`requests`, bukan lewat CLI `ollama`. Endpoint mana (`/api/generate` atau `/api/chat`) yang menurut Anda lebih cocok dipakai NALA, yang harus mengingat riwayat percakapan multi-turn (Module 8)?
+2. Dari environment variable di Langkah 33, mana yang menurut Anda **wajib** di-set eksplisit saat NALA di-deploy di Docker Compose (Module 6 dan Module 26), dan mana yang aman dibiarkan default?
+3. `stream: true` vs `stream: false` (Langkah 35) — hubungkan dengan keputusan desain yang sudah dibahas: Module 2 sengaja membangun `/chat` non-streaming dulu (sederhana), baru Module 8 mengganti total ke `/chat/stream`. Sekarang setelah melihat perbedaan bentuk response JSON-nya langsung, menurut Anda kenapa tim menunda streaming ke modul terpisah, bukan langsung di Module 2?
 
 ---
 

@@ -2,17 +2,17 @@
 
 Sesuai `README.md` utama (bagian Format Evaluasi), capstone dinilai dengan **4 kriteria**. Tiap kriteria punya 4 level skor dengan deskriptor konkret — penilai memilih level yang paling sesuai dengan yang **benar-benar ditunjukkan** saat demo/presentasi, bukan yang diklaim lisan tanpa bukti.
 
-Bobot tiap kriteria **sama (25% masing-masing)** kecuali instruktur menentukan pembobotan lain sebelum sesi capstone dimulai — kalau berbeda, sampaikan ke peserta di awal Module 25, bukan saat penilaian berlangsung.
+Bobot tiap kriteria **sama (25% masing-masing)** kecuali instruktur menentukan pembobotan lain sebelum sesi capstone dimulai — kalau berbeda, sampaikan ke peserta di awal Module 26, bukan saat penilaian berlangsung.
 
 ## Kriteria 1: Fungsionalitas Sistem
 
-Seberapa lengkap dan andal NALA berjalan end-to-end saat didemokan — mencakup chat UI, upload dokumen, RAG, agent routing (RAG vs SQL), dan deployment full-stack Module 25.
+Seberapa lengkap dan andal NALA berjalan end-to-end saat didemokan — mencakup chat UI, upload dokumen, RAG, agent routing (RAG vs SQL), dan deployment full-stack Module 26.
 
 | Level | Skor | Deskriptor |
 |---|---|---|
 | **4 — Sangat Baik** | 90-100 | Seluruh alur berjalan tanpa intervensi manual saat demo: upload dokumen baru → ter-index → bisa ditanyakan; pertanyaan operasional ter-routing ke SQL tool dengan benar; streaming, multi-turn, dan status page semuanya berfungsi. Tidak ada error yang terlihat penilai. |
 | **3 — Baik** | 75-89 | Alur inti (chat RAG, chat SQL tool) berjalan lancar; ada 1-2 fitur pendukung (upload real-time, badge tool, status page) yang sedikit kurang mulus tapi tidak menggagalkan demo — presenter berhasil menjelaskan/mengatasinya secara langsung. |
-| **2 — Cukup** | 60-74 | Fungsi inti (chat, RAG) berjalan, tapi agent routing RAG-vs-SQL tidak konsisten benar, atau ada fitur Module 25-26 (deployment full-stack, monitoring) yang tidak berhasil didemokan secara live dan hanya dijelaskan lisan. |
+| **2 — Cukup** | 60-74 | Fungsi inti (chat, RAG) berjalan, tapi agent routing RAG-vs-SQL tidak konsisten benar, atau ada fitur Module 26-27 (deployment full-stack, monitoring) yang tidak berhasil didemokan secara live dan hanya dijelaskan lisan. |
 | **1 — Perlu Perbaikan** | <60 | Demo live gagal berjalan sama sekali (harus fallback ke screenshot/rekaman untuk sebagian besar bagian), atau fungsi inti (chat dasar) tidak bisa ditunjukkan bekerja. |
 
 ## Kriteria 2: Quality of Retrieved Answers
@@ -32,12 +32,12 @@ Seberapa dalam peserta memahami **kenapa** sistem dibangun dengan cara tertentu 
 
 | Level | Skor | Deskriptor |
 |---|---|---|
-| **4 — Sangat Baik** | 90-100 | Peserta bisa menjelaskan minimal 3 trade-off konkret dari training ini (contoh: model 3B vs akurasi routing Module 20-24, vector search murni vs hybrid+reranking Module 16-19, grounding ketat vs fleksibilitas jawaban Module 6-15, Airflow vs upload endpoint) dengan alasan yang benar secara teknis, termasuk kapan pilihan itu bisa berubah di konteks lain. |
+| **4 — Sangat Baik** | 90-100 | Peserta bisa menjelaskan minimal 3 trade-off konkret dari training ini (contoh: model 3B vs akurasi routing Module 21-25, vector search murni vs hybrid+reranking Module 17-20, grounding ketat vs fleksibilitas jawaban Module 7-16, Airflow vs upload endpoint) dengan alasan yang benar secara teknis, termasuk kapan pilihan itu bisa berubah di konteks lain. |
 | **3 — Baik** | 75-89 | Peserta bisa menjelaskan 2+ trade-off dengan benar saat ditanya, meski tidak proaktif diangkat di presentasi awal. |
 | **2 — Cukup** | 60-74 | Peserta menyebutkan trade-off tapi penjelasannya dangkal atau sebagian tidak akurat secara teknis (misalnya salah memahami kenapa suatu keputusan diambil). |
 | **1 — Perlu Perbaikan** | <60 | Peserta tidak bisa menjelaskan trade-off apa pun saat ditanya, atau menjawab dengan "karena diminta modul" tanpa pemahaman alasan teknis di baliknya. |
 
-**Area trade-off yang relevan untuk digali** (bukan daftar wajib, tapi rujukan penilai): pilihan model `llama3.2:3b` (README utama), grounding vs fleksibilitas (Module 12 Bagian 4), keterbatasan vector search murni sebelum hybrid+reranking (Module 12 Bagian 7, Module 16-19), Airflow vs upload endpoint (Module 12 Bagian 5), agent routing RAG-vs-SQL (Module 20-24), RBAC/prompt injection sebagai risiko yang diakui bukan diselesaikan (Module 26 Bagian 3), dan resource/RAM full-stack (Module 25 Bagian 4).
+**Area trade-off yang relevan untuk digali** (bukan daftar wajib, tapi rujukan penilai): pilihan model `llama3.2:3b` (README utama), grounding vs fleksibilitas (Module 13 Bagian 4), keterbatasan vector search murni sebelum hybrid+reranking (Module 13 Bagian 7, Module 17-20), Airflow vs upload endpoint (Module 13 Bagian 5), agent routing RAG-vs-SQL (Module 21-25), RBAC/prompt injection sebagai risiko yang diakui bukan diselesaikan (Module 27 Bagian 3), dan resource/RAM full-stack (Module 26 Bagian 4).
 
 ## Kriteria 4: Presentasi dan Komunikasi Hasil
 
@@ -53,5 +53,5 @@ Seberapa jelas dan meyakinkan peserta mengomunikasikan apa yang dibangun — kep
 ## Catatan untuk Penilai
 
 - Rubrik ini dinilai **per kelompok/peserta**, bukan relatif dibanding kelompok lain — dua kelompok bisa sama-sama mendapat skor tinggi kalau memang sama-sama layak.
-- Kegagalan teknis kecil saat demo live (lihat catatan fallback di Module 28 materi.md, bagian Panduan Praktik > Troubleshooting) **tidak otomatis** menjatuhkan skor Kriteria 1 ke level terendah — nilai bagaimana presenter menangani kegagalan itu di bawah Kriteria 4, bukan menghukum dua kali di kedua kriteria untuk masalah yang sama.
+- Kegagalan teknis kecil saat demo live (lihat catatan fallback di Module 29 materi.md, bagian Panduan Praktik > Troubleshooting) **tidak otomatis** menjatuhkan skor Kriteria 1 ke level terendah — nilai bagaimana presenter menangani kegagalan itu di bawah Kriteria 4, bukan menghukum dua kali di kedua kriteria untuk masalah yang sama.
 - Skor akhir = rata-rata (atau rata-rata berbobot, kalau bobot disesuaikan) dari keempat kriteria, dibulatkan sesuai kebijakan standar penilaian institusi penyelenggara.
