@@ -334,6 +334,24 @@ Bagian 3.4 tadi sudah memanggil satu endpoint Ollama lewat `curl` (`/api/tags`) 
 > - Endpoint **POST** (misal `/api/generate`, `/api/chat`, `/api/show`, `/api/embed`): pilih method **POST**, isi URL-nya, lalu di tab **Body** pilih **raw** → format **JSON**, paste isi JSON yang ada di contoh `curl -d '{...}'` (tanpa perlu tanda kutip escape seperti di shell).
 >
 > Keduanya sama-sama valid — pakai yang paling nyaman. Sisa materi ini tetap memakai `curl` supaya konsisten dan gampang di-*copy-paste* langsung ke terminal.
+>
+> **Contoh konkret** — mengetes `POST /api/generate` (lihat 4.1 di bawah) lewat Postman:
+>
+> | Field di Postman | Isinya |
+> |---|---|
+> | Method | `POST` |
+> | URL | `http://localhost:11434/api/generate` |
+> | Body → raw → JSON | `{"model": "llama3.2:3b", "prompt": "Sebutkan 3 kegunaan AI di industri keuangan", "stream": false}` |
+>
+> Klik **Send**, responsnya muncul di panel bawah — isinya sama persis dengan JSON yang keluar dari `curl` di contoh 4.1 (field `response` berisi jawaban modelnya).
+>
+> Untuk endpoint **GET** seperti `/api/tags`, lebih sederhana lagi — cukup:
+>
+> | Field di Postman | Isinya |
+> |---|---|
+> | Method | `GET` |
+> | URL | `http://localhost:11434/api/tags` |
+> | Body | (kosongkan, tidak perlu diisi) |
 
 ### 4.1 Endpoint yang Sudah Dipakai/Akan Dipakai NALA
 
