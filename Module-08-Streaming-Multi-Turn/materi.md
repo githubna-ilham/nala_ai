@@ -83,6 +83,8 @@ Dibanding akhir Module 7, ada beberapa perubahan di `Nala/`. Sama seperti Module
 
 Kode lengkap tiap tahap ditunjukkan langsung di bawah, sebagai referensi/jawaban setelah Anda mencoba menulisnya sendiri.
 
+**Prasyarat**: sudah menyelesaikan **Module 7** (Chat UI Dasar) — container `ollama`+`api` dari `Nala/` masih berjalan (kalau tidak, ulangi Module 7 Langkah 2). Belum butuh `opensearch` atau `airflow` di module ini.
+
 ### Tahap A — Tambah `chat_stream()` di `app/ollama_client.py`
 
 **Langkah 1 — Tambah `import json` dan method `chat_stream()`**
@@ -326,9 +328,11 @@ curl -N -X POST http://localhost:8000/chat/stream \
   -d '{"messages": [{"role": "user", "content": "Halo, kamu siapa?"}]}'
 ```
 
-✅ **Indikator sukses**: teks balasan NALA muncul **bertahap** di terminal (flag `-N` mencegah `curl` buffer output) — bukan sekaligus di akhir. Coba juga kirim `messages` kosong (`{"messages": []}`) dan pastikan responsnya `400`, bukan `500` atau hang.
+✅ **Indikator sukses**: teks balasan NALA muncul **bertahap** di terminal (flag `-N` mencegah `curl` buffer output) — bukan sekaligus di akhir. Kalau koneksi lambat, jeda antar-token akan terlihat jelas — itu tanda streaming benar-benar berjalan token-demi-token dari Ollama, bukan efek animasi di frontend. Coba juga kirim `messages` kosong (`{"messages": []}`) dan pastikan responsnya `400`, bukan `500` atau hang.
 
-Verifikasi juga bahwa `/chat` benar-benar sudah hilang:
+Perhatikan bedanya dari `/chat` (sudah dihapus): body sekarang `messages` (array), bukan `message` (string tunggal), dan responsnya teks mengalir — bukan JSON `{"reply": "..."}`. **Mulai langkah ini, `/chat/stream` adalah satu-satunya endpoint chat NALA sepanjang sisa Module 7-16** — tidak akan ada endpoint chat baru lagi.
+
+Verifikasi juga bahwa `/chat` benar-benar sudah hilang, bukan cuma tidak dipakai:
 
 ```bash
 curl -s -o /dev/null -w "%{http_code}\n" -X POST http://localhost:8000/chat \
@@ -596,9 +600,18 @@ document.getElementById("reset-btn").addEventListener("click", () => {
 docker compose up --build api
 ```
 
-Buka `http://localhost:8000`, kirim pertanyaan, amati jawaban muncul bertahap. Lanjutkan dengan pertanyaan kedua yang merujuk balik ke pertanyaan pertama (misalnya "Berapa lama proses kredit?" lalu "Kalau untuk nasabah lama?") dan pastikan NALA memahami konteksnya.
+Buka `http://localhost:8000`, kirim pertanyaan, amati jawaban muncul bertahap. Lanjutkan dengan pertanyaan kedua yang merujuk balik ke pertanyaan pertama, **tanpa reload**, misalnya:
 
-✅ **Indikator sukses**: jawaban muncul kata demi kata, badge pesan bertambah, keterangan windowing muncul setelah 8 pesan, tombol reset berfungsi dengan konfirmasi.
+1. "Berapa lama proses pengajuan kredit?"
+2. Lanjutkan dengan: "Kalau untuk nasabah yang sudah lama jadi customer?"
+
+Pertanyaan kedua tidak menyebut "kredit" atau "proses" sama sekali — NALA seharusnya tetap paham bahwa ini masih soal proses kredit, karena riwayat percakapan (termasuk pertanyaan dan jawaban pertama) ikut terkirim di `messages`. Amati juga:
+
+- **Badge jumlah pesan** di atas kolom chat bertambah setiap kali Anda mengirim pesan.
+- Kirim beberapa pertanyaan lagi sampai lebih dari 8 pesan — keterangan "windowing aktif" akan muncul, menandakan hanya 10 pesan terakhir yang dikirim ke NALA.
+- Klik **"Mulai percakapan baru"** — dialog konfirmasi muncul; setelah dikonfirmasi, riwayat kosong dan pertanyaan lanjutan tidak lagi memahami konteks sebelumnya (membuktikan riwayat benar-benar direset, bukan cuma tampilan yang dibersihkan).
+
+✅ **Indikator sukses**: jawaban muncul kata demi kata, badge pesan bertambah, keterangan windowing muncul setelah 8 pesan, tombol reset berfungsi dengan konfirmasi dan benar-benar mengosongkan riwayat.
 
 <details>
 <summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 6</strong></summary>
@@ -637,6 +650,14 @@ GUARDRAIL:
 ```
 
 </details>
+
+**Troubleshooting:**
+
+- **`/chat` mengembalikan 404 setelah Langkah 4**: ini **normal**, bukan bug — `/chat` sengaja dihapus total di module ini, digantikan `/chat/stream`. Kalau Anda masih mencoba memanggil `/chat` di langkah-langkah berikutnya (atau di module-module setelah ini), gunakan `/chat/stream` (body `messages`, bukan `message`).
+- **`400 Bad Request` saat memanggil `/chat/stream`**: hampir selalu berarti body request salah bentuk — pastikan mengirim `messages` (array of `{role, content}`), bukan `message` (string, itu format `/chat` yang sudah dihapus), dan pastikan elemen **terakhir** di array selalu `role: "user"`.
+- **Streaming di browser terasa "meledak sekaligus" (tidak bertahap)**: kemungkinan proxy/antivirus lokal melakukan buffering. Coba dulu lewat `curl -N` (Langkah 4) untuk memastikan server memang mengirim bertahap — kalau `curl` juga terlihat sekaligus, cek apakah `StreamingResponse` di `app/main.py` benar-benar dipanggil (bukan tertimpa jadi response biasa).
+- **Pertanyaan lanjutan tidak nyambung meski sudah di percakapan yang sama**: cek di DevTools browser (tab Network) apakah body request ke `/chat/stream` benar-benar berisi seluruh `conversation` (bukan cuma pesan terakhir) — kemungkinan state `conversation` di `chat.html` ter-reset tanpa sengaja, atau halaman sempat di-reload di antara pertanyaan.
+- **Chat menjawab generik / bilang belum ada dokumen internal**: ini **selalu normal** di module ini — `/chat/stream` belum punya logika retrieval sama sekali (baru ditambahkan di Module 13), jadi memang selalu menjawab generik, bukan tanda ada yang salah.
 
 **📄 Kode lengkap Tahap C** (`app/templates/chat.html`, versi final Module 8):
 
@@ -737,7 +758,7 @@ Mengirim **seluruh** riwayat percakapan ke Ollama di setiap request punya dua ma
 
 ## 5. Checkpoint Praktik
 
-Langkah uji coba lengkap (kirim pertanyaan berurutan, amati streaming, amati windowing, coba reset) ada di **bagian Panduan Praktik di bawah, Langkah 1-2**. Yang perlu diverifikasi sebelum lanjut ke Module 9:
+Langkah uji coba lengkap (kirim pertanyaan berurutan, amati streaming, amati windowing, coba reset) ada di **Tahap B Langkah 4** (verifikasi `/chat/stream` & `/chat` terhapus) **dan Tahap C Langkah 6** (uji multi-turn, badge, reset di browser) di atas. Yang perlu diverifikasi sebelum lanjut ke Module 9:
 
 - [ ] Jawaban NALA muncul bertahap (kata demi kata), bukan sekaligus
 - [ ] Pertanyaan lanjutan ("Kalau untuk nasabah lama?") dijawab dengan memahami konteks pertanyaan sebelumnya
@@ -746,55 +767,3 @@ Langkah uji coba lengkap (kirim pertanyaan berurutan, amati streaming, amati win
 - [ ] `/chat` (endpoint lama Module 7) sudah **dihapus** — `POST /chat` mengembalikan `404`, dites lewat `curl` seperti di Langkah 4
 
 Begitu kelima hal ini terverifikasi, lanjut ke Module 9 — yang menjawab pertanyaan "kenapa NALA butuh dokumen sama sekali?" secara konsep, sebelum Module 10 mulai membangun jawabannya secara teknis ("dokumen SOP-nya sendiri masuk ke NALA lewat mana?"). NALA di titik ini sudah terasa hidup (streaming, ingat konteks) dan **seluruhnya berbasis satu endpoint streaming** (`/chat/stream`) — tidak akan ada endpoint chat baru lagi sepanjang Module 7-16, cuma endpoint ini yang terus diperkaya (retrieval di Module 13). Jawabannya masih dari pengetahuan umum model — RAG baru masuk di Module 13.
-
-## Panduan Praktik
-
-### Prasyarat
-- Sudah menyelesaikan **Module 7** (Chat UI Dasar) — container `ollama`+`api` dari `Nala/` masih berjalan (kalau tidak, ulangi Module 7 Langkah 2)
-- Belum butuh `opensearch` atau `airflow` di module ini
-
-### Langkah 1: `/chat/stream` menggantikan `/chat` total, coba streaming
-
-Halaman chat (`http://localhost:8000`) sekarang memanggil `/chat/stream`, dan **`/chat` sudah dihapus** dari `app/main.py` — bukan cuma tidak dipanggil lagi dari frontend. Kirim pertanyaan apa saja dan perhatikan jawaban NALA **muncul bertahap kata demi kata**, bukan langsung muncul utuh seperti di Module 7. Kalau koneksi lambat, jeda antar-token akan terlihat jelas — itu tanda streaming benar-benar berjalan token-demi-token dari Ollama, bukan efek animasi di frontend.
-
-Belum ada dokumen atau RAG di titik ini — jawabannya akan tetap generik seperti Module 7, bedanya cuma **cara** jawabannya muncul (bertahap, bukan sekaligus). Lihat Bagian 2 di atas kenapa NALA sengaja pindah ke **satu** endpoint chat saja mulai sekarang — bukan mempertahankan `/chat` dan `/chat/stream` berdampingan. Streaming dulu, RAG menyusul mulai Module 13.
-
-Verifikasi bahwa `/chat` benar-benar sudah hilang, bukan cuma tidak dipakai:
-
-```bash
-curl -s -o /dev/null -w "%{http_code}\n" -X POST http://localhost:8000/chat \
-  -H "Content-Type: application/json" -d '{"message": "test"}'
-```
-
-✅ Harus `404`.
-
-Kalau ingin memverifikasi `/chat/stream` lewat `curl` (perhatikan flag `-N` supaya curl tidak buffer output dan token terlihat muncul bertahap di terminal):
-
-```bash
-curl -N -X POST http://localhost:8000/chat/stream \
-  -H "Content-Type: application/json" \
-  -d '{"messages": [{"role": "user", "content": "Halo, kamu siapa?"}]}'
-```
-
-Perhatikan bedanya dari `/chat` (sudah dihapus): body sekarang `messages` (array), bukan `message` (string tunggal), dan responsnya teks mengalir — bukan JSON `{"reply": "..."}`. **Mulai langkah ini, `/chat/stream` adalah satu-satunya endpoint chat NALA sepanjang sisa Module 7-16** — tidak akan ada endpoint chat baru lagi.
-
-### Langkah 2: Coba percakapan multi-turn
-
-Di halaman chat yang sama, kirim dua pertanyaan berurutan **tanpa reload**:
-
-1. "Berapa lama proses pengajuan kredit?"
-2. Lanjutkan dengan: "Kalau untuk nasabah yang sudah lama jadi customer?"
-
-Pertanyaan kedua tidak menyebut "kredit" atau "proses" sama sekali — NALA seharusnya tetap paham bahwa ini masih soal proses kredit, karena riwayat percakapan (termasuk pertanyaan dan jawaban pertama) ikut terkirim di `messages`. Amati juga:
-
-- **Badge jumlah pesan** di atas kolom chat bertambah setiap kali Anda mengirim pesan.
-- Kirim beberapa pertanyaan lagi sampai lebih dari 8 pesan — keterangan "windowing aktif" akan muncul, menandakan hanya 10 pesan terakhir yang dikirim ke NALA.
-- Klik **"Mulai percakapan baru"** — dialog konfirmasi muncul; setelah dikonfirmasi, riwayat kosong dan pertanyaan lanjutan tidak lagi memahami konteks sebelumnya (membuktikan riwayat benar-benar direset, bukan cuma tampilan yang dibersihkan).
-
-### Troubleshooting
-
-- **`/chat` mengembalikan 404 setelah Langkah 1**: ini **normal**, bukan bug — `/chat` sengaja dihapus total di module ini, digantikan `/chat/stream`. Kalau Anda masih mencoba memanggil `/chat` di Langkah 2 dan seterusnya (di module-module berikutnya), gunakan `/chat/stream` (body `messages`, bukan `message`).
-- **`400 Bad Request` saat memanggil `/chat/stream`**: hampir selalu berarti body request salah bentuk — pastikan mengirim `messages` (array of `{role, content}`), bukan `message` (string, itu format `/chat` yang sudah dihapus sejak Langkah 1), dan pastikan elemen **terakhir** di array selalu `role: "user"`.
-- **Streaming di browser terasa "meledak sekaligus" (tidak bertahap)**: kemungkinan proxy/antivirus lokal melakukan buffering. Coba dulu lewat `curl -N` (Langkah 1) untuk memastikan server memang mengirim bertahap — kalau `curl` juga terlihat sekaligus, cek apakah `StreamingResponse` di `app/main.py` benar-benar dipanggil (bukan tertimpa jadi response biasa).
-- **Pertanyaan lanjutan tidak nyambung meski sudah di percakapan yang sama**: cek di DevTools browser (tab Network) apakah body request ke `/chat/stream` benar-benar berisi seluruh `conversation` (bukan cuma pesan terakhir) — kemungkinan state `conversation` di `chat.html` ter-reset tanpa sengaja, atau halaman sempat di-reload di antara pertanyaan.
-- **Chat menjawab generik / bilang belum ada dokumen internal**: ini **selalu normal** di module ini — `/chat/stream` belum punya logika retrieval sama sekali (baru ditambahkan di Module 13), jadi memang selalu menjawab generik, bukan tanda ada yang salah.
