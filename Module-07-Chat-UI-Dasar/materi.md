@@ -6,7 +6,7 @@ Membangun antarmuka web dasar (`chat.html`) yang terhubung ke endpoint `/chat` M
 
 ## Definisi
 
-**Endpoint** adalah satu alamat URL plus method HTTP tertentu (misalnya `POST /chat`) yang FastAPI "dengarkan" dan proses begitu ada request yang masuk ke situ — satu aplikasi web bisa punya banyak endpoint, dan tiap endpoint punya tugasnya masing-masing. Cara kerjanya mengikuti pola **request/response cycle**: browser (atau `curl`) mengirim **request** (misalnya `{"message": "..."}`), server memprosesnya, lalu mengirim balik **response** (`{"reply": "..."}`) — seluruh komunikasi NALA dengan browser, sepanjang Module 7-16, mengikuti pola ini dalam berbagai bentuk, cuma bentuk request/response-nya yang berubah dari module ke module.
+**Endpoint** adalah satu alamat URL plus method HTTP tertentu (misalnya `POST /chat`) yang FastAPI "dengarkan" dan proses begitu ada request yang masuk ke situ — satu aplikasi web bisa punya banyak endpoint, dan tiap endpoint punya tugasnya masing-masing. Cara kerjanya mengikuti pola **request/response cycle**: browser (atau `curl`) mengirim **request** (misalnya `{"message": "..."}`), server memprosesnya, lalu mengirim balik **response** (`{"reply": "..."}`) — seluruh komunikasi NALA dengan browser, sepanjang Module 7-17, mengikuti pola ini dalam berbagai bentuk, cuma bentuk request/response-nya yang berubah dari module ke module.
 
 Bentuk data yang disepakati antara pengirim dan penerima request itu disebut **kontrak API** — di module ini, kontraknya adalah `ChatRequest{message}` → `ChatResponse{reply}`. Selama kontrak ini tidak berubah, pemanggilnya (`chat.html`) tidak perlu tahu apa yang sebenarnya terjadi di baliknya (Bagian 2) — itulah yang membuat frontend dan backend bisa dikembangkan agak independen satu sama lain. **Chat UI** sendiri adalah antarmuka web tempat user mengetik pertanyaan dan membaca jawaban — di NALA diwakili satu file `chat.html`, dirender lewat Jinja2 (Bagian 3 Tahap C).
 
@@ -28,17 +28,17 @@ sequenceDiagram
 - Mengirim pesan dari UI mengembalikan balasan NALA (masih generik/pengetahuan umum, belum RAG)
 - Kontrak `ChatRequest{message}` → `ChatResponse{reply}` terbukti tidak berubah dari Module 1-6
 - Tidak ada error di log container `api` saat chat dikirim dari UI
-- Kita punya baseline jawaban "sebelum RAG" untuk dibandingkan setelah Module 13 selesai
+- Kita punya baseline jawaban "sebelum RAG" untuk dibandingkan setelah Module 14 selesai
 - Kita paham `/chat` di module ini adalah **fondasi sementara** — Module 8 akan menggantikannya total dengan `/chat/stream`, bukan menambah endpoint di sampingnya
 
 ## 1. Kenapa Mulai dari UI, Bukan Dokumen
 
-Module 1-6 sudah membuktikan bahwa NALA bisa menjawab lewat `curl` — tapi `curl` bukan sesuatu yang akan dipakai staff PT Nusantara Finance sehari-hari. Sebelum Module 7-16 menumpuk kompleksitas baru (chunking, embedding, vector store, Airflow), langkah pertama adalah memastikan NALA bisa diakses lewat **antarmuka web** yang sama, yang nantinya dipakai sepanjang Module 7-29 — tanpa RAG dulu sama sekali.
+Module 1-6 sudah membuktikan bahwa NALA bisa menjawab lewat `curl` — tapi `curl` bukan sesuatu yang akan dipakai staff PT Nusantara Finance sehari-hari. Sebelum Module 7-17 menumpuk kompleksitas baru (chunking, embedding, vector store, Airflow), langkah pertama adalah memastikan NALA bisa diakses lewat **antarmuka web** yang sama, yang nantinya dipakai sepanjang Module 7-30 — tanpa RAG dulu sama sekali.
 
 Ini bukan langkah kosmetik. Ada dua hal konkret yang divalidasi di sini:
 
-1. **Kontrak `/chat` tidak berubah dari Module 1-6 ke Module 7-16.** `ChatRequest{message}` → `ChatResponse{reply}` persis sama — bukti bahwa fondasi Module 1-6 (Docker, Ollama, `NALA_SYSTEM_PROMPT`) memang portable, bukan kebetulan yang cuma jalan sekali. `/chat` sendiri cuma bertahan sampai Module 8 (lihat Bagian 2) — begitu streaming dibutuhkan, endpoint ini digantikan total, bukan dipertahankan di samping yang baru.
-2. **Masalah infrastruktur (Docker, network antar-container, model belum ter-pull) terdeteksi lebih awal**, sebelum ditumpuk dengan OpenSearch dan Airflow yang baru dikenalkan di Module 12 dan 14. Kalau chat dasar saja sudah gagal, jauh lebih mudah didiagnosis sekarang daripada setelah 3 service tambahan ikut jalan.
+1. **Kontrak `/chat` tidak berubah dari Module 1-6 ke Module 7-17.** `ChatRequest{message}` → `ChatResponse{reply}` persis sama — bukti bahwa fondasi Module 1-6 (Docker, Ollama, `NALA_SYSTEM_PROMPT`) memang portable, bukan kebetulan yang cuma jalan sekali. `/chat` sendiri cuma bertahan sampai Module 8 (lihat Bagian 2) — begitu streaming dibutuhkan, endpoint ini digantikan total, bukan dipertahankan di samping yang baru.
+2. **Masalah infrastruktur (Docker, network antar-container, model belum ter-pull) terdeteksi lebih awal**, sebelum ditumpuk dengan OpenSearch dan Airflow yang baru dikenalkan di Module 12 dan 15. Kalau chat dasar saja sudah gagal, jauh lebih mudah didiagnosis sekarang daripada setelah 3 service tambahan ikut jalan.
 
 ```mermaid
 flowchart LR
@@ -56,7 +56,7 @@ flowchart LR
 
 Tapi kontrak ini **tidak dirancang untuk bertahan selamanya**. Begitu Module 8 butuh streaming (jawaban muncul token demi token) dan riwayat multi-turn (butuh mengirim **array** pesan, bukan satu `message`), kontrak `{"message"} → {"reply"}` sudah tidak cukup — bentuknya sendiri (satu request, satu response JSON utuh) bertentangan dengan cara kerja streaming. Daripada mempertahankan dua endpoint dengan dua kontrak berbeda selamanya (satu untuk kompatibilitas lama, satu untuk fitur baru), Module 8 **mengganti total**: `/chat` dihapus, `/chat/stream` menjadi satu-satunya endpoint chat NALA sejak saat itu — konsisten dengan keputusan "NALA seluruhnya berbasis streaming mulai Module 8" (lihat Module 8 Bagian 2 untuk alasan lengkapnya).
 
-`chat.html` sendiri **akan berubah lebih awal dari yang mungkin terlihat wajar** — sudah di Module 8 (bukan menunggu sampai Module 13), karena streaming dan riwayat multi-turn butuh cara berbeda mengirim dan menampilkan pesan. Anggap Module 7 sebagai **jembatan sekali pakai**: cukup untuk membuktikan UI ↔ FastAPI ↔ Ollama tersambung, sebelum bentuk akhirnya (streaming) dibangun di atasnya.
+`chat.html` sendiri **akan berubah lebih awal dari yang mungkin terlihat wajar** — sudah di Module 8 (bukan menunggu sampai Module 14), karena streaming dan riwayat multi-turn butuh cara berbeda mengirim dan menampilkan pesan. Anggap Module 7 sebagai **jembatan sekali pakai**: cukup untuk membuktikan UI ↔ FastAPI ↔ Ollama tersambung, sebelum bentuk akhirnya (streaming) dibangun di atasnya.
 
 ## 3. Struktur Kode yang Ditambahkan
 
@@ -73,11 +73,11 @@ Dibanding starter code Module 1-6, ada tiga penambahan di `Nala/`. Daripada lang
 **Langkah 0 — Prasyarat sebelum mulai**
 
 - Sudah menyelesaikan **Module 1-6** (Docker Desktop terinstall, `llama3.2:3b` pernah dipakai, familiar dengan `docker compose up --build`).
-- **`Nala/`** adalah satu-satunya folder kerja Anda, dipakai sejak Module 1-6 dan terus sama sepanjang Module 7-29 — panduan Module 7-16 membangunnya **bertahap, module demi module, langsung di tempat**, bukan disalin ke folder baru. `ollama_client.py`, `system_prompt.py`, `main.py`, `docker-compose.yml`, dan seterusnya sudah ada di sana dari Module 1-6. Konsekuensinya: **tidak ada folder lain untuk dipindahkan, dan tidak ada container yang perlu dimatikan** — container Ollama yang sudah jalan sejak Module 1-6 terus dipakai apa adanya (project Docker Compose-nya sama, karena foldernya sama), dan model yang sudah di-pull otomatis ikut terbawa, tidak perlu di-pull ulang.
+- **`Nala/`** adalah satu-satunya folder kerja Anda, dipakai sejak Module 1-6 dan terus sama sepanjang Module 7-30 — panduan Module 7-17 membangunnya **bertahap, module demi module, langsung di tempat**, bukan disalin ke folder baru. `ollama_client.py`, `system_prompt.py`, `main.py`, `docker-compose.yml`, dan seterusnya sudah ada di sana dari Module 1-6. Konsekuensinya: **tidak ada folder lain untuk dipindahkan, dan tidak ada container yang perlu dimatikan** — container Ollama yang sudah jalan sejak Module 1-6 terus dipakai apa adanya (project Docker Compose-nya sama, karena foldernya sama), dan model yang sudah di-pull otomatis ikut terbawa, tidak perlu di-pull ulang.
 
-⚠️ **Naikkan alokasi RAM Docker Desktop sebelum Module 16.** Module 7-16 menambahkan dua service baru di atas stack Module 1-6: **OpenSearch** (vector store, mulai Module 12) dan **Airflow** (orchestrator, mode `standalone`, mulai Module 16) — keduanya jauh lebih berat dibanding FastAPI/Ollama saja: OpenSearch adalah JVM yang butuh heap tersendiri, dan Airflow standalone menjalankan webserver + scheduler + database sekaligus dalam satu container. Kalau di Module 1-6 Anda mengalokasikan Docker Desktop di batas minimal (8–12GB), **naikkan ke 16GB+**. Ikuti langkah yang sama seperti **Langkah 0 di `Module-04-Setup-Infra-Docker-Compose/materi.md`, section 3.4** (Docker Desktop → ⚙️ Settings → tab Resources):
+⚠️ **Naikkan alokasi RAM Docker Desktop sebelum Module 17.** Module 7-17 menambahkan dua service baru di atas stack Module 1-6: **OpenSearch** (vector store, mulai Module 12) dan **Airflow** (orchestrator, mode `standalone`, mulai Module 17) — keduanya jauh lebih berat dibanding FastAPI/Ollama saja: OpenSearch adalah JVM yang butuh heap tersendiri, dan Airflow standalone menjalankan webserver + scheduler + database sekaligus dalam satu container. Kalau di Module 1-6 Anda mengalokasikan Docker Desktop di batas minimal (8–12GB), **naikkan ke 16GB+**. Ikuti langkah yang sama seperti **Langkah 0 di `Module-04-Setup-Infra-Docker-Compose/materi.md`, section 3.4** (Docker Desktop → ⚙️ Settings → tab Resources):
 
-| Setting | Minimal Module 7-16 | Direkomendasikan | Alasan |
+| Setting | Minimal Module 7-17 | Direkomendasikan | Alasan |
 |---|---|---|---|
 | **Memory (RAM)** | 8 GB | 16 GB+ | `llama3.2:3b` (~4-6GB) + `nomic-embed-text` + OpenSearch (heap `-Xms512m -Xmx512m` minimal, tapi JVM + OS overhead-nya lebih besar dari itu) + Airflow standalone (webserver+scheduler+metadata DB dalam satu proses) berjalan bersamaan. |
 | **CPUs** | 4 | 4+ | 4 service (ollama, opensearch, airflow, api) aktif sekaligus. |
@@ -86,7 +86,7 @@ Dibanding starter code Module 1-6, ada tiga penambahan di `Nala/`. Daripada lang
 
 Kalau Anda sudah mengubah setting ini di Module 1-6 ke 16GB+, tidak perlu diubah lagi. Setelah mengubah, klik **Apply & Restart**.
 
-Catatan: panduan Module 7-16 menyalakan service **secara bertahap**, mengikuti urutan module — `ollama`+`api` dulu di Langkah 1 di bawah (Module 7-10 cuma butuh ini — Module 9 malah tidak butuh service apa pun, murni diskusi), `opensearch` menyusul di Module 12, `airflow` terakhir di Module 16 — jadi beban RAM di Module 7-11 jauh lebih ringan dari 16GB. Alokasi 16GB+ tetap perlu disiapkan sebelum Module 16, begitu keempat service jalan bersamaan.
+Catatan: panduan Module 7-17 menyalakan service **secara bertahap**, mengikuti urutan module — `ollama`+`api` dulu di Langkah 1 di bawah (Module 7-10 cuma butuh ini — Module 9 malah tidak butuh service apa pun, murni diskusi), `opensearch` menyusul di Module 12, `airflow` terakhir di Module 17 — jadi beban RAM di Module 7-11 jauh lebih ringan dari 16GB. Alokasi 16GB+ tetap perlu disiapkan sebelum Module 17, begitu keempat service jalan bersamaan.
 
 Kalau disk mulai penuh, bersihkan image/volume lama yang tidak terpakai (lihat peringatan di `Module-04-Setup-Infra-Docker-Compose/materi.md`, section 3.4, soal `docker system prune -a --volumes` — perintah ini menghapus model Ollama yang sudah di-pull juga).
 
@@ -108,7 +108,7 @@ cd Nala
 docker compose up --build --no-deps ollama api
 ```
 
-Stack Module 7-16 total punya 4 service (`ollama`, `opensearch`, `airflow`, `api`), tapi Module 7-10 (chat UI, streaming/multi-turn, konsep RAG, data seed — Module 9 murni diskusi konsep, tidak butuh service sama sekali) cuma butuh **dua yang pertama** — `opensearch` baru dipakai mulai Module 12, `airflow` baru dipakai mulai Module 16. Flag `--no-deps` penting: tanpa itu, Docker Compose otomatis ikut menyalakan `opensearch` karena `api` punya `depends_on: opensearch` di `docker-compose.yml`. Dengan `--no-deps`, benar-benar hanya 2 container yang jalan — dan ini aman meski `api` "seharusnya" nantinya butuh OpenSearch, karena di titik ini `/chat` belum menyentuh OpenSearch sama sekali (lihat Module 13 Bagian 2 Langkah 3 dan Module 15 Bagian 2 Tahap B untuk penjelasan fallback-nya begitu Anda sampai di situ).
+Stack Module 7-17 total punya 4 service (`ollama`, `opensearch`, `airflow`, `api`), tapi Module 7-10 (chat UI, streaming/multi-turn, konsep RAG, data seed — Module 9 murni diskusi konsep, tidak butuh service sama sekali) cuma butuh **dua yang pertama** — `opensearch` baru dipakai mulai Module 12, `airflow` baru dipakai mulai Module 17. Flag `--no-deps` penting: tanpa itu, Docker Compose otomatis ikut menyalakan `opensearch` karena `api` punya `depends_on: opensearch` di `docker-compose.yml`. Dengan `--no-deps`, benar-benar hanya 2 container yang jalan — dan ini aman meski `api` "seharusnya" nantinya butuh OpenSearch, karena di titik ini `/chat` belum menyentuh OpenSearch sama sekali (lihat Module 14 Bagian 2 Langkah 3 dan Module 16 Bagian 2 Tahap B untuk penjelasan fallback-nya begitu Anda sampai di situ).
 
 Tunggu sampai log `api` menunjukkan `Uvicorn running on http://0.0.0.0:8000` — jauh lebih cepat dari menyalakan keempat service sekaligus, karena tidak perlu menunggu inisialisasi cluster OpenSearch atau database metadata Airflow.
 
@@ -141,7 +141,7 @@ curl -X POST http://localhost:8000/chat \
 - **`failed to read dockerfile: open Dockerfile: no such file or directory`**: nama file salah — harus persis `Dockerfile`. Cek dengan `ls` dan rename kalau perlu: `mv DockerFile Dockerfile`.
 - **`Internal Server Error` saat chat**: cek dulu model Ollama sudah ter-pull (`docker compose exec ollama ollama list`) — di titik ini baru `llama3.2:3b` yang dibutuhkan. Detail traceback Python bisa dilihat di log container `api` (terminal yang menjalankan `docker compose up` di atas).
 - **Port sudah dipakai (8000/11434)**: ubah mapping port di `docker-compose.yml` untuk service yang bentrok (misal `8001:8000`).
-- **Semua service terasa sangat lambat / laptop panas / container ter-*kill***: kemungkinan besar alokasi RAM Docker Desktop kurang — lihat Langkah 0 di atas. Cek pemakaian resource real-time dengan `docker stats`. Beban RAM di module ini masih ringan (cuma `ollama`+`api`); ini jadi penting begitu `opensearch` (Module 12) dan `airflow` (Module 16) ikut menyala.
+- **Semua service terasa sangat lambat / laptop panas / container ter-*kill***: kemungkinan besar alokasi RAM Docker Desktop kurang — lihat Langkah 0 di atas. Cek pemakaian resource real-time dengan `docker stats`. Beban RAM di module ini masih ringan (cuma `ollama`+`api`); ini jadi penting begitu `opensearch` (Module 12) dan `airflow` (Module 17) ikut menyala.
 
 <details>
 <summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 1</strong></summary>
@@ -401,7 +401,7 @@ GUARDRAIL:
 jinja2==3.1.4
 ```
 
-Pola ini akan berulang di module-module berikutnya: `python-multipart` ditambahkan tepat saat Module 14 butuh upload file, dependency OpenSearch/Airflow ditambahkan tepat saat Module 12 dan 14 membutuhkannya — bukan diborong semua di awal.
+Pola ini akan berulang di module-module berikutnya: `python-multipart` ditambahkan tepat saat Module 15 butuh upload file, dependency OpenSearch/Airflow ditambahkan tepat saat Module 12 dan 15 membutuhkannya — bukan diborong semua di awal.
 
 <details>
 <summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 4</strong></summary>
@@ -603,12 +603,12 @@ Setelah Langkah 1-6 (Tahap A-C), `app/main.py` Anda seharusnya cocok dengan **�
 Untuk menjaga fokus, Module 7 sengaja **tidak** menyentuh:
 - Streaming atau riwayat multi-turn (Module 8 — endpoint `/chat/stream` **menggantikan** `/chat`, dibangun di atas fondasi module ini)
 - Konsep RAG (Module 9), data seed (Module 10, belum ada chunking)
-- Embedding (Module 11), vector search (Module 12)
-- Retrieval yang benar-benar dipakai `/chat/stream` (Module 13, versi tanpa chunking)
-- Chunking (Module 14) dan upload dokumen (Module 15, halaman `/upload`)
-- Airflow (Module 16)
+- Embedding (Module 11), vector search (Module 13)
+- Retrieval yang benar-benar dipakai `/chat/stream` (Module 14, versi tanpa chunking)
+- Chunking (Module 15) dan upload dokumen (Module 16, halaman `/upload`)
+- Airflow (Module 17)
 
-Kalau dicoba di titik ini, jawaban NALA akan terasa "biasa saja" — sama seperti Module 1-6 — dan itu **memang tujuannya**: memberi kita garis dasar (baseline) yang jelas untuk dibandingkan setelah RAG mulai aktif di Module 13. Perbedaan sebelum-dan-sesudah ini adalah salah satu momen belajar paling nyata di Module 7-16.
+Kalau dicoba di titik ini, jawaban NALA akan terasa "biasa saja" — sama seperti Module 1-6 — dan itu **memang tujuannya**: memberi kita garis dasar (baseline) yang jelas untuk dibandingkan setelah RAG mulai aktif di Module 14. Perbedaan sebelum-dan-sesudah ini adalah salah satu momen belajar paling nyata di Module 7-17.
 
 ## 5. Checkpoint Praktik
 
@@ -618,4 +618,4 @@ Langkah eksekusi lengkap (menjalankan `docker compose up`, membuka `http://local
 - [ ] Mengirim pesan dari UI mengembalikan balasan dari NALA (walau jawabannya generik)
 - [ ] Tidak ada error di log container `api` saat chat dikirim
 
-Begitu ketiga hal ini terverifikasi, lanjut ke Module 8 — yang membuat balasan NALA terasa hidup lewat streaming dan mengingat konteks percakapan sebelumnya (multi-turn), sebelum Module 7-16 menumpuk kompleksitas dokumen/RAG.
+Begitu ketiga hal ini terverifikasi, lanjut ke Module 8 — yang membuat balasan NALA terasa hidup lewat streaming dan mengingat konteks percakapan sebelumnya (multi-turn), sebelum Module 7-17 menumpuk kompleksitas dokumen/RAG.

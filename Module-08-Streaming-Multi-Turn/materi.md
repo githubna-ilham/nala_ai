@@ -2,7 +2,7 @@
 
 ## Tujuan
 
-Mengganti total endpoint `/chat` (Module 7) dengan `POST /chat/stream` — menjawab secara streaming (token demi token) dan mengingat riwayat percakapan (multi-turn). Mulai module ini, **NALA seluruhnya berbasis streaming**: `/chat/stream` menjadi satu-satunya endpoint chat, dipakai terus sampai Module 7-16 selesai (RAG di Module 13, chunking di Module 14, upload di Module 15 semuanya dibangun di atas endpoint ini, bukan endpoint baru lagi) — belum ada RAG di module ini, itu baru masuk Module 13.
+Mengganti total endpoint `/chat` (Module 7) dengan `POST /chat/stream` — menjawab secara streaming (token demi token) dan mengingat riwayat percakapan (multi-turn). Mulai module ini, **NALA seluruhnya berbasis streaming**: `/chat/stream` menjadi satu-satunya endpoint chat, dipakai terus sampai Module 7-17 selesai (RAG di Module 14, chunking di Module 15, upload di Module 16 semuanya dibangun di atas endpoint ini, bukan endpoint baru lagi) — belum ada RAG di module ini, itu baru masuk Module 14.
 
 ## Definisi
 
@@ -42,7 +42,7 @@ Module 7 sudah membuktikan `/chat` bisa diakses lewat browser — tapi dua hal m
 1. **Tidak ada streaming.** `/chat` menunggu `ollama_client.generate()` selesai total sebelum mengembalikan jawaban. Untuk jawaban panjang (beberapa kalimat SOP), user menatap layar kosong selama beberapa detik tanpa tanda apa pun sedang terjadi.
 2. **Tidak ada memori percakapan.** Setiap pesan diperlakukan sebagai percakapan baru. Kalau user bertanya "Berapa lama proses kredit?" lalu lanjut "Kalau untuk nasabah lama?", NALA tidak tahu "itu" merujuk ke pertanyaan sebelumnya — karena `/chat` hanya menerima satu `message`, tanpa riwayat.
 
-Module ini menyelesaikan keduanya sekaligus lewat satu endpoint baru: `POST /chat/stream`, yang **menggantikan** `/chat` sepenuhnya (Bagian 2 menjelaskan kenapa mengganti, bukan menambah). **Belum ada RAG di titik ini** — Module 9-12 belum dikerjakan, jadi belum ada konsep RAG yang dibahas, dokumen, embedding, atau vector store untuk di-retrieve. `/chat/stream` di module ini murni streaming + riwayat, memakai `NALA_SYSTEM_PROMPT` polos yang sama seperti `/chat` sebelumnya. Module 13 nanti yang menambahkan retrieval ke endpoint ini — satu-satunya endpoint chat yang tersisa sejak module ini.
+Module ini menyelesaikan keduanya sekaligus lewat satu endpoint baru: `POST /chat/stream`, yang **menggantikan** `/chat` sepenuhnya (Bagian 2 menjelaskan kenapa mengganti, bukan menambah). **Belum ada RAG di titik ini** — Module 9-13 belum dikerjakan, jadi belum ada konsep RAG yang dibahas, dokumen, embedding, atau vector store untuk di-retrieve. `/chat/stream` di module ini murni streaming + riwayat, memakai `NALA_SYSTEM_PROMPT` polos yang sama seperti `/chat` sebelumnya. Module 14 nanti yang menambahkan retrieval ke endpoint ini — satu-satunya endpoint chat yang tersisa sejak module ini.
 
 ```mermaid
 sequenceDiagram
@@ -67,7 +67,7 @@ sequenceDiagram
 
 Ada dua pilihan desain di titik ini: (a) tambah `/chat/stream` **di samping** `/chat` yang sudah ada, biarkan keduanya hidup berdampingan selamanya, atau (b) **ganti total** — hapus `/chat`, `/chat/stream` jadi satu-satunya endpoint chat. NALA memilih **(b)**, dan alasannya bukan sekadar selera:
 
-- **Dua endpoint dengan dua kontrak berarti dua jalur kode yang harus terus disinkronkan.** Mulai Module 13, retrieval (RAG) ditambahkan ke endpoint chat — kalau ada dua endpoint, setiap fitur baru (retrieval Module 13, tuning `top_k` Module 14) harus ditulis **dua kali**, dengan risiko nyata keduanya diam-diam jadi tidak sinkron (satu di-update, satu lupa). Satu endpoint berarti satu jalur kode, satu tempat untuk tiap fitur baru.
+- **Dua endpoint dengan dua kontrak berarti dua jalur kode yang harus terus disinkronkan.** Mulai Module 14, retrieval (RAG) ditambahkan ke endpoint chat — kalau ada dua endpoint, setiap fitur baru (retrieval Module 14, tuning `top_k` Module 15) harus ditulis **dua kali**, dengan risiko nyata keduanya diam-diam jadi tidak sinkron (satu di-update, satu lupa). Satu endpoint berarti satu jalur kode, satu tempat untuk tiap fitur baru.
 - **Kontrak `/chat` (`{"message"} → {"reply"}`, satu response JSON utuh) secara fundamental tidak cocok dengan streaming** — bukan soal "belum diperbarui", tapi bentuknya sendiri mengasumsikan jawaban selesai dulu baru dikirim. Mempertahankannya di samping `/chat/stream` bukan backward-compatibility yang berguna, cuma dua cara berbeda melakukan hal yang sama, salah satunya terasa jauh lebih kaku (Langkah 4 di Module 7).
 - **Staff PT Nusantara Finance cuma akan pakai satu antarmuka** (`chat.html`) — tidak ada kebutuhan nyata di NALA untuk endpoint non-streaming yang dipakai paralel oleh sistem lain. Kalau kebutuhan itu muncul nanti, lebih jelas membangunnya sebagai endpoint terpisah dengan tujuan eksplisit, bukan mempertahankan sisa dari Module 7 "karena mungkin masih dipakai".
 
@@ -313,7 +313,7 @@ def chat_stream(request: ChatStreamRequest) -> StreamingResponse:
 Di `app/main.py`, hapus seluruh fungsi `chat()` (`@app.post("/chat", response_model=ChatResponse)` beserta isinya, dari Module 7) — endpoint di atas menggantikannya, bukan menambahinya. `ChatRequest` dan `ChatResponse` (Pydantic models, Module 7) juga boleh dihapus sekalian karena sejak titik ini tidak ada lagi yang memakainya.
 
 - **Validasi eksplisit**: pesan terakhir wajib `role: "user"` — kalau tidak, FastAPI langsung menolak dengan `400`, sebelum sempat memanggil Ollama sama sekali.
-- **Belum ada retrieval** — `ollama_messages` disusun langsung dari `NALA_SYSTEM_PROMPT` + riwayat pesan, tanpa langkah pencarian dokumen apa pun. Ini konsisten dengan `/chat` di Module 7 (juga belum RAG). Module 13 yang nanti menambahkan retrieval ke endpoint ini — **satu-satunya** endpoint chat yang tersisa.
+- **Belum ada retrieval** — `ollama_messages` disusun langsung dari `NALA_SYSTEM_PROMPT` + riwayat pesan, tanpa langkah pencarian dokumen apa pun. Ini konsisten dengan `/chat` di Module 7 (juga belum RAG). Module 14 yang nanti menambahkan retrieval ke endpoint ini — **satu-satunya** endpoint chat yang tersisa.
 - `StreamingResponse(ollama_client.chat_stream(...), media_type="text/plain")` — generator dari Tahap A dipasangkan langsung sebagai body response, `media_type="text/plain"` karena responnya teks biasa, bukan JSON.
 
 **▶️ Jalankan & lihat hasilnya**
@@ -330,7 +330,7 @@ curl -N -X POST http://localhost:8000/chat/stream \
 
 ✅ **Indikator sukses**: teks balasan NALA muncul **bertahap** di terminal (flag `-N` mencegah `curl` buffer output) — bukan sekaligus di akhir. Kalau koneksi lambat, jeda antar-token akan terlihat jelas — itu tanda streaming benar-benar berjalan token-demi-token dari Ollama, bukan efek animasi di frontend. Coba juga kirim `messages` kosong (`{"messages": []}`) dan pastikan responsnya `400`, bukan `500` atau hang.
 
-Perhatikan bedanya dari `/chat` (sudah dihapus): body sekarang `messages` (array), bukan `message` (string tunggal), dan responsnya teks mengalir — bukan JSON `{"reply": "..."}`. **Mulai langkah ini, `/chat/stream` adalah satu-satunya endpoint chat NALA sepanjang sisa Module 7-16** — tidak akan ada endpoint chat baru lagi.
+Perhatikan bedanya dari `/chat` (sudah dihapus): body sekarang `messages` (array), bukan `message` (string tunggal), dan responsnya teks mengalir — bukan JSON `{"reply": "..."}`. **Mulai langkah ini, `/chat/stream` adalah satu-satunya endpoint chat NALA sepanjang sisa Module 7-17** — tidak akan ada endpoint chat baru lagi.
 
 Verifikasi juga bahwa `/chat` benar-benar sudah hilang, bukan cuma tidak dipakai:
 
@@ -380,7 +380,7 @@ GUARDRAIL:
   ada — hapus semuanya, jangan cuma berhenti memanggilnya dari
   chat.html.
 - JANGAN tambah logika retrieval/embedding/vector search — itu baru
-  masuk di Module 13.
+  masuk di Module 14.
 - JANGAN ubah app/templates/chat.html di langkah ini — itu Tahap C.
 ```
 
@@ -657,7 +657,7 @@ GUARDRAIL:
 - **`400 Bad Request` saat memanggil `/chat/stream`**: hampir selalu berarti body request salah bentuk — pastikan mengirim `messages` (array of `{role, content}`), bukan `message` (string, itu format `/chat` yang sudah dihapus), dan pastikan elemen **terakhir** di array selalu `role: "user"`.
 - **Streaming di browser terasa "meledak sekaligus" (tidak bertahap)**: kemungkinan proxy/antivirus lokal melakukan buffering. Coba dulu lewat `curl -N` (Langkah 4) untuk memastikan server memang mengirim bertahap — kalau `curl` juga terlihat sekaligus, cek apakah `StreamingResponse` di `app/main.py` benar-benar dipanggil (bukan tertimpa jadi response biasa).
 - **Pertanyaan lanjutan tidak nyambung meski sudah di percakapan yang sama**: cek di DevTools browser (tab Network) apakah body request ke `/chat/stream` benar-benar berisi seluruh `conversation` (bukan cuma pesan terakhir) — kemungkinan state `conversation` di `chat.html` ter-reset tanpa sengaja, atau halaman sempat di-reload di antara pertanyaan.
-- **Chat menjawab generik / bilang belum ada dokumen internal**: ini **selalu normal** di module ini — `/chat/stream` belum punya logika retrieval sama sekali (baru ditambahkan di Module 13), jadi memang selalu menjawab generik, bukan tanda ada yang salah.
+- **Chat menjawab generik / bilang belum ada dokumen internal**: ini **selalu normal** di module ini — `/chat/stream` belum punya logika retrieval sama sekali (baru ditambahkan di Module 14), jadi memang selalu menjawab generik, bukan tanda ada yang salah.
 
 **📄 Kode lengkap Tahap C** (`app/templates/chat.html`, versi final Module 8):
 
@@ -754,7 +754,7 @@ Mengirim **seluruh** riwayat percakapan ke Ollama di setiap request punya dua ma
 1. **Context window model terbatas.** `llama3.2:3b` punya batas token yang jauh lebih kecil dari model-model besar — riwayat yang terus bertambah akhirnya melampaui batas ini dan menyebabkan error atau model "lupa" instruksi awal.
 2. **Biaya komputasi naik linear.** Setiap pesan tambahan berarti lebih banyak token yang harus diproses ulang oleh model di setiap request — percakapan panjang jadi terasa makin lambat.
 
-`HISTORY_WINDOW = 10` di `app/main.py` (Tahap B, Langkah 3) membatasi jumlah pesan yang dikirim ke 10 pesan **terakhir** saja (`request.messages[-HISTORY_WINDOW:]`) — pesan yang lebih lama tetap tersimpan di browser (state `conversation` di `chat.html`) untuk ditampilkan, tapi tidak lagi dikirim ke model. Ini strategi paling sederhana untuk membatasi context; alternatif yang lebih canggih (ringkasan otomatis atas riwayat lama, retrieval atas riwayat panjang) ada di luar cakupan Module 7-16.
+`HISTORY_WINDOW = 10` di `app/main.py` (Tahap B, Langkah 3) membatasi jumlah pesan yang dikirim ke 10 pesan **terakhir** saja (`request.messages[-HISTORY_WINDOW:]`) — pesan yang lebih lama tetap tersimpan di browser (state `conversation` di `chat.html`) untuk ditampilkan, tapi tidak lagi dikirim ke model. Ini strategi paling sederhana untuk membatasi context; alternatif yang lebih canggih (ringkasan otomatis atas riwayat lama, retrieval atas riwayat panjang) ada di luar cakupan Module 7-17.
 
 ## 5. Checkpoint Praktik
 
@@ -766,4 +766,4 @@ Langkah uji coba lengkap (kirim pertanyaan berurutan, amati streaming, amati win
 - [ ] Tombol reset meminta konfirmasi dan benar-benar mengosongkan riwayat
 - [ ] `/chat` (endpoint lama Module 7) sudah **dihapus** — `POST /chat` mengembalikan `404`, dites lewat `curl` seperti di Langkah 4
 
-Begitu kelima hal ini terverifikasi, lanjut ke Module 9 — yang menjawab pertanyaan "kenapa NALA butuh dokumen sama sekali?" secara konsep, sebelum Module 10 mulai membangun jawabannya secara teknis ("dokumen SOP-nya sendiri masuk ke NALA lewat mana?"). NALA di titik ini sudah terasa hidup (streaming, ingat konteks) dan **seluruhnya berbasis satu endpoint streaming** (`/chat/stream`) — tidak akan ada endpoint chat baru lagi sepanjang Module 7-16, cuma endpoint ini yang terus diperkaya (retrieval di Module 13). Jawabannya masih dari pengetahuan umum model — RAG baru masuk di Module 13.
+Begitu kelima hal ini terverifikasi, lanjut ke Module 9 — yang menjawab pertanyaan "kenapa NALA butuh dokumen sama sekali?" secara konsep, sebelum Module 10 mulai membangun jawabannya secara teknis ("dokumen SOP-nya sendiri masuk ke NALA lewat mana?"). NALA di titik ini sudah terasa hidup (streaming, ingat konteks) dan **seluruhnya berbasis satu endpoint streaming** (`/chat/stream`) — tidak akan ada endpoint chat baru lagi sepanjang Module 7-17, cuma endpoint ini yang terus diperkaya (retrieval di Module 14). Jawabannya masih dari pengetahuan umum model — RAG baru masuk di Module 14.
