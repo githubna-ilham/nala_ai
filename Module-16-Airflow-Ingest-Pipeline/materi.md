@@ -217,13 +217,13 @@ Untuk Module 16 training, DAG `ingest_documents` dijadwalkan **manual trigger on
 ### 6.2 Trigger via CLI
 
 ```bash
-docker-compose exec airflow airflow dags trigger ingest_documents
+docker compose exec airflow airflow dags trigger ingest_documents
 ```
 
 Memonitor dari CLI:
 ```bash
-docker-compose exec airflow airflow dags list-runs --dag-id ingest_documents
-docker-compose exec airflow airflow tasks logs ingest_documents <RUN_ID> ingest_documents
+docker compose exec airflow airflow dags list-runs --dag-id ingest_documents
+docker compose exec airflow airflow tasks logs ingest_documents <RUN_ID> ingest_documents
 ```
 
 ### 6.3 Perbedaan: Trigger Manual vs Scheduled
@@ -253,6 +253,10 @@ Format cron `schedule` — lima field `menit jam tanggal bulan hari-minggu`: `"0
 ## 7. Struktur Kode yang Ditambahkan
 
 Cuma **satu Tahap** — `ingest_documents()` (Module 13, di-upgrade Module 14) dan upload (Module 15) sudah selesai duluan, module ini murni menambahkan **service Airflow + DAG**, tidak ada perubahan `app/ingest.py` atau `app/main.py` sama sekali.
+
+**Prasyarat sebelum mulai:**
+- Sudah menyelesaikan **Module 15** (Upload Dokumen).
+- RAM Docker Desktop di 16GB+ (lihat Module 7, Tahap A Langkah 0 — catatan ⚠️ RAM Docker Desktop) — di langkah ini keempat service (`ollama`, `opensearch`, `airflow`, `api`) akan jalan bersamaan untuk pertama kalinya.
 
 **Langkah 1 — Tambah service `airflow` di `docker-compose.yml`**
 
@@ -284,6 +288,41 @@ Tambahkan sebagai service baru (sejajar dengan `ollama`, `opensearch`, `api`). E
 - **`./app:/opt/airflow/dags/app`**: DAG (Langkah 2) memanggil `from app.ingest import ingest_documents` — supaya `import` itu berhasil **di dalam** container Airflow (terpisah dari container `api`), folder `app/` yang sama dipasang lagi di situ.
 - **`../../../sample-knowledge-base:/opt/airflow/knowledge-base`**: volume terpisah dari yang dipakai `api` (`/app/knowledge-base`) — path beda, tapi **folder sumber di laptop Anda sama persis**.
 - **`_PIP_ADDITIONAL_REQUIREMENTS=pypdf==5.1.0 httpx==0.27.2`**: **wajib**, tanpa ini task DAG gagal dengan `ModuleNotFoundError: No module named 'pypdf'`. Penyebabnya: container `api` di-build dari `Dockerfile` yang menginstall seluruh `requirements.txt`, tapi container `airflow` pakai image `apache/airflow:2.10.2` mentah — tidak pernah menginstall dependency aplikasi kita.
+
+<details>
+<summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 1</strong></summary>
+
+```
+Tambah service airflow di docker-compose.yml (Module 16, Langkah 1).
+
+GOAL:
+- Di Nala/docker-compose.yml: tambah
+  service baru `airflow` (image apache/airflow:2.10.2, command
+  standalone, environment AIRFLOW__CORE__LOAD_EXAMPLES=false,
+  AIRFLOW__CORE__DAGS_FOLDER=/opt/airflow/dags,
+  OLLAMA_BASE_URL=http://ollama:11434,
+  OPENSEARCH_BASE_URL=http://opensearch:9200,
+  _PIP_ADDITIONAL_REQUIREMENTS="pypdf==5.1.0 httpx==0.27.2" (WAJIB —
+  tanpa ini task DAG gagal dengan ModuleNotFoundError), port
+  8080:8080, volumes ./airflow/dags:/opt/airflow/dags,
+  ./app:/opt/airflow/dags/app,
+  ../../../sample-knowledge-base:/opt/airflow/knowledge-base,
+  depends_on opensearch dan ollama).
+
+CONTEXT:
+- app/ingest.py sudah punya ingest_documents() dari Module 13 (versi
+  chunking dari Module 14) — service ini disiapkan supaya DAG
+  (Langkah 2, belum dibuat di langkah ini) bisa memanggilnya nanti.
+
+GUARDRAIL:
+- JANGAN ubah service ollama, opensearch, atau api yang sudah ada di
+  docker-compose.yml — cuma tambah service airflow baru.
+- JANGAN buat file DAG apa pun di langkah ini — itu Langkah 2.
+- JANGAN ubah app/main.py atau app/ingest.py — module ini murni
+  infrastruktur Airflow, bukan logika ingest baru.
+```
+
+</details>
 
 **Langkah 2 — Buat `airflow/dags/ingest_documents_dag.py`**
 
@@ -318,78 +357,36 @@ with DAG(
     )
 ```
 
-**▶️ Jalankan & lihat hasilnya**
-
-```bash
-docker compose up -d --build airflow
-docker compose logs -f airflow
-```
-
-Tunggu sampai muncul baris log berisi `password`, lalu buka `http://localhost:8080`, login, cari DAG `ingest_documents`, klik **Trigger DAG**.
-
-✅ **Indikator sukses**: DAG run berstatus `success` (hijau), log task menunjukkan jumlah chunk yang ter-index. Verifikasi: `curl "http://localhost:9200/nala-docs/_count"`.
-
-**Verifikasi akhir — dokumen dari Airflow langsung bisa ditanya**: coba tanyakan sesuatu ke `/chat/stream` yang jawabannya ada di dokumen yang baru saja di-trigger-ulang lewat Airflow — **tanpa mengubah satu baris pun kode `/chat/stream`** (Module 13). Ini bukti nyata bahwa retrieval generik terhadap sumber data: tidak peduli dokumen masuk lewat CLI manual (Module 13), form upload (Module 15), atau Airflow (module ini), `/chat/stream` selalu membaca index `nala-docs` yang sama.
-
 <details>
-<summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 1-2</strong></summary>
+<summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 2</strong></summary>
 
 ```
-Tambah service airflow di docker-compose.yml dan buat DAG
-ingest_documents (Module 16).
+Buat DAG ingest_documents (Module 16, Langkah 2).
 
 GOAL:
-- Di Nala/docker-compose.yml: tambah
-  service baru `airflow` (image apache/airflow:2.10.2, command
-  standalone, environment AIRFLOW__CORE__LOAD_EXAMPLES=false,
-  AIRFLOW__CORE__DAGS_FOLDER=/opt/airflow/dags,
-  OLLAMA_BASE_URL=http://ollama:11434,
-  OPENSEARCH_BASE_URL=http://opensearch:9200,
-  _PIP_ADDITIONAL_REQUIREMENTS="pypdf==5.1.0 httpx==0.27.2" (WAJIB —
-  tanpa ini task DAG gagal dengan ModuleNotFoundError), port
-  8080:8080, volumes ./airflow/dags:/opt/airflow/dags,
-  ./app:/opt/airflow/dags/app,
-  ../../../sample-knowledge-base:/opt/airflow/knowledge-base,
-  depends_on opensearch dan ollama).
 - Buat Nala/airflow/dags/ingest_documents_dag.py
   persis seperti kode di Bagian 4.2 materi.md (DAG dag_id
   "ingest_documents", satu PythonOperator yang panggil wrapper
   run_ingest() yang memanggil ingest_documents("/opt/airflow/knowledge-base")
   dari app.ingest, schedule=None, catchup=False).
+- Buat dulu folder airflow/dags/ kalau belum ada.
 
 CONTEXT:
 - app/ingest.py sudah punya ingest_documents() dari Module 13 (versi
   chunking dari Module 14) — DAG ini cuma memanggilnya, tidak menulis
   ulang logikanya.
+- Service airflow di docker-compose.yml (Langkah 1) sudah dipasang
+  duluan dan sudah me-mount ./airflow/dags ke /opt/airflow/dags.
 
 GUARDRAIL:
-- JANGAN ubah service ollama, opensearch, atau api yang sudah ada di
-  docker-compose.yml — cuma tambah service airflow baru.
+- JANGAN ubah docker-compose.yml — itu sudah selesai di Langkah 1.
 - JANGAN ubah app/main.py atau app/ingest.py — module ini murni
-  infrastruktur Airflow + DAG, bukan logika ingest baru.
+  menambah DAG, bukan logika ingest baru.
 ```
 
 </details>
 
-## 8. Checkpoint Praktik
-
-Yang perlu dipastikan sebelum Module 16 dianggap selesai:
-
-- [ ] DAG `ingest_documents` bisa di-trigger dari Airflow UI dan berstatus `success`
-- [ ] `curl http://localhost:9200/nala-docs/_count` menunjukkan jumlah dokumen yang sesuai
-- [ ] Kita paham kapan pakai upload (Module 15) vs Airflow (module ini) — bukan dua sistem yang bersaing
-- [ ] Dokumen yang di-ingest lewat Airflow langsung bisa ditanyakan ke `/chat/stream` tanpa perubahan kode apa pun di Module 13
-- [ ] `/chat/stream` (Module 13) masih menjawab dari dokumen seperti sebelumnya
-
-Begitu kelima hal ini terverifikasi, Module 16 selesai — NALA sudah punya RAG chain lengkap dari dokumen mentah sampai jawaban ber-konteks, dengan **tiga** cara data bisa masuk (seed manual, upload web, Airflow), semuanya bermuara ke fungsi `ingest_documents()` yang sama.
-
-## Panduan Praktik
-
-### Prasyarat
-- Sudah menyelesaikan **Module 15** (Upload Dokumen)
-- RAM Docker Desktop di 16GB+ (lihat Module 7, bagian Panduan Praktik — catatan RAM) — di langkah ini keempat service (`ollama`, `opensearch`, `airflow`, `api`) akan jalan bersamaan untuk pertama kalinya
-
-### Langkah 1: Nyalakan Airflow, trigger DAG
+**▶️ Jalankan & lihat hasilnya**
 
 ```bash
 docker compose up -d --build airflow
@@ -401,40 +398,13 @@ docker compose up -d --build airflow
 docker compose logs -f airflow
 ```
 
-Tunggu sampai muncul baris log yang mengandung kata `password` (ini password admin, simpan) serta indikasi webserver sudah listen di port 8080, lalu `Ctrl+C` untuk keluar dari `logs -f`.
+Tunggu sampai muncul baris log berisi `password` (ini password admin, simpan) serta indikasi webserver sudah listen di port 8080, lalu `Ctrl+C` untuk keluar dari `logs -f`.
 
-Sekarang trigger DAG `ingest_documents` — fungsi yang sama persis dengan yang dipanggil manual di Module 13-14 dan lewat form upload di Module 15, dipicu lewat Airflow sebagai cara **lain**. Ada dua cara — pilih salah satu.
+Sekarang trigger DAG `ingest_documents` — fungsi yang sama persis dengan yang dipanggil manual di Module 13-14 dan lewat form upload di Module 15, dipicu lewat Airflow sebagai cara **lain**. Buka `http://localhost:8080`, login dengan `admin` dan password yang tercetak di log container `airflow` saat startup (atau cari lagi dengan cara di Troubleshooting), cari DAG `ingest_documents`, aktifkan toggle-nya (kalau masih off), lalu klik tombol **Trigger DAG** (dua opsi trigger — UI atau CLI — dibahas lengkap di Bagian 6).
 
-#### Opsi A: Lewat Airflow UI (menunjukkan orchestration ala produksi)
+✅ **Indikator sukses**: DAG run berstatus `success` (hijau), log task menunjukkan jumlah chunk yang ter-index. Verifikasi: `curl "http://localhost:9200/nala-docs/_count"`.
 
-1. Buka `http://localhost:8080` di browser.
-2. Login dengan username `admin` dan password yang tercetak di log container `airflow` saat startup (atau cari lagi dengan cara di bagian Troubleshooting).
-3. Cari DAG bernama **`ingest_documents`**, aktifkan toggle-nya (kalau masih off), lalu klik tombol **Trigger DAG** (ikon ▶️).
-4. Tunggu task `ingest_documents` selesai (status berubah jadi hijau/`success`). Cek log task untuk melihat jumlah chunk yang ter-index.
-
-#### Opsi B: Lewat CLI
-
-```bash
-docker compose exec airflow airflow dags trigger ingest_documents
-```
-
-Memonitor dari CLI:
-
-```bash
-docker compose exec airflow airflow dags list-runs --dag-id ingest_documents
-```
-
-Verifikasi akhir — coba tanyakan sesuatu ke `/chat/stream` yang jawabannya ada di dokumen yang baru saja di-trigger-ulang lewat Airflow, **tanpa mengubah satu baris pun kode `/chat/stream`**. Ini bukti nyata bahwa retrieval generik terhadap sumber data — tidak peduli dokumen masuk lewat CLI manual (Module 13-14), form upload (Module 15), atau Airflow (langkah ini), `/chat/stream` selalu membaca index `nala-docs` yang sama.
-
-### Yang Perlu Dipastikan Sebelum Module 16 Dianggap Selesai
-
-- [ ] `docker compose up -d --build airflow` berhasil, webserver Airflow bisa diakses di `http://localhost:8080`
-- [ ] DAG `ingest_documents` muncul dan bisa di-trigger (Opsi A atau B)
-- [ ] Task DAG selesai dengan status `success`, log menunjukkan jumlah chunk yang ter-index
-- [ ] `/chat/stream` bisa menjawab dari dokumen yang baru di-ingest ulang lewat Airflow, tanpa mengubah kode `/chat/stream`
-- [ ] Keempat service (`ollama`, `opensearch`, `airflow`, `api`) berjalan bersamaan tanpa container ter-*kill*
-
-Checklist ini melengkapi Checkpoint Praktik di Bagian 8 di atas — kalau kedua checklist sudah terverifikasi, Module 16 selesai.
+**Verifikasi akhir — dokumen dari Airflow langsung bisa ditanya**: coba tanyakan sesuatu ke `/chat/stream` yang jawabannya ada di dokumen yang baru saja di-trigger-ulang lewat Airflow — **tanpa mengubah satu baris pun kode `/chat/stream`** (Module 13). Ini bukti nyata bahwa retrieval generik terhadap sumber data: tidak peduli dokumen masuk lewat CLI manual (Module 13), form upload (Module 15), atau Airflow (module ini), `/chat/stream` selalu membaca index `nala-docs` yang sama.
 
 ### Troubleshooting
 
@@ -443,11 +413,25 @@ Checklist ini melengkapi Checkpoint Praktik di Bagian 8 di atas — kalau kedua 
   docker run --rm --privileged --pid=host alpine sysctl -w vm.max_map_count=262144
   ```
   Setelah itu jalankan ulang `docker compose up -d --build airflow` (Langkah 1).
-- **Lupa/tidak sempat mencatat password admin Airflow**: cari lagi di log container:
+- **Lupa/tidak sempat mencatat password admin Airflow**: cari lagi di log container (lihat juga Bagian 5.2):
   ```bash
   docker compose logs airflow | grep -i password
   ```
   Kalau tidak muncul apa-apa, password biasa tersimpan di file `standalone_admin_password.txt` di dalam `AIRFLOW_HOME` — bisa juga dicek dengan `docker compose exec airflow cat /opt/airflow/standalone_admin_password.txt`.
 - **DAG `ingest_documents` tidak muncul di Airflow UI**: tunggu sebentar — Airflow scan folder DAGs secara berkala, bukan instan. Kalau setelah 1-2 menit masih tidak muncul, cek log container `airflow` untuk error parsing DAG (`docker compose logs airflow`).
-- **Semua service terasa sangat lambat / laptop panas / container ter-*kill***: kemungkinan besar alokasi RAM Docker Desktop kurang — lihat catatan RAM di Module 7, bagian Panduan Praktik, dan naikkan ke 16GB+. Cek pemakaian resource real-time dengan `docker stats`.
+- **Semua service terasa sangat lambat / laptop panas / container ter-*kill***: kemungkinan besar alokasi RAM Docker Desktop kurang — lihat catatan RAM di Module 7, Tahap A Langkah 0, dan naikkan ke 16GB+. Cek pemakaian resource real-time dengan `docker stats`.
 - **Port sudah dipakai (8000/8080/9200/11434)**: ubah mapping port di `docker-compose.yml` untuk service yang bentrok (misal `8081:8080` untuk Airflow).
+
+## 8. Checkpoint Praktik
+
+Yang perlu dipastikan sebelum Module 16 dianggap selesai:
+
+- [ ] `docker compose up -d --build airflow` berhasil, webserver Airflow bisa diakses di `http://localhost:8080`
+- [ ] DAG `ingest_documents` bisa di-trigger dari Airflow UI dan berstatus `success`
+- [ ] `curl http://localhost:9200/nala-docs/_count` menunjukkan jumlah dokumen yang sesuai
+- [ ] Kita paham kapan pakai upload (Module 15) vs Airflow (module ini) — bukan dua sistem yang bersaing
+- [ ] Dokumen yang di-ingest lewat Airflow langsung bisa ditanyakan ke `/chat/stream` tanpa perubahan kode apa pun di Module 13
+- [ ] `/chat/stream` (Module 13) masih menjawab dari dokumen seperti sebelumnya
+- [ ] Keempat service (`ollama`, `opensearch`, `airflow`, `api`) berjalan bersamaan tanpa container ter-*kill*
+
+Begitu semua hal ini terverifikasi, Module 16 selesai — NALA sudah punya RAG chain lengkap dari dokumen mentah sampai jawaban ber-konteks, dengan **tiga** cara data bisa masuk (seed manual, upload web, Airflow), semuanya bermuara ke fungsi `ingest_documents()` yang sama.
