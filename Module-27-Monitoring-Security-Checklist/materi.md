@@ -56,9 +56,17 @@ Yang perlu dicek rutin dari dashboard Langfuse:
 
 Langfuse tidak "menyelesaikan" masalah apa pun secara otomatis — ia hanya membuat masalah **terlihat**. Keputusan apa yang dilakukan setelah melihat data tetap di tangan manusia.
 
+**Praktik — cek trace dari sesi nyata**: kirim beberapa pertanyaan ke `http://localhost:8000` (RAG dan SQL tool), lalu buka `http://localhost:3000` dan cek trace-nya muncul — latency per trace, tool yang dipilih agent, dan trace error kalau ada (lihat tabel di atas untuk daftar lengkap yang perlu dicek rutin).
+
 ### b. Status Page Ringan Custom
 
 Dashboard Langfuse berfokus pada trace request LLM — ia tidak menjawab pertanyaan yang lebih sederhana: **"apakah semua service NALA hidup sekarang?"** Untuk itu, tambahkan satu endpoint status yang mengecek kesehatan tiap service dari sisi `api`.
+
+**Prasyarat**: Module 26 sudah selesai — seluruh stack (`ollama`, `api`, `opensearch`, `opensearch-dashboards`, `airflow`, `postgres`, `adminer`, `langfuse`, `langfuse-db`) sudah jalan lewat `docker compose up -d` di `Nala/`, mengikuti Module 26 materi.md. Kalau Anda mematikan Langfuse sementara untuk menghemat RAM (lihat troubleshooting Module 26), nyalakan lagi sekarang sebelum lanjut — bukan pull/start dari awal:
+
+```bash
+docker compose start langfuse langfuse-db
+```
 
 **Langkah 1 — Tambah endpoint `GET /status` di `app/main.py`**
 
@@ -99,6 +107,40 @@ def system_status() -> dict:
 - `postgres` diasumsikan sudah punya koneksi `engine`/`text` dari SQLAlchemy yang disiapkan Module 21-25 untuk SQL agent tool — sesuaikan nama variabel dengan implementasi Module 21-25 Anda sendiri kalau berbeda.
 - `airflow` dan `langfuse` sengaja **tidak** dicek di sini — keduanya sudah punya UI/health endpoint sendiri (`http://localhost:8080/health` untuk Airflow, dashboard Langfuse itu sendiri) yang lebih representatif daripada dicek dangkal lewat `api`.
 
+<details>
+<summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 1</strong></summary>
+
+```
+Tambah fungsi system_status() di app/main.py untuk memantau kesehatan
+service NALA (Module 27, Langkah 1).
+
+GOAL:
+Di app/main.py, tambah fungsi system_status() yang mengecek ollama
+(GET {OLLAMA_BASE_URL}/api/tags), opensearch (GET
+{OPENSEARCH_BASE_URL}/_cluster/health, cek field status), dan
+postgres (SELECT 1 lewat koneksi yang sudah ada dari Module 21-25) —
+masing-masing dibungkus try/except supaya satu service down TIDAK
+membuat endpoint /status crash nantinya. Return dict {"status": "ok"|
+"degraded", "services": {...}}.
+
+CONTEXT:
+- OLLAMA_BASE_URL, OPENSEARCH_BASE_URL sudah ada sebagai konstanta di
+  main.py sejak Module 13.
+- Koneksi Postgres (engine/text SQLAlchemy atau setara, misal
+  get_connection() psycopg) sudah dibuat Module 21-25 untuk SQL agent
+  tool — pakai yang sudah ada, jangan buat koneksi baru terpisah.
+
+GUARDRAIL:
+- JANGAN biarkan satu service down membuat system_status() melempar
+  exception ke pemanggilnya — semua pengecekan WAJIB dibungkus
+  try/except.
+- JANGAN tambah endpoint apa pun di langkah ini — endpoint /status
+  dan /status/view ditambahkan di Langkah 2.
+- JANGAN ubah endpoint /chat, /chat/stream, /upload yang sudah ada.
+```
+
+</details>
+
 **Langkah 2 — Halaman `status.html` sederhana**
 
 ```html
@@ -136,13 +178,56 @@ def status_page(request: Request):
 
 `meta http-equiv="refresh"` dipakai sengaja alih-alih JavaScript polling — konsisten dengan prinsip frontend minimal NALA (server-rendered, tanpa build tooling) yang dipegang sejak Module 7-16.
 
-**▶️ Jalankan & lihat hasilnya**
+<details>
+<summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 2</strong></summary>
+
+```
+Tambah endpoint /status dan /status/view serta halaman status.html
+untuk memantau kesehatan service NALA (Module 27, Langkah 2).
+
+GOAL:
+1. Tambah endpoint GET /status (JSON, response_model tidak wajib) yang
+   memanggil system_status() (sudah dibuat di Langkah 1) dan
+   mengembalikan hasilnya langsung.
+2. Tambah endpoint GET /status/view (HTML, render
+   app/templates/status.html) yang menampilkan hasil system_status()
+   dengan auto-refresh (meta http-equiv="refresh" content="15").
+3. Buat app/templates/status.html — halaman sederhana, list servis +
+   statusnya, konsisten dengan style.css yang sudah ada, dengan nav
+   link ke halaman lain (Chat, Knowledge Base, Status).
+
+CONTEXT:
+- system_status() sudah ada dari Langkah 1 — panggil, jangan tulis
+  ulang logikanya.
+
+GUARDRAIL:
+- JANGAN biarkan satu service down membuat endpoint /status
+  mengembalikan 500 — pastikan system_status() dari Langkah 1 tetap
+  yang dipanggil (sudah dibungkus try/except).
+- JANGAN tambah JavaScript polling — pakai meta refresh saja, sesuai
+  prinsip frontend minimal NALA.
+- JANGAN ubah endpoint /chat, /chat/stream, /upload yang sudah ada.
+```
+
+</details>
+
+Setiap kali mengubah `app/main.py` atau file di `app/`, rebuild `api` saja (bukan seluruh stack):
+
+```bash
+docker compose up -d --build api
+```
+
+**Langkah 3 — Verifikasi status page**
 
 ```bash
 curl http://localhost:8000/status
 ```
 
-Lalu buka `http://localhost:8000/status/view` di browser. Coba matikan salah satu service (`docker compose stop opensearch`) dan refresh — `opensearch` di `/status` harus berubah jadi `unreachable`, bukan hang atau error 500 di endpoint `/status` itu sendiri.
+Lalu buka `http://localhost:8000/status/view` di browser. Coba matikan salah satu service (`docker compose stop opensearch`) dan refresh — `opensearch` di `/status` harus berubah jadi `unreachable`, bukan hang atau error 500 di endpoint `/status` itu sendiri. Nyalakan lagi setelahnya:
+
+```bash
+docker compose start opensearch
+```
 
 ✅ **Indikator sukses**: `/status` selalu mengembalikan `200 OK` dengan JSON yang menyebutkan status tiap service, tidak pernah crash walau salah satu/semua service down. `/status/view` menampilkan halaman yang sama secara visual, auto-refresh.
 
@@ -156,48 +241,16 @@ Setelah `docker compose stop opensearch`:
 ```
 — tetap `200 OK`, tidak crash, persis sesuai target. Satu penyesuaian dari contoh materi: implementasi nyata memakai `get_connection()` (psycopg, role `nala_readonly` — sudah ada dari Module 23) untuk cek `postgres`, bukan `engine`/`text` SQLAlchemy seperti contoh ilustratif di atas — sesuaikan dengan pola koneksi database yang sudah dipakai di project Anda sendiri, jangan menambah dependency SQLAlchemy baru kalau belum pernah dipakai.
 
-<details>
-<summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 1-2</strong></summary>
+**Troubleshooting**
 
-```
-Tambah endpoint /status dan halaman status.html untuk memantau
-kesehatan service NALA (Module 27).
-
-GOAL:
-1. Di app/main.py, tambah fungsi system_status() yang mengecek ollama
-   (GET {OLLAMA_BASE_URL}/api/tags), opensearch (GET
-   {OPENSEARCH_BASE_URL}/_cluster/health, cek field status), dan
-   postgres (SELECT 1 lewat koneksi yang sudah ada dari Module 21-25) —
-   masing-masing dibungkus try/except supaya satu service down TIDAK
-   membuat endpoint /status crash. Return dict {"status": "ok"|
-   "degraded", "services": {...}}.
-2. Tambah endpoint GET /status (JSON, response_model tidak wajib) dan
-   GET /status/view (HTML, render app/templates/status.html) yang
-   menampilkan hasil system_status() dengan auto-refresh
-   (meta http-equiv="refresh" content="15").
-3. Buat app/templates/status.html — halaman sederhana, list servis +
-   statusnya, konsisten dengan style.css yang sudah ada.
-
-CONTEXT:
-- OLLAMA_BASE_URL, OPENSEARCH_BASE_URL sudah ada sebagai konstanta di
-  main.py sejak Module 13.
-- Koneksi Postgres (engine/text SQLAlchemy atau setara) sudah dibuat
-  Module 21-25 untuk SQL agent tool — pakai yang sudah ada, jangan buat
-  koneksi baru terpisah.
-
-GUARDRAIL:
-- JANGAN biarkan satu service down membuat endpoint /status
-  mengembalikan 500 — semua pengecekan WAJIB dibungkus try/except.
-- JANGAN tambah JavaScript polling — pakai meta refresh saja, sesuai
-  prinsip frontend minimal NALA.
-- JANGAN ubah endpoint /chat, /chat/stream, /upload yang sudah ada.
-```
-
-</details>
+- **`/status` selalu melaporkan `postgres: unreachable` padahal `docker compose ps` bilang `healthy`**: cek `DATABASE_URL`/koneksi SQLAlchemy (atau `get_connection()` psycopg) yang dipakai `system_status()` memakai host `postgres` (nama service di Docker network), bukan `localhost` — dari dalam container `api`, `localhost` merujuk ke container itu sendiri, bukan container `postgres`.
+- **Dashboard Langfuse tidak menampilkan trace baru**: cek `LANGFUSE_HOST`, `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY` di environment `api` sudah benar dan mengarah ke instance Langfuse yang sama dengan yang dibuka di browser — gejala umum kalau `.env` sempat diregenerasi ulang tanpa update key project Langfuse.
 
 ## 3. Checklist Review Keamanan
 
 NALA adalah asisten AI internal untuk **sektor finansial** — data yang disentuhnya (SOP kredit, data pengajuan kredit, klaim asuransi) bukan data sembarangan. Checklist ini dikelompokkan per area, masing-masing dengan status jujur: sudah diatasi, sebagian diatasi, atau secara eksplisit di luar cakupan training.
+
+**Praktik — bahas bersama kelompok/instruktur**: untuk tiap poin di lima subbagian di bawah (Secrets & Credentials, RBAC & Audit Logging, Prompt Injection, Rate Limiting, Data Retention), catat status jujur: **sudah diatasi**, **sebagian diatasi**, atau **secara eksplisit di luar cakupan** — jangan menandai selesai kalau belum benar-benar diverifikasi.
 
 ### a. Secrets & Credentials
 
@@ -244,64 +297,14 @@ Ini **dibahas secara jujur**, bukan diklaim sudah diselesaikan:
 
 ## 4. Checkpoint Praktik
 
-Langkah eksekusi lengkap (menjalankan Langfuse, mengecek trace, menjalankan `/status`) ada di bagian **Panduan Praktik** di bawah. Yang perlu dipastikan sebelum lanjut ke Module 28:
+Yang perlu dipastikan sebelum lanjut ke Module 28:
 
 - [ ] Dashboard Langfuse (`http://localhost:3000`) menampilkan trace dari percakapan yang baru saja dilakukan
 - [ ] `GET /status` mengembalikan `200 OK` dengan status tiap service, tidak crash walau satu service dimatikan
 - [ ] `/status/view` menampilkan halaman yang sama secara visual dan auto-refresh
 - [ ] Checklist keamanan Bagian 3 sudah dibahas per kelompok/peserta — untuk poin yang statusnya "belum ada"/"di luar cakupan", kita memahami **kenapa**, bukan menganggapnya sudah selesai
 
-## Panduan Praktik
-
-> Catatan penomoran: bagian ini punya urutan **Langkah 1-4** sendiri (langkah eksekusi praktik), terpisah dari Langkah 1-2 yang sudah muncul di Bagian 2.b di atas (langkah penjelasan konsep/kode untuk endpoint `/status`). Nomor di bawah ini merujuk ke urutan eksekusi panduan praktik, bukan ke Bagian 2.b.
-
-### Prasyarat
-
-- Module 26 sudah selesai — seluruh stack (`ollama`, `api`, `opensearch`, `opensearch-dashboards`, `airflow`, `postgres`, `adminer`, `langfuse`, `langfuse-db`) sudah jalan lewat `docker compose up -d` di `Nala/`, mengikuti Module 26 materi.md, bagian Panduan Praktik.
-- Kalau Anda mematikan Langfuse sementara untuk menghemat RAM (lihat troubleshooting Module 26), nyalakan lagi sekarang sebelum lanjut — bukan pull/start dari awal:
-
-```bash
-docker compose start langfuse langfuse-db
-```
-
-### Langkah 1: Implementasikan endpoint `/status` dan `/status/view`
-
-Ikuti Langkah 1-2 di Bagian 2.b di atas untuk menambahkan fungsi `system_status()`, endpoint `GET /status`, dan halaman `status.html`.
-
-Setiap kali mengubah `app/main.py` atau file di `app/`, rebuild `api` saja (bukan seluruh stack):
-
-```bash
-docker compose up -d --build api
-```
-
-### Langkah 2: Verifikasi status page
-
-```bash
-curl http://localhost:8000/status
-```
-
-Lalu buka `http://localhost:8000/status/view` di browser. Coba matikan salah satu service (`docker compose stop opensearch`) dan refresh — `opensearch` di `/status` harus berubah jadi `unreachable`, bukan hang atau error 500 di endpoint `/status` itu sendiri. Nyalakan lagi setelahnya:
-
-```bash
-docker compose start opensearch
-```
-
-✅ **Indikator sukses**: `/status` selalu mengembalikan `200 OK` dengan JSON yang menyebutkan status tiap service, tidak pernah crash walau salah satu/semua service down. `/status/view` menampilkan halaman yang sama secara visual, auto-refresh.
-
-### Langkah 3: Review Dashboard Langfuse
-
-Kirim beberapa pertanyaan ke `http://localhost:8000` (RAG dan SQL tool), lalu buka `http://localhost:3000` dan cek trace-nya muncul — latency per trace, tool yang dipilih agent, dan trace error kalau ada. Lihat Bagian 2.a di atas untuk daftar lengkap yang perlu dicek rutin.
-
-### Langkah 4: Checklist Review Keamanan
-
-Bersama kelompok/instruktur, bahas checklist keamanan di Bagian 3 di atas (Secrets & Credentials, RBAC & Audit Logging, Prompt Injection, Rate Limiting, Data Retention). Untuk tiap poin, catat status jujur: **sudah diatasi**, **sebagian diatasi**, atau **secara eksplisit di luar cakupan** — jangan menandai selesai kalau belum benar-benar diverifikasi.
-
-Pastikan poin Checkpoint Praktik (Bagian 4 di atas) terpenuhi sebelum lanjut ke **Module 28 materi.md, bagian Panduan Praktik** (`../Module-28-Polish-Frontend-Demo/materi.md`).
-
-### Troubleshooting
-
-- **`/status` selalu melaporkan `postgres: unreachable` padahal `docker compose ps` bilang `healthy`**: cek `DATABASE_URL`/koneksi SQLAlchemy (atau `get_connection()` psycopg) yang dipakai `system_status()` memakai host `postgres` (nama service di Docker network), bukan `localhost` — dari dalam container `api`, `localhost` merujuk ke container itu sendiri, bukan container `postgres`.
-- **Dashboard Langfuse tidak menampilkan trace baru**: cek `LANGFUSE_HOST`, `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY` di environment `api` sudah benar dan mengarah ke instance Langfuse yang sama dengan yang dibuka di browser — gejala umum kalau `.env` sempat diregenerasi ulang tanpa update key project Langfuse.
+Setelah semua poin di atas terpenuhi, lanjut ke **Module 28 materi.md, bagian Panduan Praktik** (`../Module-28-Polish-Frontend-Demo/materi.md`).
 
 ## Kesimpulan
 
