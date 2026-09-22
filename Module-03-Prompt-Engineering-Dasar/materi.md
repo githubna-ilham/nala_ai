@@ -387,7 +387,7 @@ Bandingkan dua versi ini: versi ringkas di atas dipakai langsung sebagai kode (`
 
 Draft `System Prompt NALA v1` yang baru saja disusun di section 5 **tidak perlu menunggu Module 4** untuk dicoba — Ollama sudah bisa menerima system prompt langsung dari terminal. Menguji draft sekarang penting supaya Anda dapat feedback nyata (bukan cuma dugaan di atas kertas) sebelum lanjut ke integrasi kode di Module 4.
 
-> 📌 **Ini baru v1, bukan versi final.** System prompt yang diuji di sini akan terus berkembang di modul-modul berikutnya seiring NALA bertambah kemampuan: Module 12 menambah instruksi *grounding* (jawab hanya dari dokumen yang di-retrieve, sebutkan sumbernya), Module 19 kemungkinan di-tuning ulang berdasarkan hasil evaluasi RAG, dan Module 24 diperluas dengan instruksi *tool-use* (kapan pakai RAG dokumen vs kapan query data operasional). Jadi jangan terlalu lama "menyempurnakan" draft sekarang — cukup pastikan persona & aturan dasarnya benar, detailnya akan menyusul.
+> 📌 **Ini baru v1, bukan versi final.** System prompt yang diuji di sini akan terus berkembang di modul-modul berikutnya seiring NALA bertambah kemampuan: Module 14 menambah instruksi *grounding* (jawab hanya dari dokumen yang di-retrieve, sebutkan sumbernya), Module 20 kemungkinan di-tuning ulang berdasarkan hasil evaluasi RAG, dan Module 25 diperluas dengan instruksi *tool-use* (kapan pakai RAG dokumen vs kapan query data operasional). Jadi jangan terlalu lama "menyempurnakan" draft sekarang — cukup pastikan persona & aturan dasarnya benar, detailnya akan menyusul.
 
 > ⚠️ **Koreksi:** flag `ollama run --system "..."` **tidak tersedia** (cek `ollama run --help` — flag ini tidak ada di daftar). Dua cara di bawah ini adalah yang benar-benar berfungsi.
 
@@ -606,7 +606,7 @@ FROM llama3.2:3b
 PARAMETER repeat_penalty 1.1
 ```
 
-**`repeat_last_n`** — perpanjang dari default 64 ke 128, jendela pengecekan pengulangan lebih luas — relevan kalau nanti jawaban menyertakan konteks RAG yang panjang (Module 12):
+**`repeat_last_n`** — perpanjang dari default 64 ke 128, jendela pengecekan pengulangan lebih luas — relevan kalau nanti jawaban menyertakan konteks RAG yang panjang (Module 14):
 ```
 FROM llama3.2:3b
 PARAMETER repeat_last_n 128

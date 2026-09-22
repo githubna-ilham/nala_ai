@@ -38,7 +38,7 @@ Module 1-6 sudah membuktikan bahwa NALA bisa menjawab lewat `curl` — tapi `cur
 Ini bukan langkah kosmetik. Ada dua hal konkret yang divalidasi di sini:
 
 1. **Kontrak `/chat` tidak berubah dari Module 1-6 ke Module 7-17.** `ChatRequest{message}` → `ChatResponse{reply}` persis sama — bukti bahwa fondasi Module 1-6 (Docker, Ollama, `NALA_SYSTEM_PROMPT`) memang portable, bukan kebetulan yang cuma jalan sekali. `/chat` sendiri cuma bertahan sampai Module 8 (lihat Bagian 2) — begitu streaming dibutuhkan, endpoint ini digantikan total, bukan dipertahankan di samping yang baru.
-2. **Masalah infrastruktur (Docker, network antar-container, model belum ter-pull) terdeteksi lebih awal**, sebelum ditumpuk dengan OpenSearch dan Airflow yang baru dikenalkan di Module 12 dan 15. Kalau chat dasar saja sudah gagal, jauh lebih mudah didiagnosis sekarang daripada setelah 3 service tambahan ikut jalan.
+2. **Masalah infrastruktur (Docker, network antar-container, model belum ter-pull) terdeteksi lebih awal**, sebelum ditumpuk dengan OpenSearch dan Airflow yang baru dikenalkan di Module 12 dan 17. Kalau chat dasar saja sudah gagal, jauh lebih mudah didiagnosis sekarang daripada setelah 3 service tambahan ikut jalan.
 
 ```mermaid
 flowchart LR
@@ -401,7 +401,7 @@ GUARDRAIL:
 jinja2==3.1.4
 ```
 
-Pola ini akan berulang di module-module berikutnya: `python-multipart` ditambahkan tepat saat Module 15 butuh upload file, dependency OpenSearch/Airflow ditambahkan tepat saat Module 12 dan 15 membutuhkannya — bukan diborong semua di awal.
+Pola ini akan berulang di module-module berikutnya: `python-multipart` ditambahkan tepat saat Module 16 butuh upload file, dependency OpenSearch/Airflow ditambahkan tepat saat Module 12 dan 17 membutuhkannya — bukan diborong semua di awal.
 
 <details>
 <summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 4</strong></summary>
