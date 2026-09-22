@@ -168,6 +168,11 @@ Melanjutkan langsung di `Nala/` (folder yang sama sejak Module 1 — lihat bagia
 2. **Tahap B — Tulis tool pertama**: bungkus RAG chain Module 9-20 jadi fungsi `rag_search()` yang berdiri sendiri, plus skema tool-nya.
 3. **Tahap C — Bangun graph LangGraph**, lalu buat endpoint baru `/chat` yang mendelegasikan ke agent (menggantikan pendekatan retrieval langsung yang dipakai `/chat/stream`, tapi sebagai endpoint terpisah, bukan mengubah `/chat/stream` itu sendiri).
 
+### Prasyarat
+
+- Module 21 selesai: service `postgres` sehat, tabel `pengajuan_kredit`/`klaim_asuransi` sudah berisi data (7 baris + 4 baris) lewat form `/data-operasional`, role `nala_readonly`/`nala_writer` terverifikasi dua arah.
+- `docker compose up -d --build` sudah pernah dijalankan dari `Nala/` — kalau container belum jalan, jalankan ulang dari folder itu sebelum melanjutkan.
+
 ### Tahap A — Tambah method `chat()` dengan dukungan `tools` ke `OllamaClient`
 
 **Langkah 1 — Tambah dependency `langgraph`**
@@ -176,6 +181,28 @@ Melanjutkan langsung di `Nala/` (folder yang sama sejak Module 1 — lihat bagia
 # requirements.txt — tambahkan baris baru
 langgraph==0.2.39
 ```
+
+<details>
+<summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 1</strong></summary>
+
+```
+Tambah dependency langgraph ke requirements.txt (Module 22, Tahap A,
+Langkah 1) — belum ada perubahan kode apa pun.
+
+GOAL:
+- Di Nala/requirements.txt: tambah baris
+  baru di akhir: langgraph==0.2.39
+
+CONTEXT:
+- Dependency ini dibutuhkan untuk membangun graph agent di Langkah 5,
+  tapi belum dipakai di mana pun sampai langkah itu.
+
+GUARDRAIL:
+- JANGAN ubah baris/dependency lain di requirements.txt.
+- JANGAN sentuh file kode apa pun di langkah ini.
+```
+
+</details>
 
 **Langkah 2 — Tambah method `chat()` di `app/ollama_client.py`**
 
@@ -203,6 +230,10 @@ Bedanya dari `chat_stream()`: `stream: False` (bukan `True`), dan mengembalikan 
 **▶️ Jalankan & lihat hasilnya**
 
 ```bash
+docker compose up --build --no-deps ollama api
+```
+
+```bash
 docker compose exec api python -c "
 from app.ollama_client import OllamaClient
 client = OllamaClient(base_url='http://ollama:11434', model='llama3.2:3b')
@@ -214,31 +245,29 @@ print(result)
 ✅ **Indikator sukses**: tidak ada error, output berupa dict Python dengan key `role` (`'assistant'`) dan `content` (teks jawaban) — belum ada `tool_calls` karena belum dikirim parameter `tools` sama sekali di percobaan ini. Endpoint `/chat` belum dibuat sampai Tahap C, dan `/chat/stream` belum berubah perilaku sedikit pun — method `chat()` yang baru belum dipanggil dari mana pun di `main.py`.
 
 <details>
-<summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 1-2</strong></summary>
+<summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 2</strong></summary>
 
 ```
-Tambah dependency langgraph dan method chat() baru (dengan dukungan
-tools) ke OllamaClient (Module 22, Tahap A) — belum mengubah
-endpoint apa pun.
+Tambah method chat() baru (dengan dukungan tools) ke OllamaClient
+(Module 22, Tahap A, Langkah 2) — belum mengubah endpoint apa pun.
 
 GOAL:
-1. Di Nala/requirements.txt: tambah baris
-   baru di akhir: langgraph==0.2.39
-2. Di Nala/app/ollama_client.py: tambah
-   method baru `chat(self, messages: list[dict], tools: list[dict] |
-   None = None) -> dict` di dalam class OllamaClient (setelah method
-   generate() yang sudah ada). Method ini POST ke f"{self.base_url}/
-   api/chat" dengan payload {"model": self.model, "messages": messages,
-   "stream": False}, tambahkan key "tools": tools ke payload HANYA
-   kalau parameter tools tidak None/kosong. timeout=60.0,
-   response.raise_for_status(), return response.json()["message"]
-   (dict utuh, bukan cuma field content).
+- Di Nala/app/ollama_client.py: tambah
+  method baru `chat(self, messages: list[dict], tools: list[dict] |
+  None = None) -> dict` di dalam class OllamaClient (setelah method
+  generate() yang sudah ada). Method ini POST ke f"{self.base_url}/
+  api/chat" dengan payload {"model": self.model, "messages": messages,
+  "stream": False}, tambahkan key "tools": tools ke payload HANYA
+  kalau parameter tools tidak None/kosong. timeout=60.0,
+  response.raise_for_status(), return response.json()["message"]
+  (dict utuh, bukan cuma field content).
 
 CONTEXT:
 - File ini sudah punya generate() (lewat /api/generate, non-streaming,
   tanpa tools) dan chat_stream() (lewat /api/chat, streaming, tanpa
   tools) dari Module 1-16 — JANGAN diubah, method chat() ini murni
   tambahan baru.
+- requirements.txt sudah punya dependency langgraph dari Langkah 1.
 
 GUARDRAIL:
 - JANGAN ubah generate() atau chat_stream() sama sekali.
@@ -317,7 +346,7 @@ print(result[:200])
 "
 ```
 
-✅ **Indikator sukses**: tidak ada error, output berupa potongan teks dari `sop-pengajuan-kredit.md` (asumsi index OpenSearch sudah terisi dari Module 7-20) — bukti `rag_search()` bekerja identik dengan retrieval yang sebelumnya ada di `/chat/stream`, cuma sekarang bisa dipanggil terpisah.
+✅ **Indikator sukses**: tidak ada error, output berupa potongan teks dari `sop-pengajuan-kredit.md` (asumsi index OpenSearch sudah terisi dari Module 7-20) — bukti `rag_search()` bekerja identik dengan retrieval yang sebelumnya ada di `/chat/stream`, cuma sekarang bisa dipanggil terpisah. Kalau hasilnya kosong, index OpenSearch mungkin belum terisi — jalankan ulang ingest lewat Airflow (Module 16).
 
 <details>
 <summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 3</strong></summary>
@@ -385,6 +414,44 @@ Aturan:
 ```
 
 Berbeda dari `NALA_SYSTEM_PROMPT`/`NALA_SYSTEM_PROMPT_NO_CONTEXT` (Module 13) yang mengasumsikan konteks **sudah** disisipkan ke prompt sebelum dikirim ke model, versi `_AGENT` ini tidak menyebut "konteks" sama sekali — modelnya sendiri yang memutuskan kapan perlu mengambil konteks lewat tool, baru menjawab setelah hasil tool tersedia sebagai pesan `role: "tool"` di riwayat.
+
+<details>
+<summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 4</strong></summary>
+
+```
+Tambah system prompt versi agent ke system_prompt.py (Module 22,
+Tahap C, Langkah 4) — belum membangun graph atau endpoint apa pun.
+
+GOAL:
+- Di Nala/app/system_prompt.py: tambah
+  konstanta baru NALA_SYSTEM_PROMPT_AGENT (string) yang menjelaskan
+  NALA punya tool pencarian dokumen SOP dan harus memakainya untuk
+  pertanyaan prosedur/syarat/kebijakan, TANPA menyebut "konteks akan
+  disisipkan" (beda dari NALA_SYSTEM_PROMPT lama). Isi persis:
+
+  NALA_SYSTEM_PROMPT_AGENT = """Kamu adalah NALA, asisten AI internal PT Nusantara Finance.
+  Tugasmu adalah menjawab pertanyaan staff seputar SOP, kebijakan, dan data operasional perusahaan.
+  Kamu punya akses ke tool untuk mencari dokumen SOP internal. Gunakan tool itu setiap kali
+  pertanyaan menyangkut prosedur, syarat, atau kebijakan — jangan menjawab dari ingatanmu sendiri
+  untuk hal semacam itu.
+  Aturan:
+  - Jawab singkat, jelas, dan dalam Bahasa Indonesia.
+  - Jika hasil tool tidak relevan atau tidak cukup, katakan dengan jujur bahwa informasinya
+    tidak ditemukan. Jangan mengarang jawaban.
+  - Jangan menjawab pertanyaan di luar konteks pekerjaan PT Nusantara Finance.
+  """
+
+CONTEXT:
+- NALA_SYSTEM_PROMPT/NALA_SYSTEM_PROMPT_NO_CONTEXT (Module 13) sudah
+  ada di file yang sama dan masih dipakai /chat/stream.
+
+GUARDRAIL:
+- JANGAN ubah atau hapus NALA_SYSTEM_PROMPT/NALA_SYSTEM_PROMPT_NO_CONTEXT
+  yang sudah ada.
+- JANGAN sentuh app/agent.py atau app/main.py di langkah ini.
+```
+
+</details>
 
 **Langkah 5 — Buat `app/agent.py`**
 
@@ -458,6 +525,55 @@ Penjelasan tiap bagian:
 - **`should_continue`**: fungsi routing edge kondisional — mengecek apakah pesan terakhir dari `call_model` mengandung `tool_calls`. Kalau ya, lanjut ke `call_tool`; kalau tidak, `content` di pesan itu dianggap **jawaban final** dan graph berhenti (`END`).
 - **`graph.add_edge("call_tool", "call_model")`**: edge tetap (bukan kondisional) — setelah tool selesai dijalankan, **selalu** kembali ke `call_model` supaya LLM bisa menyusun jawaban dari hasil tool (atau minta tool lain, kalau Module 23 menambah tool kedua).
 
+**▶️ Jalankan & lihat hasilnya**
+
+```bash
+docker compose up --build api
+```
+
+✅ **Indikator sukses**: log `api` menunjukkan `Uvicorn running` tanpa traceback — `graph.compile()` berhasil disusun tanpa error. `nala_agent` belum dipanggil dari endpoint mana pun di titik ini, jadi belum ada cara menguji perilakunya lewat HTTP sampai Langkah 6.
+
+<details>
+<summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 5</strong></summary>
+
+```
+Bangun graph LangGraph minimal dengan satu tool (RAG) di app/agent.py
+(Module 22, Tahap C, Langkah 5) — belum disambungkan ke endpoint
+apa pun.
+
+GOAL:
+- Buat Nala/app/agent.py berisi:
+  - class AgentState(TypedDict) dengan field messages: Annotated[list
+    [dict], operator.add]
+  - fungsi build_agent(ollama_client, vector_store, ollama_base_url)
+    yang mendefinisikan node call_model (panggil
+    ollama_client.chat(state["messages"], tools=[RAG_TOOL_SCHEMA]),
+    return {"messages": [hasil]}), node call_tool (loop tool_calls di
+    last_message, kalau nama "cari_dokumen_sop" panggil
+    rag_search(args["query"], vector_store, ollama_base_url), bungkus
+    tiap hasil jadi {"role": "tool", "content": hasil}, return
+    {"messages": tool_messages}), fungsi should_continue (return
+    "call_tool" kalau last_message ada tool_calls, else END), lalu
+    rangkai pakai StateGraph: add_node call_model & call_tool,
+    set_entry_point("call_model"), add_conditional_edges dari
+    call_model pakai should_continue ke {"call_tool": "call_tool",
+    END: END}, add_edge("call_tool", "call_model"), return
+    graph.compile().
+
+CONTEXT:
+- app/tools/rag_tool.py (RAG_TOOL_SCHEMA, rag_search) sudah dibuat di
+  Tahap B — JANGAN diubah.
+- app/ollama_client.py sudah punya method chat() dari Tahap A —
+  JANGAN diubah.
+
+GUARDRAIL:
+- JANGAN sentuh app/main.py di langkah ini — belum ada yang memanggil
+  build_agent() dari sana sampai Langkah 6.
+- JANGAN ubah app/tools/rag_tool.py atau app/ollama_client.py.
+```
+
+</details>
+
 **Langkah 6 — Buat endpoint `/chat`, sambungkan ke agent**
 
 Di `app/main.py`, tambah import dan inisialisasi agent:
@@ -507,60 +623,37 @@ curl -X POST http://localhost:8000/chat \
   -d '{"message": "Apa saja syarat pengajuan kredit untuk nasabah perorangan?"}'
 ```
 
-✅ **Indikator sukses**: tidak ada error `500`, jawaban tetap berbasis dokumen SOP seperti sejak Module 9-20 (kualitasnya seharusnya setara, karena `rag_search()` adalah refactor, bukan perubahan logika retrieval). Cek juga log container `api` — kalau memungkinkan, tambahkan `print()` sementara di `call_model`/`call_tool` untuk melihat bahwa graph benar-benar melewati kedua node itu (dihapus lagi setelah verifikasi, atau ganti dengan `logging` semestinya — audit logging asli baru dibangun di Module 25). Coba juga pertanyaan yang **tidak butuh tool sama sekali**, misalnya "Halo, kamu siapa?" — jawaban tetap muncul tanpa error, membuktikan `should_continue` benar mengarahkan ke `END` langsung tanpa memanggil `call_tool`.
+✅ **Indikator sukses**: tidak ada error `500`, jawaban tetap berbasis dokumen SOP seperti sejak Module 9-20 (kualitasnya seharusnya setara, karena `rag_search()` adalah refactor, bukan perubahan logika retrieval). Cek juga log container `api` — kalau memungkinkan, tambahkan `print()` sementara di `call_model`/`call_tool` untuk melihat bahwa graph benar-benar melewati kedua node itu (dihapus lagi setelah verifikasi, atau ganti dengan `logging` semestinya — audit logging asli baru dibangun di Module 25).
 
 <details>
-<summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 4-6</strong></summary>
+<summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 6</strong></summary>
 
 ```
-Bangun graph LangGraph minimal dengan satu tool (RAG) dan buat
-endpoint baru /chat yang mendelegasikan ke agent itu — logika
-retrieval yang dipakainya adalah refactor dari yang sebelumnya
-hardcoded di /chat/stream, TAPI /chat/stream sendiri tidak diubah
-(Module 22, Tahap C).
+Buat endpoint baru /chat yang mendelegasikan ke agent LangGraph yang
+sudah dibangun di Langkah 5 (Module 22, Tahap C, Langkah 6) — logika
+retrieval di baliknya adalah refactor dari yang sebelumnya hardcoded
+di /chat/stream, TAPI /chat/stream sendiri tidak diubah.
 
 GOAL:
-1. Di Nala/app/system_prompt.py: tambah
-   konstanta baru NALA_SYSTEM_PROMPT_AGENT (string) yang menjelaskan
-   NALA punya tool pencarian dokumen SOP dan harus memakainya untuk
-   pertanyaan prosedur/syarat/kebijakan, TANPA menyebut "konteks akan
-   disisipkan" (beda dari NALA_SYSTEM_PROMPT lama).
-2. Buat Nala/app/agent.py berisi:
-   - class AgentState(TypedDict) dengan field messages: Annotated[list
-     [dict], operator.add]
-   - fungsi build_agent(ollama_client, vector_store, ollama_base_url)
-     yang mendefinisikan node call_model (panggil
-     ollama_client.chat(state["messages"], tools=[RAG_TOOL_SCHEMA]),
-     return {"messages": [hasil]}), node call_tool (loop tool_calls di
-     last_message, kalau nama "cari_dokumen_sop" panggil
-     rag_search(args["query"], vector_store, ollama_base_url), bungkus
-     tiap hasil jadi {"role": "tool", "content": hasil}, return
-     {"messages": tool_messages}), fungsi should_continue (return
-     "call_tool" kalau last_message ada tool_calls, else END), lalu
-     rangkai pakai StateGraph: add_node call_model & call_tool,
-     set_entry_point("call_model"), add_conditional_edges dari
-     call_model pakai should_continue ke {"call_tool": "call_tool",
-     END: END}, add_edge("call_tool", "call_model"), return
-     graph.compile().
-3. Di Nala/app/main.py:
-   - Tambah import build_agent dari app.agent dan
-     NALA_SYSTEM_PROMPT_AGENT dari app.system_prompt.
-   - Buat instance nala_agent = build_agent(ollama_client=ollama_client,
-     vector_store=vector_store, ollama_base_url=OLLAMA_BASE_URL) di
-     dekat instance ollama_client/vector_store yang sudah ada.
-   - BUAT fungsi chat() BARU (endpoint POST /chat, belum pernah ada
-     sebelumnya) supaya: bangun initial_state = {"messages":
-     [{"role": "system", "content": NALA_SYSTEM_PROMPT_AGENT},
-     {"role": "user", "content": request.message}]}, panggil
-     final_state = nala_agent.invoke(initial_state), reply =
-     final_state["messages"][-1]["content"], return
-     ChatResponse(reply=reply).
+- Di Nala/app/main.py:
+  - Tambah import build_agent dari app.agent dan
+    NALA_SYSTEM_PROMPT_AGENT dari app.system_prompt.
+  - Buat instance nala_agent = build_agent(ollama_client=ollama_client,
+    vector_store=vector_store, ollama_base_url=OLLAMA_BASE_URL) di
+    dekat instance ollama_client/vector_store yang sudah ada.
+  - BUAT fungsi chat() BARU (endpoint POST /chat, belum pernah ada
+    sebelumnya) supaya: bangun initial_state = {"messages":
+    [{"role": "system", "content": NALA_SYSTEM_PROMPT_AGENT},
+    {"role": "user", "content": request.message}]}, panggil
+    final_state = nala_agent.invoke(initial_state), reply =
+    final_state["messages"][-1]["content"], return
+    ChatResponse(reply=reply).
 
 CONTEXT:
-- app/tools/rag_tool.py (RAG_TOOL_SCHEMA, rag_search) sudah dibuat di
-  Tahap B — JANGAN diubah.
-- app/ollama_client.py sudah punya method chat() dari Tahap A —
+- app/agent.py (build_agent, AgentState) sudah dibuat di Langkah 5 —
   JANGAN diubah.
+- app/system_prompt.py sudah punya NALA_SYSTEM_PROMPT_AGENT dari
+  Langkah 4 — JANGAN diubah.
 - Kontrak ChatRequest{message} -> ChatResponse{reply} TIDAK berubah.
 
 GUARDRAIL:
@@ -574,6 +667,28 @@ GUARDRAIL:
 
 </details>
 
+**Langkah 7 — Pastikan `/chat/stream` tidak tersentuh, dan pertanyaan tanpa tool tetap jalan**
+
+```bash
+curl -N -X POST http://localhost:8000/chat/stream \
+  -H "Content-Type: application/json" \
+  -d '{"messages": [{"role": "user", "content": "Halo, kamu siapa?"}]}'
+```
+
+```bash
+curl -X POST http://localhost:8000/chat \
+  -H "Content-Type: application/json" \
+  -d '{"message": "Halo, kamu siapa?"}'
+```
+
+✅ **Indikator sukses**: `/chat/stream` tetap streaming seperti sebelumnya (belum lewat agent, sesuai catatan scope Bagian 4 Tahap C). `/chat` untuk sapaan tetap menjawab tanpa error — jawaban tetap muncul tanpa memanggil tool, membuktikan `should_continue` benar mengarahkan ke `END` langsung tanpa memanggil `call_tool`. Module 22 selesai — lanjut ke Module 23.
+
+### Troubleshooting
+
+- **`message.tool_calls` selalu kosong padahal pertanyaannya jelas butuh tool**: cek versi Ollama (`docker compose exec ollama ollama --version`) — dukungan tool-calling butuh versi yang cukup baru. Cek juga `RAG_TOOL_SCHEMA` terkirim dengan benar sebagai parameter `tools` di `OllamaClient.chat()` (Bagian 3, ⚠️ catatan kejujuran teknis).
+- **Agent tampak "menggantung" lama (timeout)**: wajar sampai batas tertentu — setiap panggilan tool berarti minimal satu panggilan tambahan ke `llama3.2:3b`, jadi pertanyaan yang butuh tool otomatis lebih lambat dari pertanyaan tanpa tool.
+- **Error umum lain** (`no configuration file provided`, `failed to read dockerfile`, port sudah dipakai, dsb.): lihat bagian praktik Module 7-16 materi.md — penyebab dan solusinya sama, tidak spesifik rangkaian Module 21-25.
+
 **📄 Kode lengkap Module 22** (`app/agent.py`, `app/tools/rag_tool.py`, potongan relevan `app/main.py` — sudah ditampilkan utuh di Langkah 3, 5, 6 di atas; tidak ada file lain yang berubah).
 
 ## 5. Apa yang TIDAK Ada di Module Ini
@@ -585,7 +700,7 @@ GUARDRAIL:
 
 ## 6. Checkpoint Praktik
 
-Langkah eksekusi lengkap ada di bagian **Panduan Praktik** di bawah (Langkah 6-10). Yang perlu dipastikan sebelum lanjut ke Module 23:
+Langkah eksekusi lengkap ada di Bagian 4 di atas (Langkah 1-7). Yang perlu dipastikan sebelum lanjut ke Module 23:
 
 - [ ] `docker compose exec api python -c "..."` di Langkah 1 Tahap A menunjukkan `OllamaClient.chat()` bekerja (dict dengan `role`/`content`)
 - [ ] `rag_search()` (Tahap B) mengembalikan potongan teks dokumen SOP yang relevan
@@ -706,100 +821,6 @@ def chat(request: ChatRequest) -> ChatResponse:
 ## Kesimpulan
 
 Module ini tidak menambah kemampuan baru yang terasa dari sisi user — jawaban `/chat` (endpoint baru) untuk pertanyaan seputar SOP seharusnya terasa sama seperti jawaban `/chat/stream` di akhir Module 20. Yang berubah adalah **arsitektur di baliknya**: logika retrieval yang dulu hardcoded langsung di endpoint sekarang jadi tool yang dipanggil lewat keputusan LLM sendiri, dibungkus graph LangGraph dengan state dan edge kondisional. Fondasi ini sengaja dibangun dengan satu tool dulu, supaya perubahan arsitekturnya bisa diverifikasi terpisah dari kompleksitas tool kedua — yang baru ditambahkan di Module 23.
-
-## Panduan Praktik
-
-> Catatan penomoran: bagian ini memakai penomoran "Langkah" tersendiri (melanjutkan urutan global lintas-module: Module 21 = Langkah 1-5, module ini = Langkah 6-10) yang berbeda dari "Langkah 1-6" di dalam Bagian 4 di atas — keduanya kebetulan bertumpang tindih penomoran tapi berasal dari dua urutan yang terpisah, peninggalan dari saat panduan ini masih satu dokumen gabungan Module 21-25.
-
-**Panduan Praktik — Module 22: Desain Agent dengan LangGraph — Tool-Calling**
-
-Lanjutan langsung dari bagian Panduan Praktik di materi Module 21 — folder `Nala/` dan service `postgres` (dengan data operasional yang sudah Anda isi lewat form) harus sudah siap sebelum mulai di sini. Penomoran Langkah di bawah melanjutkan penomoran global dari Module 21 (Langkah 1-5), supaya referensi silang antar-bagian tetap konsisten.
-
-### Prasyarat
-- Module 21 selesai: service `postgres` sehat, tabel `pengajuan_kredit`/`klaim_asuransi` sudah berisi data (7 baris + 4 baris) lewat form `/data-operasional`, role `nala_readonly`/`nala_writer` terverifikasi dua arah.
-- `docker compose up -d --build` sudah pernah dijalankan dari `Nala/` — kalau container belum jalan, jalankan ulang dari folder itu sebelum melanjutkan.
-
-### Langkah 6: Tambah dependency `langgraph`, method `chat()` di `OllamaClient` (Module 22 Tahap A)
-
-Ikuti Module 22 Bagian 4 Tahap A Langkah 1-2 (tambah `langgraph` ke `requirements.txt`, tambah method `chat()` ke `app/ollama_client.py`).
-
-```bash
-docker compose up --build --no-deps ollama api
-```
-
-```bash
-docker compose exec api python -c "
-from app.ollama_client import OllamaClient
-client = OllamaClient(base_url='http://ollama:11434', model='llama3.2:3b')
-result = client.chat(messages=[{'role': 'user', 'content': 'Halo, siapa kamu?'}])
-print(result)
-"
-```
-
-✅ **Indikator sukses**: dict Python dengan `role`/`content`, tidak ada error. `/chat` belum berubah perilaku.
-
-### Langkah 7: Tool pertama — bungkus RAG chain (Module 22 Tahap B)
-
-Ikuti Module 22 Bagian 4 Tahap B Langkah 3 (buat `app/tools/rag_tool.py`).
-
-```bash
-docker compose exec api python -c "
-from app.vector_store import VectorStore
-from app.tools.rag_tool import rag_search
-store = VectorStore(base_url='http://opensearch:9200', index_name='nala-docs')
-print(rag_search('syarat pengajuan kredit', store, 'http://ollama:11434')[:200])
-"
-```
-
-✅ **Indikator sukses**: potongan teks dari dokumen SOP (asumsi index OpenSearch dari module-module sebelumnya masih terisi — kalau kosong, jalankan ulang ingest, lihat bagian Panduan Praktik module yang membangun Airflow ingest pipeline, Module 16).
-
-### Langkah 8: Bangun graph LangGraph (Module 22 Tahap C)
-
-Ikuti Module 22 Bagian 4 Tahap C Langkah 4-5 (system prompt agent + `app/agent.py`).
-
-```bash
-docker compose up --build api
-```
-
-✅ **Indikator sukses**: log `api` menunjukkan `Uvicorn running` tanpa traceback — `nala_agent` belum dipanggil dari endpoint mana pun di titik ini.
-
-### Langkah 9: Sambungkan agent ke `/chat` (Module 22 Tahap C Langkah 6)
-
-Ikuti Module 22 Bagian 4 Tahap C Langkah 6.
-
-```bash
-docker compose up --build api
-```
-
-```bash
-curl -X POST http://localhost:8000/chat \
-  -H "Content-Type: application/json" \
-  -d '{"message": "Apa saja syarat pengajuan kredit untuk nasabah perorangan?"}'
-```
-
-✅ **Indikator sukses**: jawaban berbasis dokumen, kualitas setara Langkah 1 (agent memakai tool RAG, hasilnya seharusnya tidak berubah dari sebelum di-refactor).
-
-### Langkah 10: Pastikan `/chat/stream` tidak tersentuh, dan pertanyaan tanpa tool tetap jalan
-
-```bash
-curl -N -X POST http://localhost:8000/chat/stream \
-  -H "Content-Type: application/json" \
-  -d '{"messages": [{"role": "user", "content": "Halo, kamu siapa?"}]}'
-```
-
-```bash
-curl -X POST http://localhost:8000/chat \
-  -H "Content-Type: application/json" \
-  -d '{"message": "Halo, kamu siapa?"}'
-```
-
-✅ **Indikator sukses**: `/chat/stream` tetap streaming seperti sebelumnya (belum lewat agent, sesuai catatan scope Module 22 Bagian 4 Tahap C). `/chat` untuk sapaan tetap menjawab tanpa error — bukti `should_continue` mengarah ke `END` langsung tanpa memanggil tool. Module 22 selesai — lanjut ke bagian Panduan Praktik di materi Module 23.
-
-### Troubleshooting
-
-- **`message.tool_calls` selalu kosong padahal pertanyaannya jelas butuh tool**: cek versi Ollama (`docker compose exec ollama ollama --version`) — dukungan tool-calling butuh versi yang cukup baru. Cek juga `RAG_TOOL_SCHEMA` terkirim dengan benar sebagai parameter `tools` di `OllamaClient.chat()` (Module 22 Bagian 3, ⚠️ catatan kejujuran teknis).
-- **Agent tampak "menggantung" lama (timeout)**: wajar sampai batas tertentu — setiap panggilan tool berarti minimal satu panggilan tambahan ke `llama3.2:3b`, jadi pertanyaan yang butuh tool otomatis lebih lambat dari pertanyaan tanpa tool.
-- **Error umum lain** (`no configuration file provided`, `failed to read dockerfile`, port sudah dipakai, dsb.): lihat bagian Panduan Praktik > Troubleshooting di materi.md module-module sebelumnya (Module 7-16) — penyebab dan solusinya sama, tidak spesifik rangkaian Module 21-25.
 
 ---
 
