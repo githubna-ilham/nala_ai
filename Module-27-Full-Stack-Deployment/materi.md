@@ -38,8 +38,9 @@ Sepanjang Module 1-26, NALA tumbuh service demi service — dan `docker-compose.
 | Module 7-17 | + `opensearch`, `opensearch-dashboards`, `airflow` |
 | Module 18-21 | (OpenSearch dipakai sebagai hybrid search, Langfuse observability ditambahkan) |
 | Module 22-26 | + `postgres` (data operasional), LangGraph agent berjalan di dalam `api` yang sama |
+| Module 27 (module ini) | + `adminer` (satu-satunya service baru sungguhan di module ini) |
 
-Konsekuensinya: sampai akhir Module 26, tidak pernah ada **satu** `docker-compose.yml` yang benar-benar menjalankan semuanya sekaligus — tiap module cuma menjalankan service yang relevan untuk module itu (`docker compose up <service tertentu>`), bukan seluruh stack. Module ini bukan menulis service baru — service-nya sudah semua pernah dibangun. Tugasnya murni **konsolidasi**: satu `docker-compose.yml` final, satu `.env`, urutan startup yang jelas, dan kesiapan menjalankan tujuh+ container sekaligus di laptop peserta.
+Konsekuensinya: sampai akhir Module 26, tidak pernah ada **satu** `docker-compose.yml` yang benar-benar menjalankan semuanya sekaligus — tiap module cuma menjalankan service yang relevan untuk module itu (`docker compose up <service tertentu>`), bukan seluruh stack. Module ini **hampir seluruhnya konsolidasi**, bukan menulis service baru — hampir semua service sudah pernah dibangun di module sebelumnya, kecuali `adminer` (GUI database, baru benar-benar dipasang di sini). Tugasnya: satu `docker-compose.yml` final, satu `.env`, urutan startup yang jelas, dan kesiapan menjalankan sembilan container sekaligus di laptop peserta.
 
 Ini juga titik training paling berat secara resource — persis peringatan di README utama ("Minimal 16GB RAM — untuk menjalankan LLM lokal bersamaan dengan services pendukung"). Sampai Module 26, kita tidak pernah menyalakan **seluruh** service bersamaan; Module 27 adalah pertama kalinya itu terjadi.
 
@@ -57,7 +58,7 @@ flowchart TB
         AF["airflow<br/>ingest pipeline (standalone)"]
         PG["postgres<br/>data operasional<br/>(pengajuan kredit, klaim)"]
 
-        Adminer["adminer<br/>GUI database (Module 26)"]
+        Adminer["adminer<br/>GUI database (module ini)"]
 
         subgraph LF["Langfuse v2 self-hosted (observability)"]
             LFWeb["langfuse<br/>(monolitik: web+worker jadi satu)"]
@@ -530,7 +531,7 @@ volumes:
   postgres_data:
 ```
 
-Sembilan service total (bukan tiga belas seperti estimasi awal berbasis v4) — `ollama`, `api`, `opensearch`, `opensearch-dashboards`, `airflow`, `postgres`, `adminer` (Module 26, UI database ringan), `langfuse-db`, `langfuse`. Ini konfigurasi yang **sudah dijalankan langsung** (`docker compose up -d`), bukan ilustratif — lihat Bagian 4a untuk hasil pengujiannya, termasuk satu gotcha nyata soal rotasi password.
+Sembilan service total (bukan tiga belas seperti estimasi awal berbasis v4) — `ollama`, `api`, `opensearch`, `opensearch-dashboards`, `airflow`, `postgres`, `adminer` (baru di module ini, UI database ringan), `langfuse-db`, `langfuse`. Ini konfigurasi yang **sudah dijalankan langsung** (`docker compose up -d`), bukan ilustratif — lihat Bagian 4a untuk hasil pengujiannya, termasuk satu gotcha nyata soal rotasi password.
 
 **▶️ Jalankan & lihat hasilnya**
 
