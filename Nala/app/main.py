@@ -72,7 +72,9 @@ def chat_stream(request: ChatStreamRequest) -> StreamingResponse:
         results = []
 
     if request.use_rag and results:
-        context = "\n\n".join(r["text"] for r in results)
+        context = "\n\n".join(
+            f"[{r['metadata']['source']}]\n{r['text']}" for r in results
+        )
         system_prompt = NALA_SYSTEM_PROMPT
         grounded_content = f"Konteks:\n{context}\n\nPertanyaan: {last_user_message}"
     elif request.use_rag:
