@@ -63,6 +63,14 @@ cosine_similarity(A, B) = (A · B) / (‖A‖ × ‖B‖)
 
 di mana `A · B` adalah dot product (Bagian 2.c), dan `‖A‖`/`‖B‖` adalah panjang (*norm*) masing-masing vektor. Hasilnya berkisar **-1 sampai 1**:
 
+**Cara menghitung `‖V‖` (panjang/norm sebuah vektor)** — rumus Pythagoras yang diperluas ke banyak dimensi:
+
+```
+‖V‖ = √(v₁² + v₂² + ... + vₙ²)
+```
+
+Kuadratkan tiap angka di dalam vektor, jumlahkan semuanya, lalu akar-kan hasilnya. Kalau divisualisasikan sebagai panah dari titik `(0,0)`, `‖V‖` adalah panjang panah itu. Untuk vektor 768 dimensi (`nomic-embed-text` sungguhan), caranya sama persis — cuma ada 768 suku yang dikuadratkan dan dijumlahkan sebelum di-akar-kan, bukan cuma 2 seperti contoh di Bagian 2.e.
+
 - **1** — kedua vektor mengarah ke arah yang **persis sama** (paling mirip)
 - **0** — kedua vektor **tegak lurus** (tidak berhubungan)
 - **-1** — kedua vektor mengarah ke arah yang **berlawanan** (paling tidak mirip)
@@ -125,7 +133,17 @@ dot(Q, B) = (1×5)   + (0×5)   = 5.0
 
 ❌ **Dot product mentah bilang Chunk B (5.0) "lebih mirip" daripada Chunk A (0.9)** — padahal secara makna, Chunk A jelas lebih relevan (arahnya nyaris sama dengan query). Ini persis kelemahan yang dijelaskan Bagian 2.c: dot product ikut terpengaruh magnitude, dan magnitude besar Chunk B (mungkin karena chunk itu lebih panjang) membuatnya menang secara angka walau arahnya jauh berbeda.
 
-**Langkah 2 — Cosine similarity (mengabaikan magnitude):**
+**Langkah 2 — Hitung `‖Q‖`, `‖A‖`, `‖B‖` (panjang/norm tiap vektor):**
+
+```
+‖Q‖ = √(1² + 0²) = √1     = 1
+‖A‖ = √(0.9² + 0.1²) = √0.82 ≈ 0.906
+‖B‖ = √(5² + 5²)     = √50   ≈ 7.071
+```
+
+Kuadratkan tiap angka di dalam vektor, jumlahkan, lalu akar-kan (rumus Pythagoras yang diperluas — dibahas di Bagian 2.a). Angka-angka inilah yang dipakai sebagai pembagi di Langkah 3.
+
+**Langkah 3 — Cosine similarity (mengabaikan magnitude):**
 
 ```
 cosine(Q, A) = dot(Q,A) / (‖Q‖×‖A‖) = 0.9 / (1 × 0.906) ≈ 0.994
@@ -134,7 +152,7 @@ cosine(Q, B) = dot(Q,B) / (‖Q‖×‖B‖) = 5.0 / (1 × 7.071) ≈ 0.707
 
 ✅ **Cosine similarity membetulkan urutannya**: Chunk A (0.994) jauh lebih mirip daripada Chunk B (0.707) — sesuai intuisi makna, karena cosine cuma peduli **sudut**, bukan seberapa "panjang" vektornya.
 
-**Langkah 3 — Euclidean distance (L2):**
+**Langkah 4 — Euclidean distance (L2):**
 
 ```
 L2(Q, A) = √((1−0.9)² + (0−0.1)²) = √0.02 ≈ 0.141
@@ -143,7 +161,7 @@ L2(Q, B) = √((1−5)²   + (0−5)²)   = √41   ≈ 6.403
 
 ✅ **L2 juga membetulkan urutannya** (jarak lebih kecil = lebih mirip): Chunk A (0.141) jauh lebih dekat ke query dibanding Chunk B (6.403) — sejalan dengan cosine, kontras dengan dot product mentah di Langkah 1.
 
-**Langkah 4 — Sekarang normalisasikan A dan B, ulangi dot product:**
+**Langkah 5 — Sekarang normalisasikan A dan B, ulangi dot product:**
 
 ```
 A_ternormalisasi = (0.9/0.906, 0.1/0.906) ≈ (0.994, 0.110)
