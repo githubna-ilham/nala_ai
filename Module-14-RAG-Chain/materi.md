@@ -553,13 +553,30 @@ GUARDRAIL:
 
 Coba beberapa skenario untuk memastikan RAG benar-benar bekerja:
 
-**a. Pertanyaan yang jawabannya ada di dokumen:**
+**a. Pertanyaan yang jawabannya ada di dokumen — coba ke tiap dokumen yang sudah di-ingest (Bagian 1), bukan cuma satu:**
+
 ```bash
 curl -N -X POST http://localhost:8000/chat/stream \
   -H "Content-Type: application/json" \
   -d '{"messages": [{"role": "user", "content": "Dokumen apa saja yang saya butuhkan untuk mengajukan kredit?"}]}'
 ```
 ✅ Jawaban menyebut KTP, NPWP, laporan keuangan, dst — persis dari `sop-pengajuan-kredit.md`.
+
+```bash
+curl -N -X POST http://localhost:8000/chat/stream \
+  -H "Content-Type: application/json" \
+  -d '{"messages": [{"role": "user", "content": "Bagaimana prosedur pengajuan klaim asuransi?"}]}'
+```
+✅ Jawaban menyebut tahapan klaim (misal dokumen yang perlu dilampirkan, batas waktu pengajuan) — persis dari `sop-klaim-asuransi.md`, **bukan** tercampur dengan isi SOP kredit.
+
+```bash
+curl -N -X POST http://localhost:8000/chat/stream \
+  -H "Content-Type: application/json" \
+  -d '{"messages": [{"role": "user", "content": "Apa syarat pembukaan rekening tabungan?"}]}'
+```
+✅ Kalau `sop-pembukaan-rekening-tabungan.pdf` (opsional, Module 10) sudah disalin dan ikut di-ingest, jawaban menyebut syaratnya dari dokumen itu; kalau belum, jawabannya generik (fallback, lihat skenario **b**) — bukan error.
+
+Ketiga pertanyaan ini sengaja menyasar tiga dokumen sumber yang **berbeda** dengan `top_k=2` (Langkah 3) — cara paling sederhana membuktikan retrieval memang mengambil dokumen yang **relevan** dengan query, bukan sekadar mengembalikan dokumen yang sama setiap kali.
 
 **b. Index kosong → fallback, bukan crash:**
 ```bash
