@@ -136,7 +136,9 @@ curl -s -X POST "http://localhost:9200/nala-docs/_search" \
   }' | python3 -m json.tool
 ```
 
-Perhatikan field `"_score"` di tiap hasil — **itulah** angka yang dihasilkan formula BM25 di atas, dihitung OpenSearch di balik layar dari TF, IDF, dan length normalization tiap chunk relatif ke lima kata di query. Chunk dengan `_score` tertinggi ditaruh paling atas; kalau index Anda sama seperti di materi, chunk `### 2.1 Untuk Nasabah Perorangan` seharusnya muncul dekat urutan atas — konsisten dengan tabel token-matching di atas.
+Perhatikan field `"_score"` di tiap hasil — **itulah** angka yang dihasilkan formula BM25 di atas, dihitung OpenSearch di balik layar dari TF, IDF, dan length normalization tiap chunk relatif ke lima kata di query. Chunk dengan `_score` tertinggi ditaruh paling atas.
+
+⚠️ **Catatan jujur**: dengan `size: 5`, chunk `### 2.1 Untuk Nasabah Perorangan` **belum tentu** langsung terlihat di lima hasil teratas — pada pengujian nyata ke data NALA (32 chunk: 3 SOP + 1 catatan cabang), chunk ini baru muncul di posisi **#6 dari 21** dokumen yang cocok, kalah dari heading section `## 2. Syarat dan Ketentuan Pengajuan Kredit` (skor 7.53) yang literal mengandung kata "syarat", "pengajuan", "kredit" sekaligus di judulnya — walau heading itu sendiri tidak berisi jawaban detail (KTP, KK, slip gaji, dst). Ini bukan kegagalan BM25, ini **bukti nyata** kenapa BM25 sendirian juga belum cukup (motivasi Module 19 menggabungkannya dengan vector search).
 
 Kalau ingin tampilan lebih ringkas (cuma skor + potongan teks, tanpa metadata JSON penuh), pakai versi Python ini lewat container `api`:
 
@@ -159,6 +161,38 @@ for hit in response.json()['hits']['hits']:
 ✅ **Indikator sukses**: lima baris tercetak, terurut dari skor BM25 tertinggi ke terendah — bandingkan urutan ini dengan hasil `store.search()` (vector, Module 13) untuk query yang sama persis; urutannya kemungkinan besar berbeda, bukti konkret bahwa kedua metode benar-benar menilai relevansi dengan cara berbeda, persis seperti yang dijelaskan di atas.
 
 ⚠️ Ini **query mentah langsung ke OpenSearch** — belum lewat `VectorStore`, belum jadi bagian alur `/chat/stream` mana pun. Tujuannya murni eksplorasi supaya konsep BM25 di atas terasa nyata sebelum masuk ke kode aplikasi yang sesungguhnya di Bagian 4 (`search_bm25()`, yang membungkus query yang sama ini jadi method Python yang bisa dipanggil ulang).
+
+### Coba Langsung: Cari Posisi Pasti Chunk Target di Data Anda
+
+`size: 5` di atas cukup untuk melihat skor BM25 bekerja, tapi tidak cukup untuk **membuktikan** di posisi keberapa persis chunk yang Anda harapkan (`### 2.1 Untuk Nasabah Perorangan`) berada di antara **semua** dokumen yang cocok — kalau posisinya di luar 5 besar, `size: 5` cuma akan membuatnya terlihat "tidak ditemukan", padahal sebenarnya cuma belum ditampilkan. Naikkan `size` supaya semua hasil ikut kembali:
+
+```bash
+curl -s "http://localhost:9200/nala-docs/_search" -H "Content-Type: application/json" -d '{
+  "size": 15,
+  "_source": ["text","metadata"],
+  "query": { "match": { "text": "syarat pengajuan kredit nasabah perorangan" } }
+}'
+```
+
+Dua angka yang perlu dibaca dari response JSON-nya:
+
+- **`hits.total.value`** — jumlah **total** dokumen yang cocok (bukan cuma yang ditampilkan). Untuk query di atas, biasanya berkisar belasan-dua puluhan — karena `match` query BM25 default memakai operator `OR` antar kata, jadi chunk yang mengandung **minimal satu** dari lima kata query saja sudah dihitung "cocok", walau skornya rendah.
+- **Posisi chunk target di `hits.hits[]`** — array ini sudah terurut `_score` tertinggi ke terendah. Cari elemen dengan `"_id": "sop-pengajuan-kredit.md-3"` (atau `doc_id` chunk lain yang Anda harapkan), lalu hitung indeksnya (0-based) di array itu.
+
+Kalau ingin dihitung otomatis (bukan cari manual di JSON), pakai versi Python lewat container `api`, memakai `search_bm25()` yang baru selesai dibangun di Bagian 4 di bawah:
+
+```bash
+docker compose exec api python -c "
+from app.vector_store import VectorStore
+store = VectorStore(base_url='http://opensearch:9200', index_name='nala-docs')
+results = store.search_bm25('syarat pengajuan kredit nasabah perorangan', top_k=21)
+for i, r in enumerate(results):
+    tanda = '  <== target' if r['_id'] == 'sop-pengajuan-kredit.md-3' else ''
+    print(i, round(r['score'], 3), r['_id'], tanda)
+"
+```
+
+✅ **Indikator sukses**: baris dengan `<== target` tercetak di suatu posisi — catat angkanya. Ganti `'sop-pengajuan-kredit.md-3'` dengan `doc_id` chunk lain sesuai dokumen yang sudah Anda ingest sendiri (lihat `_id` di hasil `_search` biasa untuk tahu format `doc_id`-nya: `<nama-file>-<nomor-chunk>`, Module 15 Bagian 8).
 
 ## 3. Catatan Penting: BM25 Tidak Butuh Reindex
 
