@@ -2,7 +2,7 @@
 
 ## Tujuan
 
-Menambahkan cross-encoder reranking di atas kandidat top-20 hasil hybrid search Module 18-19, supaya urutan akhir yang dikirim ke LLM ditentukan oleh penilaian relevansi query-dokumen langsung, bukan cuma heuristik rank RRF.
+Menambahkan cross-encoder reranking di atas kandidat top-20 hasil retrieval, supaya urutan akhir yang dikirim ke LLM ditentukan oleh penilaian relevansi query-dokumen langsung, bukan cuma heuristik rank RRF. Reranking ini dipasang sebagai switch **independen** dari `search_method` (Module 18-19) — bisa dikombinasikan dengan `"vector"`, `"bm25"`, atau `"hybrid"` manapun, bukan cuma eksklusif untuk hybrid search.
 
 ## Definisi
 
@@ -26,7 +26,8 @@ sequenceDiagram
 ## Hasil Akhir yang Diharapkan
 
 - `app/reranker.py` (class `Reranker`, method `rerank()`) berjalan lokal offline lewat `sentence-transformers`/`cross-encoder/ms-marco-MiniLM-L-6-v2`, model di-*pre-pull* dan tersimpan di volume `hf_cache`
-- `/chat/stream` (satu-satunya endpoint chat NALA sejak Module 8) memanggil `search_hybrid(top_k=20)` lalu `reranker.rerank(top_k=3)`, dengan `RERANK_ENABLED` sebagai katup pengaman yang bisa dimatikan lewat env var
+- `/chat/stream` (satu-satunya endpoint chat NALA sejak Module 8) punya field baru `use_reranking: bool = True` — bisa dikombinasikan bebas dengan `search_method` (`"vector"`/`"bm25"`/`"hybrid"`, Module 18-19): total 6 kombinasi valid (3 metode retrieval × rerank on/off), semuanya lewat satu switch yang sama, bukan endpoint terpisah
+- `RERANK_ENABLED` (env var, server-wide) tetap ada sebagai katup pengaman terpisah dari `use_reranking` (per-request) — kalau server mematikannya, reranking tidak pernah jalan sama sekali walau user minta `use_reranking: true`
 - Bug infrastruktur nyata sudah diperbaiki: `torch` dipin ke build CPU-only (`+cpu`) supaya image `api` ~1.6GB, bukan ~9.6GB akibat varian CUDA default
 - Dibuktikan dengan uji nyata: kasus keras Module 19 Bagian 4 (chunk `### 2.1` di posisi #7-8) terselesaikan — jawaban `/chat/stream` jadi akurat 100% dan lengkap 8 item setelah reranking aktif
 - Trade-off latensi tercatat jujur dengan angka (~39 detik dengan reranking vs ~18 detik tanpa), dan temuan bahwa tanpa reranking `llama3.2:3b` tidak konsisten — kadang jujur "tidak ditemukan", kadang mengarang jawaban dari konteks yang kurang tepat
@@ -336,7 +337,7 @@ RERANK_ENABLED = os.environ.get("RERANK_ENABLED", "true").lower() == "true"
 reranker = Reranker() if RERANK_ENABLED else None
 ```
 
-`RERANK_ENABLED` (default `"true"`) sengaja dibuat bisa dimatikan lewat environment variable — lihat Bagian 6 kenapa ini bukan sekadar fitur opsional kosmetik, tapi katup pengaman kalau alokasi RAM laptop peserta mulai mepet begitu Module 22 (Langfuse) menambah beban lagi di atas stack yang sudah ada.
+`RERANK_ENABLED` (default `"true"`) sengaja dibuat bisa dimatikan lewat environment variable — lihat Bagian 6 kenapa ini bukan sekadar fitur opsional kosmetik, tapi katup pengaman **level-server** kalau alokasi RAM laptop peserta mulai mepet begitu Module 22 (Langfuse) menambah beban lagi di atas stack yang sudah ada. Ini beda dari `use_reranking` yang ditambahkan Langkah 5 di bawah — `use_reranking` adalah pilihan **per-request** dari user, `RERANK_ENABLED` adalah kill-switch operasional yang menang di atas permintaan user mana pun: kalau `RERANK_ENABLED=false`, `reranker` bernilai `None` dan reranking tidak pernah jalan sama sekali, tidak peduli `use_reranking` di request diisi apa.
 
 <details>
 <summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 4</strong></summary>
@@ -369,48 +370,88 @@ GUARDRAIL:
 
 </details>
 
-**Langkah 5 — Ubah alur retrieval di `/chat/stream`**
+**Langkah 5 — Tambah field `use_reranking` dan ubah alur retrieval di `/chat/stream`**
+
+Tambah field baru ke `ChatStreamRequest` (sudah punya `use_rag` dari Module 14 dan `search_method` dari Module 18):
 
 ```python
-# app/main.py — di dalam chat_stream(), menggantikan pemanggilan search_hybrid(top_k=3) dari Module 19
+# app/main.py
+class ChatStreamRequest(BaseModel):
+    messages: list[ChatMessage]
+    use_rag: bool = True
+    search_method: Literal["vector", "bm25", "hybrid"] = "hybrid"
+    use_reranking: bool = True
+```
+
+`use_reranking` **independen** dari `search_method` — user bisa memilih kombinasi apa pun dari 3 metode retrieval × on/off reranking (6 kombinasi total), bukan cuma "hybrid + rerank". Sekarang ubah blok retrieval supaya: (1) ukuran kandidat yang diminta ke `VectorStore` **bergantung** pada apakah reranking akan benar-benar jalan (20 kandidat kalau iya, angka lama Module 18-19 kalau tidak — supaya perilaku "tanpa rerank" tetap identik dengan sebelum module ini), dan (2) reranking cuma dipanggil kalau **kedua** syarat terpenuhi: `use_reranking=True` **dan** `reranker` tersedia (`RERANK_ENABLED` server tidak mematikannya):
+
+```python
+# app/main.py — di dalam chat_stream(), menggantikan blok retrieval dari Module 19
 try:
-    query_embedding = embed_text(last_user_message, base_url=OLLAMA_BASE_URL)
-    candidates = vector_store.search_hybrid(
-        query_text=last_user_message,
-        query_embedding=query_embedding,
-        top_k=20,
-    )
-    results = reranker.rerank(last_user_message, candidates, top_k=3) if reranker else candidates[:3]
+    do_rerank = request.use_reranking and reranker is not None
+    pool_size = 20 if do_rerank else (3 if request.search_method == "hybrid" else 6)
+
+    if request.search_method == "bm25":
+        candidates = vector_store.search_bm25(last_user_message, top_k=pool_size)
+    elif request.search_method == "hybrid":
+        query_embedding = embed_text(last_user_message, base_url=OLLAMA_BASE_URL)
+        candidates = vector_store.search_hybrid(
+            query_text=last_user_message,
+            query_embedding=query_embedding,
+            top_k=pool_size,
+        )
+    else:
+        query_embedding = embed_text(last_user_message, base_url=OLLAMA_BASE_URL)
+        candidates = vector_store.search(query_embedding, top_k=pool_size)
+
+    results = reranker.rerank(last_user_message, candidates, top_k=3) if do_rerank else candidates
 except httpx.HTTPError:
     results = []
 ```
 
-Perubahan intinya: `search_hybrid()` sekarang dipanggil dengan `top_k=20` (bukan `3`) untuk mengambil **kandidat**, bukan hasil final — hasil final baru didapat setelah `reranker.rerank(..., top_k=3)` memangkasnya. Kalau `RERANK_ENABLED=false` (`reranker is None`), sistem tetap berjalan dengan mengambil 3 kandidat teratas versi RRF langsung (`candidates[:3]`) — bukan error, cuma kembali ke perilaku Module 19 tanpa reranking.
+- **`do_rerank`**: satu variabel yang menggabungkan dua syarat (permintaan user **dan** izin server) — dipakai dua kali di bawahnya (`pool_size` dan `results`) supaya keduanya selalu konsisten, tidak mungkin kandidatnya cuma 6 tapi tetap dipaksa di-rerank (atau sebaliknya, ambil 20 kandidat tapi tidak pernah dipangkas cross-encoder).
+- **`pool_size` bercabang dua, bukan selalu 20**: kalau reranking **akan** jalan, ambil 20 kandidat dari metode retrieval mana pun (cross-encoder butuh kandidat lumayan banyak untuk bisa memilih yang terbaik, Bagian 2). Kalau **tidak**, `pool_size` kembali ke angka masing-masing metode dari Module 18-19 (`6` untuk `"vector"`/`"bm25"`, `3` untuk `"hybrid"`) — supaya kombinasi "tanpa rerank" berperilaku **identik** dengan sebelum module ini, bukan diam-diam berubah jadi 20 kandidat mentah tanpa penyortiran cross-encoder.
+- **Tiga cabang `if/elif/else` metode retrieval**: sama persis dengan Module 19 Tahap B (BM25 tanpa `embed_text()`, hybrid dan vector dengan `embed_text()`) — cuma `top_k` sekarang variabel (`pool_size`), bukan angka hardcoded.
+- **`results = reranker.rerank(...) if do_rerank else candidates`**: kalau reranking tidak jalan, `candidates` **sudah** berukuran final (karena `pool_size` sudah disesuaikan di atas) — tidak perlu potongan `[:3]` atau `[:6]` lagi di sini, beda dari desain awal yang sempat memakai `candidates[:3]` secara hardcoded.
 
 <details>
 <summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 5</strong></summary>
 
 ```
-Wiring Reranker ke /chat/stream (Module 20, Langkah 5).
+Tambah field use_reranking ke ChatStreamRequest dan wiring Reranker
+yang bisa dikombinasikan bebas dengan search_method di /chat/stream
+(Module 20, Langkah 5).
 
 GOAL:
-Di fungsi chat_stream() Nala/app/main.py: ganti pemanggilan
-vector_store.search_hybrid() yang top_k=3 (dari Module 19) jadi
-top_k=20, simpan hasilnya ke variabel `candidates` (bukan `results`),
-lalu tambah baris `results = reranker.rerank(last_user_message,
-candidates, top_k=3) if reranker else candidates[:3]`.
+- Di Nala/app/main.py, ChatStreamRequest (sudah punya messages,
+  use_rag dari Module 14, search_method dari Module 18-19): tambah
+  field use_reranking: bool = True.
+- Di dalam chat_stream(), ganti blok retrieval yang ada (if/elif/else
+  search_method dari Module 19) supaya:
+  1. do_rerank = request.use_reranking and reranker is not None
+  2. pool_size = 20 if do_rerank else (3 if request.search_method ==
+     "hybrid" else 6)
+  3. Tiga cabang if/elif/else search_method (sama seperti Module 19,
+     BM25 tanpa embed_text(), vector dan hybrid dengan embed_text())
+     — tapi semua top_k diganti jadi pool_size, dan variabelnya
+     disimpan sebagai `candidates` (bukan langsung `results`).
+  4. results = reranker.rerank(last_user_message, candidates,
+     top_k=3) if do_rerank else candidates
 
 CONTEXT:
-- reranker dan RERANK_ENABLED sudah dibuat Langkah 4.
-- vector_store.search_hybrid() sudah ada sejak Module 19.
-- /chat/stream adalah satu-satunya endpoint chat NALA sejak Module 8
-  — tidak ada endpoint /chat lain untuk diubah.
+- reranker dan RERANK_ENABLED (kill-switch server) sudah dibuat
+  Langkah 4.
+- search_bm25()/search()/search_hybrid() sudah ada sejak Module
+  13/18/19 — jangan tulis ulang logikanya, cuma ganti argumen top_k.
+- /chat/stream adalah satu-satunya endpoint chat NALA sejak Module 8.
 - Blok try/except httpx.HTTPError di sekitar retrieval TIDAK berubah
-  strukturnya — cuma isi di dalam try yang berubah.
+  strukturnya.
 
 GUARDRAIL:
 - JANGAN ubah logika fallback NALA_SYSTEM_PROMPT_NO_CONTEXT (dipicu
   kalau `results` kosong) — itu tetap sama persis dari Module 14.
+- JANGAN hardcode candidates[:3] atau candidates[:6] di cabang
+  do_rerank=False — pool_size sudah menangani ukurannya di sumbernya.
 - JANGAN ubah top_k lain di luar retrieval (mis. HISTORY_WINDOW atau
   system prompt building).
 ```
@@ -423,15 +464,31 @@ GUARDRAIL:
 docker compose up --build api
 ```
 
+Coba beberapa kombinasi — pertanyaan yang sama, `search_method` dan `use_reranking` berbeda:
+
 ```bash
 curl -N -X POST http://localhost:8000/chat/stream \
   -H "Content-Type: application/json" \
   -d '{"messages": [{"role": "user", "content": "Apa saja syarat pengajuan kredit untuk nasabah perorangan?"}]}'
 ```
 
-✅ **Indikator sukses**: jawaban tetap akurat (menyebut item dari `### 2.1`) seperti Module 19, muncul bertahap seperti biasa (flag `-N`), dan **response time terasa lebih lama** — 20 kandidat sekarang di-cross-encode setiap request, dibanding Module 19 yang langsung memotong ke 3 lewat RRF saja. Perlambatan ini nyata dan diharapkan — dibahas jujur di Bagian 6 sebagai trade-off, bukan bug. Untuk membandingkan langsung dengan reranking dimatikan (`RERANK_ENABLED=false`) — termasuk contoh nyata hasilnya dan kenapa perilakunya tidak konsisten — lihat Bagian 8.
+(tanpa field tambahan — default `search_method="hybrid"` + `use_reranking=true`)
 
-**📄 Kode lengkap Tahap B** (bagian relevan `app/main.py` setelah Module 20):
+```bash
+curl -N -X POST http://localhost:8000/chat/stream \
+  -H "Content-Type: application/json" \
+  -d '{"messages": [{"role": "user", "content": "Apa saja syarat pengajuan kredit untuk nasabah perorangan?"}], "search_method": "vector", "use_reranking": true}'
+```
+
+```bash
+curl -N -X POST http://localhost:8000/chat/stream \
+  -H "Content-Type: application/json" \
+  -d '{"messages": [{"role": "user", "content": "Apa saja syarat pengajuan kredit untuk nasabah perorangan?"}], "search_method": "bm25", "use_reranking": false}'
+```
+
+✅ **Indikator sukses**: keenam kombinasi (`vector`/`bm25`/`hybrid` × `use_reranking` `true`/`false`) sukses dijalankan tanpa error. Kombinasi manapun dengan `use_reranking: true` terasa lebih lambat (20 kandidat di-cross-encode) dibanding `use_reranking: false` (langsung dari metode retrieval, tanpa cross-encoder) — perlambatan ini nyata dan diharapkan, dibahas jujur di Bagian 6 sebagai trade-off, bukan bug. Bandingkan juga akurasi jawaban `vector + rerank` vs `vector` saja — reranking biasanya membantu **semua** metode retrieval, bukan cuma hybrid, karena cross-encoder menilai ulang kandidat apa pun sumbernya.
+
+**📄 Kode lengkap Tahap B** (bagian relevan `app/main.py` setelah Module 20 — kumulatif dari Module 14 `use_rag` + Module 18-19 `search_method` + Module 20 `use_reranking`):
 
 ```python
 # app/main.py — bagian setup (tambahan dari Module 20)
@@ -440,6 +497,13 @@ from app.reranker import Reranker
 # ...
 RERANK_ENABLED = os.environ.get("RERANK_ENABLED", "true").lower() == "true"
 reranker = Reranker() if RERANK_ENABLED else None
+
+
+class ChatStreamRequest(BaseModel):
+    messages: list[ChatMessage]
+    use_rag: bool = True
+    search_method: Literal["vector", "bm25", "hybrid"] = "hybrid"
+    use_reranking: bool = True
 
 
 @app.post("/chat/stream")
@@ -453,23 +517,41 @@ def chat_stream(request: ChatStreamRequest) -> StreamingResponse:
     recent = request.messages[-HISTORY_WINDOW:]
     last_user_message = recent[-1].content
 
-    try:
-        query_embedding = embed_text(last_user_message, base_url=OLLAMA_BASE_URL)
-        candidates = vector_store.search_hybrid(
-            query_text=last_user_message,
-            query_embedding=query_embedding,
-            top_k=20,
-        )
-        results = reranker.rerank(last_user_message, candidates, top_k=3) if reranker else candidates[:3]
-    except httpx.HTTPError:
+    if request.use_rag:
+        try:
+            do_rerank = request.use_reranking and reranker is not None
+            pool_size = 20 if do_rerank else (3 if request.search_method == "hybrid" else 6)
+
+            if request.search_method == "bm25":
+                candidates = vector_store.search_bm25(last_user_message, top_k=pool_size)
+            elif request.search_method == "hybrid":
+                query_embedding = embed_text(last_user_message, base_url=OLLAMA_BASE_URL)
+                candidates = vector_store.search_hybrid(
+                    query_text=last_user_message,
+                    query_embedding=query_embedding,
+                    top_k=pool_size,
+                )
+            else:
+                query_embedding = embed_text(last_user_message, base_url=OLLAMA_BASE_URL)
+                candidates = vector_store.search(query_embedding, top_k=pool_size)
+
+            results = reranker.rerank(last_user_message, candidates, top_k=3) if do_rerank else candidates
+        except httpx.HTTPError:
+            results = []
+    else:
         results = []
 
-    if results:
-        context = "\n\n".join(r["text"] for r in results)
+    if request.use_rag and results:
+        context = "\n\n".join(
+            f"[{r['metadata']['source']}]\n{r['text']}" for r in results
+        )
         system_prompt = NALA_SYSTEM_PROMPT
         grounded_content = f"Konteks:\n{context}\n\nPertanyaan: {last_user_message}"
-    else:
+    elif request.use_rag:
         system_prompt = NALA_SYSTEM_PROMPT_NO_CONTEXT
+        grounded_content = last_user_message
+    else:
+        system_prompt = NALA_SYSTEM_PROMPT_RAG_OFF
         grounded_content = last_user_message
 
     ollama_messages = [{"role": "system", "content": system_prompt}]
@@ -480,6 +562,36 @@ def chat_stream(request: ChatStreamRequest) -> StreamingResponse:
         ollama_client.chat_stream(ollama_messages), media_type="text/plain"
     )
 ```
+
+**Opsional — tambah checkbox di `chat.html`** (di dekat dropdown `searchMethodSelect` dari Module 18) supaya kombinasi ini bisa dicoba dari browser:
+
+```html
+<!-- app/templates/chat.html, di dekat searchMethodSelect (Module 18) -->
+<label class="rerank-toggle">
+  <input type="checkbox" id="useRerankingToggle" checked>
+  Rerank hasil (cross-encoder)
+</label>
+```
+
+```javascript
+// app/templates/chat.html, di dalam handler submit — menambah satu field ke body Module 19
+const useRag = document.getElementById("useRagToggle").checked;
+const searchMethod = document.getElementById("searchMethodSelect").value;
+const useReranking = document.getElementById("useRerankingToggle").checked;
+
+const response = await fetch("/chat/stream", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({
+    messages: conversation,
+    use_rag: useRag,
+    search_method: searchMethod,
+    use_reranking: useReranking,
+  }),
+});
+```
+
+Dengan dropdown `searchMethodSelect` (3 opsi) dan checkbox `useRerankingToggle` (independen) berdampingan, user bisa memilih ke-6 kombinasi langsung dari browser: `vector` saja, `vector` + rerank, `bm25` saja, `bm25` + rerank, `hybrid` saja, atau `hybrid` + rerank (default).
 
 ### Troubleshooting
 
@@ -510,12 +622,13 @@ Langkah eksekusi lengkap (termasuk pre-pull model) ada di Bagian 5, Langkah 1-5.
 
 - [ ] Model `cross-encoder/ms-marco-MiniLM-L-6-v2` sudah ter-*pre-pull* dan tersimpan di volume `hf_cache` (tidak diunduh ulang setiap `docker compose up --build`)
 - [ ] `reranker.rerank()` menghasilkan urutan yang bisa berbeda dari urutan RRF `search_hybrid()` untuk query yang sama
-- [ ] `/chat/stream` tetap menjawab akurat dengan reranking aktif, response time terasa lebih lama dibanding Module 19 (diharapkan, bukan bug)
-- [ ] `RERANK_ENABLED=false` (di `docker-compose.yml` atau env var saat menjalankan) membuat sistem tetap berjalan tanpa reranking, bukan error
+- [ ] `/chat/stream` punya field `use_reranking` yang independen dari `search_method` — keenam kombinasi (`vector`/`bm25`/`hybrid` × rerank on/off) berhasil dijalankan tanpa error
+- [ ] Kombinasi manapun dengan `use_reranking: true` response time-nya lebih lama dibanding `use_reranking: false` untuk `search_method` yang sama (diharapkan, bukan bug)
+- [ ] `RERANK_ENABLED=false` (env var server-wide) membuat sistem tetap berjalan tanpa reranking walau `use_reranking: true` diminta di request — kill-switch operasional menang di atas preferensi user
 
 ## 8. Hasil Uji Nyata: Kasus Keras Module 19 Bagian 4 Terselesaikan
 
-Pertanyaan yang jadi kasus keras di Module 19 Bagian 4 — *"Apa saja syarat pengajuan kredit untuk nasabah perorangan?"* (chunk jawaban `### 2.1` cuma di posisi #7-8, tidak masuk `top_k=3` hybrid search) — diuji ulang lewat `/chat/stream` setelah reranking aktif:
+Pertanyaan yang jadi kasus keras di Module 19 Bagian 4 — *"Apa saja syarat pengajuan kredit untuk nasabah perorangan?"* (chunk jawaban `### 2.1` cuma di posisi #7-8, tidak masuk `top_k=3` hybrid search) — diuji ulang lewat `/chat/stream` setelah reranking aktif, pakai kombinasi default (`search_method="hybrid"` + `use_reranking=true`, tidak perlu disebut eksplisit di request):
 
 ```bash
 curl -N -X POST http://localhost:8000/chat/stream \
