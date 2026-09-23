@@ -787,13 +787,13 @@ curl -N -X POST http://localhost:8000/chat/stream \
 
 ## 5. Data Operasional: Upload vs Airflow (Preview Module 16-17)
 
-Sejauh ini, data seed (Bagian 1) diisi lewat pemanggilan `ingest_documents()` secara manual dari terminal. Module 15 dulu meng-**upgrade** `ingest_documents()` supaya memecah dokumen jadi chunk sebelum embed, baru Module 16-17 menambahkan **dua cara lain** memicu proses yang sudah di-upgrade itu:
+Sejauh ini, data seed (Bagian 1) diisi lewat pemanggilan `ingest_documents()` secara manual dari terminal. Module 15 nanti meng-**upgrade** `ingest_document()` (tunggal) supaya memecah dokumen jadi chunk sebelum embed — `ingest_documents()` (jamak) tetap jadi loop tipis di atasnya, tidak berubah polanya. Module 16-17 lalu menambahkan **dua cara lain** memicu proses yang sudah di-upgrade itu, masing-masing lewat fungsi yang **sesuai skalanya**:
 
 | Aspek | Endpoint Upload (Module 16) | Airflow Pipeline (Module 17) |
 |---|---|---|
 | Trigger | Staff upload lewat form web | Manual trigger di Airflow UI/CLI |
 | Cocok untuk | Satu dokumen, cepat, reaktif | Batch, audit trail, siap upgrade ke terjadwal |
-| Kode yang dipanggil | `ingest_documents()` — versi **upgrade** dari Module 15 | `ingest_documents()` — fungsi **sama persis** dengan yang dipanggil Upload |
+| Kode yang dipanggil | `ingest_document()` (tunggal) — versi **upgrade** dari Module 15, cuma untuk file yang baru diupload | `ingest_documents()` (jamak) — scan ulang seluruh folder, versi **upgrade** dari Module 15 |
 
 **Poin penting**: kode `/chat/stream` di module ini **tidak akan berubah sama sekali** setelah Module 15-17 selesai — chunking, upload, dan Airflow cuma menambah/mengubah **cara mengisi index**, retrieval-nya tetap membaca index `nala-docs` apa adanya, tidak peduli dokumen itu masuk lewat CLI manual (Bagian 1), form upload (Module 16), atau Airflow (Module 17), dan tidak peduli isinya satu vektor per dokumen (sekarang) atau beberapa chunk per dokumen (setelah Module 15). Ini dibuktikan langsung setelah Module 16-17 selesai.
 
