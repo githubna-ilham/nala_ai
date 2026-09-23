@@ -374,7 +374,73 @@ POST nala-docs/_search
 
 ⚠️ **Kenapa langkah manual (curl maupun Dev Tools) tidak dipakai sungguhan**: menyalin-tempel array 768 angka jelas tidak praktis — ini murni latihan pembuktian konsep. Begitu jelas OpenSearch memang bisa menyimpan dan mencari vektor seperti yang diharapkan, Module 13 menulis kode Python yang melakukan proses identik secara otomatis (memanggil `embed_text()`, mengirim hasilnya ke OpenSearch, tanpa copy-paste manual).
 
-## 5. Checkpoint Praktik
+## 5. Referensi: Operasi yang Tersedia di OpenSearch REST API
+
+Uji coba di Bagian 4 baru memakai beberapa operasi (buat index, simpan dokumen, cari lewat k-NN, hitung jumlah dokumen) — itu bukan **semua** yang bisa dilakukan OpenSearch lewat REST API-nya. Mengenal permukaan lengkapnya berguna sebelum Module 13 membangun `VectorStore` yang cuma membungkus sebagian kecil dari semua ini, sama seperti Module 4 mengenalkan permukaan lengkap REST API Ollama sebelum `OllamaClient` dibangun.
+
+### 5.1 Operasi yang Sudah/Akan Dipakai NALA
+
+| Operasi | Endpoint | Dipakai di NALA |
+|---|---|---|
+| Cek index ada | `HEAD /{index}` | `VectorStore.ensure_index()` (Module 13) — cek dulu sebelum membuat, supaya tidak error kalau dipanggil berulang |
+| Buat index + mapping | `PUT /{index}` | `VectorStore.ensure_index()` (Module 13) — sudah dicoba manual di Bagian 4 |
+| Simpan/timpa dokumen | `PUT /{index}/_doc/{id}` | `VectorStore.index_document()` (Module 13) — sudah dicoba manual di Bagian 4 |
+| Cari dokumen (k-NN vector) | `POST /{index}/_search` (query `knn`) | `VectorStore.search()` (Module 13) — sudah dicoba manual di Bagian 4 |
+| Cari dokumen (BM25 keyword) | `POST /{index}/_search` (query `match`) | Belum dipakai sampai Module 18 (hybrid search) |
+| Hitung jumlah dokumen | `GET /{index}/_count` | Dipakai untuk verifikasi manual di Bagian 4 |
+
+### 5.2 Operasi Lain yang Tersedia (Belum Dipakai NALA)
+
+| Operasi | Endpoint | Fungsi |
+|---|---|---|
+| Ambil satu dokumen | `GET /{index}/_doc/{id}` | Ambil kembali satu dokumen persis apa adanya (termasuk field `embedding` mentah) berdasarkan ID-nya — beda dengan `_search` yang mencari berdasarkan kemiripan/kata kunci |
+| Cek dokumen ada | `HEAD /{index}/_doc/{id}` | Cek keberadaan satu dokumen tanpa mengambil isinya, lebih ringan dari `GET` kalau cuma butuh tahu ada/tidak |
+| Update sebagian field | `POST /{index}/_update/{id}` | Ubah sebagian field dokumen (mis. `metadata` saja) tanpa perlu mengirim ulang seluruh dokumen termasuk `embedding`-nya |
+| Hapus satu dokumen | `DELETE /{index}/_doc/{id}` | Hapus satu dokumen — relevan kalau nanti NALA butuh fitur "hapus dokumen dari knowledge base" |
+| Hapus index (semua isinya) | `DELETE /{index}` | Hapus index beserta seluruh dokumen di dalamnya — dipakai manual kalau mapping perlu diubah total (lihat catatan `space_type` di Module 13 Bagian 3) |
+| Lihat mapping index | `GET /{index}/_mapping` | Lihat struktur field yang sudah ditetapkan untuk sebuah index — cara cepat mengecek `space_type`/`dimension` yang aktif tanpa buka kode |
+| Operasi massal (bulk) | `POST /_bulk` | Kirim banyak operasi (index/update/delete) sekaligus dalam satu request — jauh lebih cepat daripada memanggil `_doc` satu per satu untuk ratusan dokumen; relevan kalau `ingest_documents()` (Module 14) suatu saat perlu dioptimasi untuk dataset besar |
+| Kesehatan cluster | `GET /_cluster/health` | Detail status cluster (jumlah node, jumlah shard aktif, dst.) — versi lebih rinci dari yang terlihat di `docker compose logs opensearch` |
+| Daftar semua index | `GET /_cat/indices?v` | Lihat semua index yang ada di OpenSearch beserta ukuran dan jumlah dokumennya masing-masing, dalam format tabel yang mudah dibaca manusia |
+| Info node | `GET /_cat/nodes?v` | Lihat node yang aktif di cluster — untuk single-node training ini, hasilnya cuma satu baris |
+
+### 5.3 Contoh Cepat: Memanggil Beberapa Operasi Lain Lewat `curl`
+
+Operasi-operasi di Bagian 5.2 tidak dipakai kode NALA saat ini, tapi bisa dicoba langsung untuk memastikan pemahamannya — jalankan sambil container `opensearch` masih aktif:
+
+```bash
+# Ambil kembali dokumen test-1 yang sudah disimpan di Bagian 4
+curl http://localhost:9200/nala-docs/_doc/test-1
+
+# Lihat mapping index nala-docs (cek space_type/dimension yang aktif)
+curl http://localhost:9200/nala-docs/_mapping
+
+# Daftar semua index beserta ukuran & jumlah dokumen, format tabel
+curl "http://localhost:9200/_cat/indices?v"
+
+# Kesehatan cluster secara detail
+curl http://localhost:9200/_cluster/health
+```
+
+**`POST /_update`** — ubah `metadata` tanpa mengirim ulang `text`/`embedding`:
+
+```bash
+curl -X POST "http://localhost:9200/nala-docs/_update/test-1" -H 'Content-Type: application/json' -d '{
+  "doc": { "metadata": { "source": "manual-test", "verified": true } }
+}'
+```
+
+**`DELETE /{index}/_doc/{id}`** — hapus dokumen `test-1` (data uji coba dari Bagian 4, aman dihapus kapan saja):
+
+```bash
+curl -X DELETE http://localhost:9200/nala-docs/_doc/test-1
+```
+
+### 5.4 Kenapa `VectorStore` (Module 13) Nanti Cuma Membungkus Sebagian Kecil
+
+Dari daftar di atas, `VectorStore` yang dibangun Module 13 sengaja **tidak** membungkus semua operasi OpenSearch — cuma `ensure_index()`, `index_document()`, dan `search()`, karena itulah yang dibutuhkan NALA saat itu. Ini konsisten dengan pola yang berulang sepanjang training: tambahkan kemampuan **tepat saat dibutuhkan**, bukan diborong di awal. Kalau nanti NALA butuh menghapus dokumen atau melakukan operasi massal, `VectorStore` akan diperluas dengan method baru yang memanggil operasi terkait — bukan mengganti method yang sudah ada.
+
+## 6. Checkpoint Praktik
 
 Yang perlu dipastikan sebelum lanjut ke Module 13:
 
