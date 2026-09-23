@@ -40,7 +40,7 @@ Module 10-13 membangun tiga alat terpisah: `extract_text()` (Module 10), `embed_
 
 ⚠️ **Belum ada chunking di versi ini**: tiap dokumen dibaca `extract_text()` **secara utuh**, langsung di-embed **secara utuh** jadi satu vektor, lalu disimpan sebagai **satu entri** di OpenSearch (`doc_id` = nama file apa adanya, bukan `filename-0`, `filename-1`, dst). Ini sengaja — versi pertama RAG dibuat sesederhana mungkin supaya cepat terbukti bekerja. Bagian 7 di bawah akan menunjukkan keterbatasan nyata dari pendekatan ini, yang jadi alasan konkret Module 15 menambahkan chunking.
 
-**Langkah 1 — Tambah `ingest_documents()` di `app/ingest.py`**
+**Langkah 1 — Tambah `ingest_document()` dan `ingest_documents()` di `app/ingest.py`**
 
 `app/ingest.py` sejak Module 10 berisi `extract_text()`. Tambahkan import dan konstanta baru di baris paling atas:
 
@@ -57,34 +57,47 @@ OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
 OPENSEARCH_BASE_URL = os.environ.get("OPENSEARCH_BASE_URL", "http://localhost:9200")
 ```
 
-Lalu tambahkan fungsi baru di akhir file:
+Sebelum membangun versi "satu folder sekaligus", bangun dulu bagian intinya: fungsi untuk **satu dokumen spesifik**. Tambahkan di akhir file:
 
 ```python
 # app/ingest.py, di bawah extract_text()
-def ingest_documents(folder_path: str) -> int:
+def ingest_document(file_path: str) -> None:
     store = VectorStore(base_url=OPENSEARCH_BASE_URL, index_name="nala-docs")
     store.ensure_index()
 
+    filename = os.path.basename(file_path)
+    content = extract_text(file_path)
+    embedding = embed_text(content, base_url=OLLAMA_BASE_URL)
+    store.index_document(
+        doc_id=filename,
+        text=content,
+        embedding=embedding,
+        metadata={"source": filename},
+    )
+```
+
+`ingest_document()` (tunggal) menerima **path satu file spesifik** — bukan folder — lalu memproses cuma file itu: memastikan index OpenSearch sudah ada (`ensure_index()`), baca isinya jadi string utuh (`extract_text`, Module 10), embed **seluruh isi dokumen sekaligus** (`embed_text`, Module 11), lalu index-kan ke OpenSearch (`store.index_document`, Module 13) dengan `doc_id` = nama filenya sendiri (`os.path.basename(file_path)`, supaya sama persis dengan `doc_id` yang dipakai `ingest_documents()` di bawah, tidak peduli path lengkap yang diberikan). Inilah titik di mana ketiga potongan (ekstraksi teks, embedding, vector store) akhirnya bertemu di satu file — versi paling sederhana yang mungkin, untuk **satu** dokumen.
+
+Sekarang bangun versi "satu folder sekaligus" **di atas** fungsi tunggal itu — bukan menulis ulang logikanya:
+
+```python
+# app/ingest.py, di bawah ingest_document()
+def ingest_documents(folder_path: str) -> int:
     total_documents = 0
     for filename in sorted(os.listdir(folder_path)):
         if not filename.endswith((".md", ".txt", ".pdf")):
             continue
-        content = extract_text(os.path.join(folder_path, filename))
-        embedding = embed_text(content, base_url=OLLAMA_BASE_URL)
-        store.index_document(
-            doc_id=filename,
-            text=content,
-            embedding=embedding,
-            metadata={"source": filename},
-        )
+        ingest_document(os.path.join(folder_path, filename))
         total_documents += 1
 
     return total_documents
 ```
 
-Fungsi ini: memastikan index OpenSearch sudah ada (`ensure_index()`), scan semua file `.md`/`.txt`/`.pdf` di folder tersebut (urut alfabetis), baca isinya jadi string utuh (`extract_text`, Module 10), embed **seluruh isi dokumen sekaligus** (`embed_text`, Module 11), lalu index-kan satu entri per dokumen ke OpenSearch (`store.index_document`, Module 13) dengan `doc_id` = nama filenya sendiri. Inilah titik di mana ketiga potongan (ekstraksi teks, embedding, vector store) akhirnya bertemu di satu file — versi paling sederhana yang mungkin.
+`ingest_documents()` (jamak) sekarang cuma **loop** — scan semua file `.md`/`.txt`/`.pdf` di folder tersebut (urut alfabetis), panggil `ingest_document()` untuk tiap file satu per satu, hitung berapa yang berhasil diproses. Tidak ada logika baca/embed/simpan yang diduplikasi antara keduanya — satu-satunya "kebenaran" soal bagaimana **satu** dokumen diproses ada di `ingest_document()`, `ingest_documents()` cuma memanggilnya berulang.
 
-> **📝 Catatan penting — semua dokumen di-embed ulang, bukan cuma yang baru**: `ingest_documents()` **tidak** membedakan dokumen lama vs baru — setiap kali dipanggil, fungsi ini scan ulang **seluruh isi folder**, lalu embed ulang semuanya dari nol. **Kenapa ini tidak menyebabkan duplikat**: `doc_id=filename` bersifat deterministik — dokumen yang sama selalu punya ID yang sama, jadi `index_document()` **menimpa** (overwrite), bukan menambah entri baru — idempotent, aman dijalankan berkali-kali. **Tapi ini boros**: makin banyak dokumen lama, makin banyak panggilan Ollama yang tidak perlu tiap kali di-ingest ulang. Di production nyata, biasanya ditambah pengecekan `mtime`/hash file untuk skip dokumen yang tidak berubah — di luar cakupan training ini, demi kesederhanaan belajar konsep.
+> **📝 Kenapa dipisah jadi dua fungsi, bukan satu**: `ingest_documents()` (folder) tetap dipakai untuk mengisi index pertama kali (Langkah ini) dan untuk Airflow (Module 17, yang men-scan ulang seluruh folder secara berkala). Tapi begitu Module 16 (Upload Dokumen) menambahkan endpoint upload, cuma **satu** file baru yang perlu di-ingest — memanggil `ingest_documents()` (scan+embed ulang **seluruh** folder) untuk itu jelas boros, apalagi kalau folder-nya sudah berisi banyak dokumen lama yang tidak berubah. `ingest_document()` (tunggal) memungkinkan Module 16 nanti meng-ingest **cuma dokumen yang baru diupload**, tanpa menyentuh dokumen lain sama sekali.
+
+⚠️ **`doc_id` deterministik membuat keduanya aman dipanggil berkali-kali (idempotent)**: `doc_id=filename` selalu sama untuk dokumen yang sama, jadi `index_document()` **menimpa** (overwrite) entri lama, bukan menduplikasi. Bedanya cuma soal **berapa banyak yang ikut diproses ulang**: `ingest_documents()` (folder) scan ulang **seluruh isi folder** setiap kali dipanggil — makin banyak dokumen lama, makin banyak panggilan Ollama yang sebenarnya tidak perlu (dokumennya tidak berubah, tapi tetap di-embed ulang). `ingest_document()` (tunggal) **tidak** punya masalah ini — cuma file yang disebutkan yang diproses, dokumen lain sama sekali tidak tersentuh. Di production nyata, `ingest_documents()` biasanya ditambah pengecekan `mtime`/hash file untuk skip dokumen yang tidak berubah — di luar cakupan training ini, demi kesederhanaan belajar konsep.
 
 **▶️ Jalankan & lihat hasilnya**
 
@@ -104,6 +117,14 @@ curl "http://localhost:9200/nala-docs/_count"
 
 harus menunjukkan angka yang sama.
 
+Coba juga `ingest_document()` (tunggal) langsung — meng-ingest **satu** file spesifik, tanpa menyentuh dokumen lain:
+
+```bash
+docker compose exec api python -c "from app.ingest import ingest_document; ingest_document('/app/knowledge-base/sop-pengajuan-kredit.md')"
+```
+
+Tidak ada nilai balik (return `None`) — cek lewat `curl "http://localhost:9200/nala-docs/_count"` yang sama: `count` tidak bertambah kalau file itu sudah pernah di-ingest sebelumnya (overwrite, bukan duplikat), sesuai penjelasan idempotency di atas.
+
 > 🔧 **Troubleshooting — chat menjawab generik / bilang belum ada dokumen internal padahal sudah ingest**: `/chat/stream` (Bagian 2) otomatis jatuh ke mode tanpa-konteks saat index OpenSearch masih kosong (atau belum menyala) — itu normal, bukan error, tapi tandanya ingest belum berhasil. Cek lagi `curl http://localhost:9200/nala-docs/_count` — kalau `count` bernilai 0, index memang kosong, jalankan ulang Langkah 1 ini.
 
 > **📝 Catatan — beda dengan Module 15 nanti**: angka yang dikembalikan di sini adalah jumlah **dokumen**, bukan jumlah chunk — karena belum ada chunking. Setelah Module 15 meng-upgrade `ingest_documents()` untuk memecah tiap dokumen jadi beberapa chunk dulu sebelum di-embed, angka yang sama akan jauh lebih besar (satu dokumen bisa jadi 8-13 chunk, tergantung strategi chunking-nya) — perbandingan langsung ini jadi bukti konkret kenapa chunking penting, bukan cuma teori.
@@ -114,9 +135,10 @@ harus menunjukkan angka yang sama.
 <summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 1</strong></summary>
 
 ```
-Tambah ingest_documents() v1 ke app/ingest.py yang sudah ada
-(Module 14) — menyatukan extract_text() (Module 10) dengan embed_text()
-(Module 11) dan VectorStore (Module 13). BELUM ADA CHUNKING.
+Tambah ingest_document() dan ingest_documents() v1 ke app/ingest.py
+yang sudah ada (Module 14) — menyatukan extract_text() (Module 10)
+dengan embed_text() (Module 11) dan VectorStore (Module 13). BELUM
+ADA CHUNKING.
 
 GOAL:
 - Di Nala/app/ingest.py (saat ini berisi
@@ -126,20 +148,29 @@ GOAL:
     VectorStore`, lalu dua konstanta OLLAMA_BASE_URL dan
     OPENSEARCH_BASE_URL masing-masing dari os.environ.get(...) dengan
     default http://localhost:11434 dan http://localhost:9200.
-  - Tambah fungsi baru ingest_documents(folder_path: str) -> int di
+  - Tambah fungsi baru ingest_document(file_path: str) -> None di
     BAWAH extract_text() (jangan ubah extract_text() yang sudah ada):
     bikin VectorStore(base_url=OPENSEARCH_BASE_URL,
-    index_name="nala-docs"), panggil store.ensure_index(), lalu untuk
-    tiap file .md/.txt/.pdf di folder_path (urut alfabetis), panggil
-    extract_text() untuk dapat isinya UTUH (bukan dipecah), embed_text()
-    isinya sekaligus, lalu
-    store.index_document(doc_id=filename, text=content,
-    embedding=embedding, metadata={"source": filename}). Return total
+    index_name="nala-docs"), panggil store.ensure_index(), ambil
+    filename dari os.path.basename(file_path), panggil extract_text()
+    untuk dapat isinya UTUH (bukan dipecah), embed_text() isinya
+    sekaligus, lalu store.index_document(doc_id=filename,
+    text=content, embedding=embedding, metadata={"source": filename}).
+    Fungsi ini memproses SATU file saja, tidak ada return value.
+  - Tambah fungsi baru ingest_documents(folder_path: str) -> int di
+    BAWAH ingest_document(): untuk tiap file .md/.txt/.pdf di
+    folder_path (urut alfabetis), panggil ingest_document() dengan
+    path lengkap file itu. JANGAN duplikasi logika
+    ensure_index()/extract_text()/embed_text()/index_document() di
+    sini — cukup panggil ingest_document() per file. Return total
     jumlah DOKUMEN (bukan chunk) yang ter-index.
 
 CONTEXT:
 - app/embeddings.py (Module 11) dan app/vector_store.py (Module 13)
   sudah ada dan tidak perlu diubah.
+- ingest_document() (tunggal) adalah building block atomik; nantinya
+  Module 16 (Upload Dokumen) akan memanggilnya untuk meng-ingest satu
+  file yang baru diupload, tanpa scan ulang seluruh folder.
 - BELUM ADA chunking di versi ini — satu dokumen = satu vektor. Itu
   baru ditambahkan Module 15.
 
