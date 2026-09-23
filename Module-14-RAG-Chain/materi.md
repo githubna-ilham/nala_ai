@@ -2,7 +2,7 @@
 
 ## Tujuan
 
-Menyatukan tiga potongan yang sudah dibangun (`extract_text()` Module 10, `embed_text()` Module 11, `VectorStore` Module 13) jadi satu fungsi `ingest_documents()` **versi pertama** — belum ada chunking, satu dokumen di-embed jadi **satu vektor utuh**. Memakainya untuk mengisi index dengan **data seed** (Bagian 2), lalu menyambungkan `/chat/stream` — satu-satunya endpoint chat NALA sejak Module 8 — ke retrieval. Ini titik paling penting Module 7-17 sejauh ini: **RAG benar-benar bekerja untuk pertama kalinya** — NALA menjawab dari dokumen sungguhan, bukan lagi generik. Chunking (Module 15) akan meng-upgrade `ingest_documents()` ini nanti — bukan menggantinya dari nol.
+Menyatukan tiga potongan yang sudah dibangun (`extract_text()` Module 10, `embed_text()` Module 11, `VectorStore` Module 13) jadi satu fungsi `ingest_documents()` **versi pertama** — belum ada chunking, satu dokumen di-embed jadi **satu vektor utuh**. Memakainya untuk mengisi index dengan **data seed** (Bagian 2), lalu menyambungkan `/chat/stream` — satu-satunya endpoint chat NALA sejak Module 8 — ke retrieval, sekaligus memberi user **kendali** untuk memilih pakai RAG atau tidak lewat switch `use_rag` (Bagian 2 Langkah 4). Ini titik paling penting Module 7-17 sejauh ini: **RAG benar-benar bekerja untuk pertama kalinya** — NALA menjawab dari dokumen sungguhan, bukan lagi generik. Chunking (Module 15) akan meng-upgrade `ingest_documents()` ini nanti — bukan menggantinya dari nol.
 
 ## Definisi
 
@@ -12,12 +12,14 @@ Supaya jawaban yang dihasilkan benar-benar berdasarkan dokumen (bukan mengarang)
 
 ```mermaid
 flowchart LR
-    U["Pertanyaan user"] --> E["embed_text()"]
+    U["Pertanyaan user"] -->|"use_rag=true"| E["embed_text()"]
+    U -->|"use_rag=false"| R["NALA_SYSTEM_PROMPT_RAG_OFF"]
     E --> S["vector_store.search()"]
     S -->|"ada hasil"| G["Grounding:<br/>NALA_SYSTEM_PROMPT"]
     S -->|"kosong/gagal"| F["Fallback:<br/>NALA_SYSTEM_PROMPT_NO_CONTEXT"]
     G --> J["Jawaban ber-konteks"]
     F --> J2["Jawaban generik, jujur"]
+    R --> J3["Jawaban generik, sengaja"]
 ```
 
 ## Hasil Akhir yang Diharapkan
@@ -27,6 +29,7 @@ flowchart LR
 - `/chat/stream` menjawab berdasarkan isi dokumen SOP yang ter-index, bukan generik lagi, untuk pertanyaan yang jawabannya ada di knowledge base
 - Multi-turn (Module 8) tetap berfungsi setelah retrieval ditambahkan — pertanyaan lanjutan tanpa kata kunci eksplisit tetap dipahami dan tetap memicu retrieval baru
 - Index kosong/OpenSearch tak terjangkau menghasilkan fallback ke `NALA_SYSTEM_PROMPT_NO_CONTEXT` (jawaban tetap mengalir normal, bukan error)
+- User bisa memilih pakai RAG atau tidak lewat toggle di `chat.html` (atau field `use_rag` di request API) — mematikan RAG benar-benar melewati retrieval, bukan cuma mengabaikan hasilnya
 - Kita memahami keterbatasan nyata retrieval **level-dokumen** (Bagian 7) sebagai motivasi jujur untuk chunking di Module 15 — bukan diklaim sebagai retrieval yang sudah optimal
 
 ## 1. Menyatukan Tiga Potongan: `ingest_documents()` v1
@@ -152,7 +155,7 @@ GUARDRAIL:
 
 ## 2. Sambungkan Retrieval ke `/chat/stream`
 
-Sekarang index sudah terisi (Bagian 1) — saatnya membuat `/chat/stream` benar-benar **membaca** dari index itu sebelum menjawab. `/chat/stream` adalah **satu-satunya** endpoint chat sejak Module 8 (`/chat` sudah dihapus total) — jadi retrieval cukup ditambahkan di satu tempat, tidak ada endpoint kedua yang perlu disinkronkan. Dua Langkah: **Langkah 2** menyiapkan fondasi (prompt fallback + import + koneksi `VectorStore`), **Langkah 3** mengubah `/chat/stream` itu sendiri.
+Sekarang index sudah terisi (Bagian 1) — saatnya membuat `/chat/stream` benar-benar **membaca** dari index itu sebelum menjawab. `/chat/stream` adalah **satu-satunya** endpoint chat sejak Module 8 (`/chat` sudah dihapus total) — jadi retrieval cukup ditambahkan di satu tempat, tidak ada endpoint kedua yang perlu disinkronkan. Tiga Langkah: **Langkah 2** menyiapkan fondasi (prompt fallback + import + koneksi `VectorStore`), **Langkah 3** mengubah `/chat/stream` itu sendiri, **Langkah 4** menambah switch `use_rag` supaya user bisa memilih pakai RAG atau tidak.
 
 **Langkah 2 — Tambah `NALA_SYSTEM_PROMPT_NO_CONTEXT` dan setup `VectorStore` di `main.py`**
 
@@ -345,6 +348,162 @@ GUARDRAIL:
 
 </details>
 
+**Langkah 4 — Switch `use_rag`: biarkan user memilih pakai RAG atau tidak**
+
+Sejauh ini, retrieval **selalu** dicoba setiap kali ada pesan — user tidak punya kendali untuk mematikannya. Kadang itu tidak diinginkan: staff mungkin cuma mau tanya hal umum di luar SOP (mis. "apa itu suku bunga acuan?" — pertanyaan konsep, bukan spesifik ke dokumen internal), dan proses retrieval yang tidak perlu (satu panggilan embed + satu pencarian OpenSearch) cuma menambah latensi tanpa manfaat. Tambahkan field `use_rag` di request supaya user (lewat UI) yang memutuskan, bukan selalu otomatis.
+
+Pertama, tambah satu prompt baru di `app/system_prompt.py` — khusus untuk kasus **user sengaja mematikan RAG** (beda dari `NALA_SYSTEM_PROMPT_NO_CONTEXT` yang isinya soal "belum ada dokumen terhubung"; di sini dokumennya **ada**, cuma sengaja tidak dipakai):
+
+```python
+# app/system_prompt.py
+NALA_SYSTEM_PROMPT_RAG_OFF = """Kamu adalah NALA, asisten AI internal PT Nusantara Finance.
+Tugasmu adalah menjawab pertanyaan staff seputar SOP, kebijakan, dan data operasional perusahaan.
+Aturan:
+- Jawab singkat, jelas, dan dalam Bahasa Indonesia.
+- Mode pencarian dokumen internal sedang DIMATIKAN atas permintaan pengguna saat ini — jawab berdasarkan pengetahuan umum saja, dan kalau relevan, ingatkan bahwa jawaban akan lebih akurat dan spesifik kalau mode pencarian dokumen dinyalakan kembali.
+- Jangan berpura-pura tahu detail SOP/kebijakan spesifik PT Nusantara Finance kalau sebenarnya kamu tidak diberi konteks dokumennya.
+- Jangan menjawab pertanyaan di luar konteks pekerjaan PT Nusantara Finance.
+"""
+```
+
+Lalu di `app/main.py`, tambah field baru ke `ChatStreamRequest` (model ini sudah ada sejak Module 8 — cuma menambah satu field, bukan menulis ulang):
+
+```python
+# app/main.py
+class ChatStreamRequest(BaseModel):
+    messages: list[ChatMessage]
+    use_rag: bool = True
+```
+
+`= True` sebagai default **penting** — request lama tanpa field `use_rag` sama sekali (misal dari `curl` yang sudah ditulis di Langkah 3) tetap valid dan tetap berperilaku seperti sebelumnya (retrieval otomatis), tidak ada yang rusak begitu field baru ini ditambahkan.
+
+Import prompt barunya, lalu ubah logika di `chat_stream()` — retrieval cuma dicoba kalau `request.use_rag` bernilai `True`:
+
+```python
+# app/main.py
+from app.system_prompt import (
+    NALA_SYSTEM_PROMPT,
+    NALA_SYSTEM_PROMPT_NO_CONTEXT,
+    NALA_SYSTEM_PROMPT_RAG_OFF,
+)
+```
+
+```python
+# app/main.py, di dalam chat_stream(), menggantikan blok try/except dan if/else yang ada
+    if request.use_rag:
+        try:
+            query_embedding = embed_text(last_user_message, base_url=OLLAMA_BASE_URL)
+            results = vector_store.search(query_embedding, top_k=2)
+        except httpx.HTTPError:
+            results = []
+    else:
+        results = []
+
+    if request.use_rag and results:
+        context = "\n\n".join(r["text"] for r in results)
+        system_prompt = NALA_SYSTEM_PROMPT
+        grounded_content = f"Konteks:\n{context}\n\nPertanyaan: {last_user_message}"
+    elif request.use_rag:
+        system_prompt = NALA_SYSTEM_PROMPT_NO_CONTEXT
+        grounded_content = last_user_message
+    else:
+        system_prompt = NALA_SYSTEM_PROMPT_RAG_OFF
+        grounded_content = last_user_message
+```
+
+- **`if request.use_rag: ... else: results = []`**: kalau `use_rag=False`, `embed_text()`/`vector_store.search()` **sama sekali tidak dipanggil** — bukan cuma diabaikan hasilnya. Ini sengaja, supaya mematikan RAG benar-benar menghemat satu panggilan Ollama (embed) dan satu request OpenSearch, bukan cuma "pura-pura tidak pakai" hasilnya.
+- **Tiga cabang, bukan dua**: `use_rag=True` + `results` ada isinya → grounded (seperti sebelumnya); `use_rag=True` + `results` kosong/gagal → fallback `NALA_SYSTEM_PROMPT_NO_CONTEXT` (seperti sebelumnya, situasi tidak disengaja); `use_rag=False` → `NALA_SYSTEM_PROMPT_RAG_OFF` (situasi **disengaja** oleh user, pesannya beda supaya tidak membingungkan — bukan "belum ada dokumen", tapi "sengaja tidak dipakai").
+
+Terakhir, tambah **toggle** di `chat.html` (dibangun Module 8) supaya user bisa mengatur `use_rag` dari browser:
+
+```html
+<!-- app/templates/chat.html -->
+<label class="rag-toggle">
+  <input type="checkbox" id="useRagToggle" checked>
+  Pakai RAG (cari dari dokumen)
+</label>
+```
+
+Lalu sertakan nilainya saat mengirim request (menggantikan `body: JSON.stringify({ messages: conversation })` dari Module 8):
+
+```javascript
+// app/templates/chat.html, di dalam handler submit
+const useRag = document.getElementById("useRagToggle").checked;
+
+const response = await fetch("/chat/stream", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ messages: conversation, use_rag: useRag }),
+});
+```
+
+**▶️ Jalankan & lihat hasilnya**
+
+```bash
+docker compose up --build api
+```
+
+Uji lewat `curl` dulu (sebelum coba dari browser) — kirim pertanyaan yang jawabannya ada di dokumen, tapi dengan `use_rag: false`:
+
+```bash
+curl -N -X POST http://localhost:8000/chat/stream \
+  -H "Content-Type: application/json" \
+  -d '{"messages": [{"role": "user", "content": "Berapa lama proses pengajuan kredit sampai pencairan dana?"}], "use_rag": false}'
+```
+
+✅ **Indikator sukses**: walau pertanyaannya sama persis dengan uji Bagian 2 Langkah 3 (yang jawabannya menyebut angka dari dokumen), kali ini jawabannya **generik** — bukti `use_rag: false` benar-benar melewati retrieval. Buka `http://localhost:8000` di browser, matikan toggle "Pakai RAG", kirim pertanyaan yang sama — hasilnya harus terasa sama generiknya. Nyalakan lagi togglenya, kirim ulang — jawaban kembali menyebut angka dari dokumen.
+
+<details>
+<summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 4</strong></summary>
+
+```
+Tambah switch use_rag supaya user bisa memilih pakai RAG atau tidak
+(Module 14, Langkah 4).
+
+GOAL:
+- Di Nala/app/system_prompt.py: tambah konstanta baru
+  NALA_SYSTEM_PROMPT_RAG_OFF (string multi-baris) di bawah
+  NALA_SYSTEM_PROMPT_NO_CONTEXT yang sudah ada — isinya menjelaskan
+  bahwa mode pencarian dokumen sedang dimatikan ATAS PERMINTAAN USER
+  (beda pesan dari NALA_SYSTEM_PROMPT_NO_CONTEXT yang soal "belum ada
+  dokumen terhubung").
+- Di Nala/app/main.py:
+  - Tambah field `use_rag: bool = True` ke model ChatStreamRequest
+    yang sudah ada (jangan hapus field messages yang sudah ada).
+  - Tambah NALA_SYSTEM_PROMPT_RAG_OFF ke import dari
+    app.system_prompt yang sudah ada.
+  - Di dalam chat_stream(), ubah logika retrieval: kalau
+    request.use_rag False, SKIP pemanggilan embed_text() dan
+    vector_store.search() sama sekali (langsung results = []). Kalau
+    request.use_rag True DAN results ada isinya, pakai NALA_SYSTEM_PROMPT
+    + context seperti sebelumnya. Kalau request.use_rag True TAPI
+    results kosong, pakai NALA_SYSTEM_PROMPT_NO_CONTEXT seperti
+    sebelumnya. Kalau request.use_rag False, pakai
+    NALA_SYSTEM_PROMPT_RAG_OFF (bukan NALA_SYSTEM_PROMPT_NO_CONTEXT).
+- Di Nala/app/templates/chat.html: tambah checkbox
+  `<input type="checkbox" id="useRagToggle" checked>` dengan label
+  "Pakai RAG (cari dari dokumen)" di dekat form input pesan. Di
+  handler submit form yang sudah ada, baca nilai checkbox itu, dan
+  tambahkan `use_rag: <nilai checkbox>` ke body JSON yang dikirim
+  fetch ke /chat/stream (selain messages yang sudah ada).
+
+CONTEXT:
+- ChatStreamRequest dan chat_stream() sudah ada dari Module 8,
+  ditambah retrieval di Langkah 2-3 module ini.
+- Default use_rag=True penting supaya request lama tanpa field ini
+  tetap berperilaku sama seperti sebelum Langkah ini ditambahkan.
+
+GUARDRAIL:
+- JANGAN hapus atau ubah NALA_SYSTEM_PROMPT dan
+  NALA_SYSTEM_PROMPT_NO_CONTEXT yang sudah ada.
+- JANGAN ubah HISTORY_WINDOW, validasi 400, atau logika windowing
+  yang sudah ada dari Module 8.
+- JANGAN ubah endpoint /health, /, atau file lain di luar yang
+  disebutkan.
+```
+
+</details>
+
 ## 3. NALA Sekarang Menjawab dari Dokumen — Verifikasi Menyeluruh
 
 Coba beberapa skenario untuk memastikan RAG benar-benar bekerja:
@@ -378,9 +537,17 @@ curl -N -X POST http://localhost:8000/chat/stream \
 ```
 ✅ Pertanyaan kedua tidak menyebut kata "kredit" sama sekali — NALA harus tetap paham ini masih soal proses kredit, sekaligus tetap melakukan retrieval baru untuk pertanyaan lanjutan ini.
 
+**d. Switch `use_rag` benar-benar mematikan retrieval (Bagian 2 Langkah 4):**
+```bash
+curl -N -X POST http://localhost:8000/chat/stream \
+  -H "Content-Type: application/json" \
+  -d '{"messages": [{"role": "user", "content": "Dokumen apa saja yang saya butuhkan untuk mengajukan kredit?"}], "use_rag": false}'
+```
+✅ Bandingkan dengan skenario **a** di atas (pertanyaan sama persis, `use_rag` tidak disebut = default `true`) — kali ini jawabannya generik, tidak menyebut KTP/NPWP dari dokumen, karena `embed_text()`/`vector_store.search()` sama sekali tidak dipanggil.
+
 ## 4. Grounding: Kenapa NALA Tidak (Selalu) Mengarang
 
-`NALA_SYSTEM_PROMPT` (Module 1-6, tidak diganti nama) sudah mencakup instruksi **grounding** — memaksa model menjawab **hanya** dari konteks yang diberikan, bukan dari pengetahuan umum. `NALA_SYSTEM_PROMPT_NO_CONTEXT` (Bagian 2) sama persis kecuali instruksi terakhir: mengizinkan pengetahuan umum saat retrieval gagal/kosong, sambil jujur bilang belum ada dokumen. Ini instruksi grounding yang membuat jawaban Module 7-8, 9-11 (sebelum ada retrieval, atau saat index kosong) terasa "generik tapi jujur", bukan mengarang seolah tahu SOP internal — konsisten dengan pembahasan halusinasi di Module 9 Bagian 1.
+`NALA_SYSTEM_PROMPT` (Module 1-6, tidak diganti nama) sudah mencakup instruksi **grounding** — memaksa model menjawab **hanya** dari konteks yang diberikan, bukan dari pengetahuan umum. Dua prompt lain dipakai untuk dua situasi "tidak ada konteks" yang **penyebabnya beda**, jadi pesannya sengaja dibedakan juga: `NALA_SYSTEM_PROMPT_NO_CONTEXT` (Bagian 2 Langkah 2) dipakai saat retrieval **gagal/kosong tanpa disengaja** (index belum ter-isi, atau OpenSearch tak terjangkau) — jujur bilang belum ada dokumen terhubung. `NALA_SYSTEM_PROMPT_RAG_OFF` (Bagian 2 Langkah 4) dipakai saat user **sengaja mematikan** RAG lewat switch `use_rag` — dokumennya sebenarnya ada dan siap dipakai, cuma user memilih tidak memakainya saat itu, jadi pesannya tidak bilang "belum ada dokumen" (yang akan menyesatkan). Ketiganya sama-sama instruksi grounding yang membuat jawaban Module 7-8, 9-11 (sebelum ada retrieval, atau saat index kosong/RAG dimatikan) terasa "generik tapi jujur", bukan mengarang seolah tahu SOP internal — konsisten dengan pembahasan halusinasi di Module 9 Bagian 1.
 
 ⚠️ Grounding lewat instruksi prompt **membantu**, tapi bukan jaminan mutlak — model kecil (`llama3.2:3b`) tetap bisa sesekali mengabaikan instruksi ini. Ini akan dibahas lebih detail konsistensinya di Module 23 saat model dipakai untuk tool-calling.
 
@@ -421,9 +588,10 @@ Yang perlu dipastikan sebelum lanjut ke Module 15:
 - [ ] `/chat/stream` menjawab berdasarkan isi dokumen SOP (bukan generik) untuk pertanyaan yang jawabannya ada di knowledge base, sambil tetap streaming bertahap
 - [ ] Percakapan multi-turn tetap berfungsi setelah retrieval ditambahkan
 - [ ] Index kosong menghasilkan fallback ke jawaban generik, bukan crash
+- [ ] `use_rag: false` (lewat toggle UI atau field request) benar-benar melewati retrieval — pertanyaan yang sama menghasilkan jawaban generik, bukan jawaban dari dokumen
 - [ ] Kita paham keterbatasan retrieval level-dokumen (Bagian 7) sebagai motivasi Module 15, bukan dianggap "RAG sudah optimal"
 
-Begitu kelima hal ini terverifikasi, lanjut ke Module 15 — menambahkan chunking (memecah dokumen jadi potongan fokus sebelum di-embed), sebelum Module 16 menambah form upload web sebagai cara staff menambahkan dokumen baru ke sistem yang **sudah hidup** ini.
+Begitu keenam hal ini terverifikasi, lanjut ke Module 15 — menambahkan chunking (memecah dokumen jadi potongan fokus sebelum di-embed), sebelum Module 16 menambah form upload web sebagai cara staff menambahkan dokumen baru ke sistem yang **sudah hidup** ini.
 
 ---
 
