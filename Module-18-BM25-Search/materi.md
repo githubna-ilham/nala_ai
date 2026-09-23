@@ -2,7 +2,7 @@
 
 ## Tujuan
 
-Menambahkan **BM25** (pencarian lexical/kata kunci) sebagai kemampuan baru di `VectorStore`, di samping vector search yang sudah ada sejak Module 13 — lewat method baru `search_bm25()`. Module ini murni membangun dan membuktikan BM25 bekerja sendirian; menggabungkannya dengan vector search lewat Reciprocal Rank Fusion (RRF) dan menyambungkannya ke `/chat/stream` baru dibahas di Module 19.
+Menambahkan **BM25** (pencarian lexical/kata kunci) sebagai kemampuan baru di `VectorStore`, di samping vector search yang sudah ada sejak Module 13 — lewat method baru `search_bm25()`. Module ini juga menambah switch `search_method` (`"vector"` atau `"bm25"`) ke `/chat/stream`, supaya BM25 bisa langsung dicoba di alur chat sungguhan, bukan cuma lewat skrip terpisah — bandingkan dengan pola switch `use_rag` di Module 14 Bagian 2 Langkah 4. Menggabungkan BM25 dan vector search jadi satu (bukan pilih salah satu) lewat Reciprocal Rank Fusion (RRF) baru dibahas di Module 19, yang memperluas switch ini dengan opsi `"hybrid"`.
 
 ## Definisi
 
@@ -24,7 +24,7 @@ flowchart LR
 - Untuk query kata kunci eksak ("KTP", "NPWP", "slip gaji"), hasil BM25 terbukti berbeda urutan dibanding vector murni (Module 13)
 - Kita paham kenapa vector search murni bisa kalah oleh chunk pendek yang cuma "mirip" secara makna, dan kenapa BM25 menutup celah itu
 - Kita paham cara kerja BM25 (TF, IDF, length normalization) lewat contoh sederhana dan kasus nyata NALA
-- `/chat/stream` (Module 7) **belum** berubah di module ini — `search_bm25()` belum dipakai endpoint apa pun, baru disambungkan di Module 19
+- `/chat/stream` (satu-satunya endpoint chat NALA sejak Module 8) punya field baru `search_method` (`"vector"` default, atau `"bm25"`) — user bisa membandingkan langsung dua metode retrieval dari UI/curl yang sama, tanpa perlu masuk ke container
 
 ## 1. Kenapa Vector Search Murni Tidak Cukup
 
@@ -422,13 +422,142 @@ class VectorStore:
 - **Port sudah dipakai (8000/9200/11434)**: ubah mapping port yang bentrok di `docker-compose.yml`, atau pastikan container lama sudah benar-benar dimatikan (`docker compose down` di `Nala`).
 - **`docker compose exec ollama ollama list` tidak menampilkan model**: model belum pernah di-pull ke volume container ini — jalankan ulang `docker compose exec ollama ollama pull <nama-model>` (lihat Prasyarat & Setup Sebelum Mulai di atas).
 
-## 5. Checkpoint Praktik
+## 5. Switch `search_method`: Pilih BM25 atau Vector Search di `/chat/stream`
+
+Sejauh ini `search_bm25()` cuma bisa dicoba lewat skrip Python terpisah (Bagian 4) — belum bisa dipakai lewat `/chat/stream` sungguhan. Langkah ini menambah switch `search_method` ke `ChatStreamRequest`, mengikuti pola yang sama dengan switch `use_rag` (Module 14 Bagian 2 Langkah 4): sebuah field request yang membiarkan **user** memilih, bukan hardcode di kode.
+
+**Langkah 2 — Tambah field `search_method` dan cabang retrieval di `app/main.py`**
+
+```python
+# app/main.py
+from typing import Literal
+
+
+class ChatStreamRequest(BaseModel):
+    messages: list[ChatMessage]
+    use_rag: bool = True
+    search_method: Literal["vector", "bm25"] = "vector"
+```
+
+`Literal["vector", "bm25"]` (bukan `str` biasa) memaksa FastAPI/Pydantic menolak request dengan nilai selain dua itu (respons `422`, bukan diam-diam diterima lalu error di tempat lain) — validasi ini didapat gratis tanpa kode tambahan. `= "vector"` sebagai default penting dengan alasan yang sama seperti `use_rag`: request lama tanpa field ini tetap valid dan tetap berperilaku seperti sebelumnya (vector search, Module 15).
+
+Ubah blok retrieval di `chat_stream()` supaya bercabang berdasarkan `search_method`:
+
+```python
+# app/main.py, di dalam chat_stream(), menggantikan blok try/except yang ada
+    if request.use_rag:
+        try:
+            if request.search_method == "bm25":
+                results = vector_store.search_bm25(last_user_message, top_k=6)
+            else:
+                query_embedding = embed_text(last_user_message, base_url=OLLAMA_BASE_URL)
+                results = vector_store.search(query_embedding, top_k=6)
+        except httpx.HTTPError:
+            results = []
+    else:
+        results = []
+```
+
+- **Cabang `"bm25"` tidak memanggil `embed_text()` sama sekali** — ini sengaja, bukan oversight. BM25 murni operasi teks di OpenSearch, tidak butuh model embedding apa pun. Konsekuensi nyata: `search_method="bm25"` menghemat satu panggilan Ollama dibanding `"vector"`, jadi biasanya sedikit lebih cepat — trade-off yang tidak selalu disadari kalau cuma baca teori BM25 vs vector.
+- **Sisa logika grounding/fallback (`if results: ... else: ...`, Module 14) tidak berubah** — `search_bm25()` mengembalikan bentuk dict yang sama persis dengan `search()` (`text`, `score`, `metadata`, Bagian 4), jadi kode yang membaca `r["metadata"]["source"]`/`r["text"]` tetap jalan tanpa peduli metode mana yang dipakai.
+- **`search_method` cuma relevan kalau `use_rag=True`** — kalau `use_rag=False`, kedua field retrieval (`search_method` apa pun) tidak pernah dibaca, konsisten dengan Module 14: mematikan RAG melewati retrieval sepenuhnya.
+
+**▶️ Jalankan & lihat hasilnya**
+
+```bash
+docker compose up --build api
+```
+
+Bandingkan langsung — pertanyaan yang sama, dua metode berbeda:
+
+```bash
+curl -N -X POST http://localhost:8000/chat/stream \
+  -H "Content-Type: application/json" \
+  -d '{"messages": [{"role": "user", "content": "Apa saja syarat pengajuan kredit untuk nasabah perorangan?"}], "search_method": "vector"}'
+```
+
+```bash
+curl -N -X POST http://localhost:8000/chat/stream \
+  -H "Content-Type: application/json" \
+  -d '{"messages": [{"role": "user", "content": "Apa saja syarat pengajuan kredit untuk nasabah perorangan?"}], "search_method": "bm25"}'
+```
+
+✅ **Indikator sukses**: kedua request sukses (bukan `422`), dan jawaban `search_method: "bm25"` terasa lebih menyebut detail spesifik (KTP, KK, slip gaji) dibanding `search_method: "vector"` — konsisten dengan hasil pengujian posisi chunk di Bagian 2. Coba juga kirim `"search_method": "salah-ketik"` — harus ditolak dengan status `422`, bukti validasi `Literal` bekerja.
+
+<details>
+<summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 2</strong></summary>
+
+```
+Tambah switch search_method ("vector"/"bm25") ke ChatStreamRequest dan
+cabang retrieval di chat_stream() (Module 18, Bagian 5, Langkah 2).
+
+GOAL:
+- Di Nala/app/main.py:
+  - Tambah `from typing import Literal` di baris import (kalau belum
+    ada).
+  - Tambah field search_method: Literal["vector", "bm25"] = "vector"
+    ke ChatStreamRequest (model ini sudah punya field messages dan
+    use_rag dari Module 14).
+  - Di dalam chat_stream(), pada blok `if request.use_rag: try: ...`:
+    tambah percabangan — kalau request.search_method == "bm25",
+    panggil results = vector_store.search_bm25(last_user_message,
+    top_k=6) (TANPA memanggil embed_text() sama sekali); selain itu
+    (default "vector"), tetap panggil embed_text() lalu
+    vector_store.search(query_embedding, top_k=6) seperti semula.
+
+CONTEXT:
+- search_bm25() sudah ada di app/vector_store.py sejak Bagian 4 module
+  ini, return bentuknya sama persis dengan search() (list of dict
+  dengan text/score/metadata) — logika grounding/fallback di bawah
+  blok ini TIDAK perlu diubah.
+- use_rag (Module 14) TETAP ada dan TIDAK berubah — search_method
+  cuma relevan kalau use_rag=True.
+
+GUARDRAIL:
+- JANGAN ubah logika use_rag atau blok if/elif/else grounding-fallback
+  di bawah blok retrieval.
+- JANGAN ubah app/vector_store.py — search_bm25() sudah final dari
+  Bagian 4.
+- JANGAN sentuh chat.html di langkah ini kecuali diminta terpisah.
+```
+
+</details>
+
+**Opsional — tambah dropdown di `chat.html`** supaya bisa dicoba dari browser, bukan cuma curl:
+
+```html
+<!-- app/templates/chat.html, di dekat toggle useRagToggle (Module 14) -->
+<label class="search-method-select">
+  Metode pencarian:
+  <select id="searchMethodSelect">
+    <option value="vector" selected>Vector (makna)</option>
+    <option value="bm25">BM25 (kata kunci)</option>
+  </select>
+</label>
+```
+
+```javascript
+// app/templates/chat.html, di dalam handler submit — menggantikan body Module 14
+const useRag = document.getElementById("useRagToggle").checked;
+const searchMethod = document.getElementById("searchMethodSelect").value;
+
+const response = await fetch("/chat/stream", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ messages: conversation, use_rag: useRag, search_method: searchMethod }),
+});
+```
+
+⚠️ **Catatan forward-looking**: Module 19 nanti memperluas `Literal["vector", "bm25"]` menjadi `Literal["vector", "bm25", "hybrid"]` dan mengganti default-nya jadi `"hybrid"` — dropdown ini juga akan dapat opsi ketiga di sana. Switch ini sengaja dirancang supaya perluasan itu tinggal menambah satu opsi, bukan menulis ulang logikanya.
+
+## 6. Checkpoint Praktik
 
 Yang perlu dipastikan sebelum lanjut ke Module 19:
 
 - [ ] `store.search_bm25()` mengembalikan hasil yang cocok kata kunci eksak dengan query
 - [ ] Hasil `store.search_bm25()` terbukti berbeda urutan dibanding `store.search()` murni untuk query yang sama — chunk `### 2.1 Untuk Nasabah Perorangan` naik peringkat dibanding hasil vector murni di Bagian 1
 - [ ] Kita paham komponen skor BM25 (TF, IDF, length normalization) dan kenapa itu berbeda mekanisme dari vector search
-- [ ] `/chat/stream` (Module 7) masih berfungsi seperti sebelumnya — belum ada perubahan di endpoint ini
+- [ ] `/chat/stream` menerima field `search_method` (`"vector"`/`"bm25"`), request dengan nilai lain ditolak `422`, dan `search_method="bm25"` terbukti tidak memanggil `embed_text()`
+- [ ] `use_rag=False` tetap melewati retrieval sepenuhnya, tidak peduli nilai `search_method` apa pun (Module 14 tidak berubah)
 
-Begitu keempat hal ini terverifikasi, lanjut ke Module 19 — menggabungkan `search_bm25()` dengan `search()` lewat Reciprocal Rank Fusion (RRF), lalu menyambungkannya ke `/chat/stream`.
+Begitu kelima hal ini terverifikasi, lanjut ke Module 19 — menggabungkan `search_bm25()` dengan `search()` lewat Reciprocal Rank Fusion (RRF), lalu memperluas switch `search_method` ini dengan opsi `"hybrid"`.
