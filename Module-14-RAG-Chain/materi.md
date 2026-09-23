@@ -93,7 +93,7 @@ docker compose up --build api
 docker compose exec api python -c "from app.ingest import ingest_documents; print(ingest_documents('/app/knowledge-base'))"
 ```
 
-✅ **Indikator sukses**: mengembalikan angka sesuai jumlah dokumen `.md`/`.txt`/`.pdf` di `Nala/knowledge-base/` (lihat Module 10 Bagian 2) — kalau ada 2 SOP contoh plus beberapa PDF latihan, angkanya sejumlah itu. Verifikasi lewat OpenSearch langsung:
+✅ **Indikator sukses**: mengembalikan angka sesuai jumlah dokumen `.md`/`.txt`/`.pdf` di `Nala/knowledge-base/` (lihat Module 10 Bagian 2) — normalnya `2` (dua SOP contoh wajib), atau `3` kalau Anda juga sudah menyalin file PDF opsional. Verifikasi lewat OpenSearch langsung:
 
 ```bash
 curl "http://localhost:9200/nala-docs/_count"
@@ -382,7 +382,7 @@ curl -N -X POST http://localhost:8000/chat/stream \
 
 `NALA_SYSTEM_PROMPT` (Module 1-6, tidak diganti nama) sudah mencakup instruksi **grounding** — memaksa model menjawab **hanya** dari konteks yang diberikan, bukan dari pengetahuan umum. `NALA_SYSTEM_PROMPT_NO_CONTEXT` (Bagian 2) sama persis kecuali instruksi terakhir: mengizinkan pengetahuan umum saat retrieval gagal/kosong, sambil jujur bilang belum ada dokumen. Ini instruksi grounding yang membuat jawaban Module 7-8, 9-11 (sebelum ada retrieval, atau saat index kosong) terasa "generik tapi jujur", bukan mengarang seolah tahu SOP internal — konsisten dengan pembahasan halusinasi di Module 9 Bagian 1.
 
-⚠️ Grounding lewat instruksi prompt **membantu**, tapi bukan jaminan mutlak — model kecil (`llama3.2:3b`) tetap bisa sesekali mengabaikan instruksi ini. Ini akan dibahas lebih detail konsistensinya di Module 22 saat model dipakai untuk tool-calling.
+⚠️ Grounding lewat instruksi prompt **membantu**, tapi bukan jaminan mutlak — model kecil (`llama3.2:3b`) tetap bisa sesekali mengabaikan instruksi ini. Ini akan dibahas lebih detail konsistensinya di Module 23 saat model dipakai untuk tool-calling.
 
 ## 5. Data Operasional: Upload vs Airflow (Preview Module 16-17)
 
