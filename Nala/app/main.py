@@ -1,13 +1,14 @@
 import os
 
 import httpx
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
 from app.embeddings import embed_text
+from app.ingest import ingest_document
 from app.ollama_client import OllamaClient
 from app.system_prompt import (
     NALA_SYSTEM_PROMPT,
@@ -31,6 +32,15 @@ KNOWLEDGE_BASE_PATH = os.environ.get("KNOWLEDGE_BASE_PATH", "/app/knowledge-base
 
 OPENSEARCH_BASE_URL = os.environ.get("OPENSEARCH_BASE_URL", "http://localhost:9200")
 vector_store = VectorStore(base_url=OPENSEARCH_BASE_URL, index_name="nala-docs")
+
+
+def list_knowledge_base_documents() -> list[str]:
+    if not os.path.isdir(KNOWLEDGE_BASE_PATH):
+        return []
+    return sorted(
+        f for f in os.listdir(KNOWLEDGE_BASE_PATH)
+        if f.endswith((".md", ".txt", ".pdf"))
+    )
 
 
 class ChatMessage(BaseModel):
@@ -65,7 +75,7 @@ def chat_stream(request: ChatStreamRequest) -> StreamingResponse:
     if request.use_rag:
         try:
             query_embedding = embed_text(last_user_message, base_url=OLLAMA_BASE_URL)
-            results = vector_store.search(query_embedding, top_k=2)
+            results = vector_store.search(query_embedding, top_k=6)
         except httpx.HTTPError:
             results = []
     else:
@@ -96,3 +106,34 @@ def chat_stream(request: ChatStreamRequest) -> StreamingResponse:
 @app.get("/", response_class=HTMLResponse)
 def chat_page(request: Request):
     return templates.TemplateResponse(request, "chat.html")
+
+
+@app.get("/upload", response_class=HTMLResponse)
+def upload_page(request: Request):
+    return templates.TemplateResponse(
+        request,
+        "upload.html",
+        {"message": None, "documents": list_knowledge_base_documents()},
+    )
+
+
+@app.post("/upload", response_class=HTMLResponse)
+def upload_document(request: Request, file: UploadFile = File(...)):
+    os.makedirs(KNOWLEDGE_BASE_PATH, exist_ok=True)
+    dest_path = os.path.join(KNOWLEDGE_BASE_PATH, file.filename)
+    with open(dest_path, "wb") as f:
+        f.write(file.file.read())
+
+    try:
+        count = ingest_document(dest_path)
+        message = f"Dokumen '{file.filename}' berhasil diunggah dan di-index ({count} chunk)."
+    except httpx.HTTPError:
+        message = (
+            f"Dokumen '{file.filename}' berhasil disimpan, tapi belum sempat di-index "
+            "(OpenSearch belum terjangkau) — akan otomatis diproses begitu pipeline-nya berjalan."
+        )
+    return templates.TemplateResponse(
+        request,
+        "upload.html",
+        {"message": message, "documents": list_knowledge_base_documents()},
+    )

@@ -101,3 +101,22 @@ button:disabled {
 .error {
     color: #b91c1c;
 }
+
+.success {
+    background: #e7f5e9;
+    padding: 10px;
+    border-radius: 6px;
+}
+
+.hint {
+    color: #666;
+    font-size: 0.9em;
+}
+
+.doc-list {
+    padding-left: 20px;
+}
+
+.doc-list li {
+    margin-bottom: 4px;
+}
