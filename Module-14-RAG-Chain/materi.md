@@ -225,10 +225,18 @@ from app.vector_store import VectorStore
 
 `from app.system_prompt import NALA_SYSTEM_PROMPT` (yang sudah ada sejak Module 7) diganti jadi baris di atas. `import httpx` juga baru — sejauh ini `httpx` cuma dipakai di dalam `app/ollama_client.py`, `app/embeddings.py`, dan `app/vector_store.py`, belum pernah diimpor langsung di `app/main.py`. Langkah 3 di bawah menangkap `httpx.HTTPError` langsung di `main.py`, jadi importnya wajib ada di sini — kalau terlewat, blok `except` itu akan gagal dengan `NameError` begitu benar-benar dieksekusi.
 
-Lalu tambah konstanta dan instance `VectorStore` baru, di dekat `KNOWLEDGE_BASE_PATH`:
+Lalu tambah konstanta dan instance `VectorStore` baru, di dekat `KNOWLEDGE_BASE_PATH`. Sekalian ubah setup `ollama_client` yang sudah ada supaya `base_url`-nya membaca dari konstanta modul `OLLAMA_BASE_URL` — konstanta ini **dipakai ulang** oleh retrieval di Langkah 3 (`embed_text(..., base_url=OLLAMA_BASE_URL)`), jadi harus tersedia sebagai variabel modul, bukan cuma inline di dalam `OllamaClient(...)` (kalau cuma inline, Langkah 3 akan `NameError`):
 
 ```python
 # app/main.py
+OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
+
+ollama_client = OllamaClient(
+    base_url=OLLAMA_BASE_URL,
+    model=os.environ.get("OLLAMA_MODEL", "llama3.2:3b"),
+)
+
+KNOWLEDGE_BASE_PATH = os.environ.get("KNOWLEDGE_BASE_PATH", "/app/knowledge-base")
 OPENSEARCH_BASE_URL = os.environ.get("OPENSEARCH_BASE_URL", "http://localhost:9200")
 vector_store = VectorStore(base_url=OPENSEARCH_BASE_URL, index_name="nala-docs")
 ```
@@ -255,7 +263,8 @@ GOAL:
 - Di Nala/app/system_prompt.py: tambah
   konstanta baru NALA_SYSTEM_PROMPT_NO_CONTEXT (string multi-baris)
   di bawah NALA_SYSTEM_PROMPT yang sudah ada — isinya sama persis
-  dengan NALA_SYSTEM_PROMPT kecuali aturan terakhir diganti jadi:
+  dengan NALA_SYSTEM_PROMPT ditambah SATU aturan baru di baris akhir
+  daftar Aturan (aturan-aturan lama tetap ada, tidak dihapus), yaitu:
   "Belum ada dokumen internal yang terhubung ke kamu saat ini, jadi
   jawab berdasarkan pengetahuan umum saja dan sebutkan bahwa jawaban
   akan lebih akurat setelah dokumen SOP diunggah."
@@ -268,6 +277,12 @@ GOAL:
     NALA_SYSTEM_PROMPT_NO_CONTEXT`.
   - Tambah `from app.embeddings import embed_text` dan `from
     app.vector_store import VectorStore`.
+  - Definisikan konstanta modul OLLAMA_BASE_URL =
+    os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434"), dan
+    ubah setup ollama_client yang sudah ada supaya
+    base_url=OLLAMA_BASE_URL (bukan os.environ.get(...) inline).
+    Konstanta ini WAJIB jadi variabel modul karena dipakai ulang oleh
+    retrieval di Langkah 3 — kalau cuma inline, Langkah 3 NameError.
   - Tambah konstanta OPENSEARCH_BASE_URL =
     os.environ.get("OPENSEARCH_BASE_URL", "http://localhost:9200")
     dan `vector_store = VectorStore(base_url=OPENSEARCH_BASE_URL,
@@ -308,7 +323,9 @@ def chat_stream(request: ChatStreamRequest) -> StreamingResponse:
         results = []
 
     if results:
-        context = "\n\n".join(r["text"] for r in results)
+        context = "\n\n".join(
+            f"[{r['metadata']['source']}]\n{r['text']}" for r in results
+        )
         system_prompt = NALA_SYSTEM_PROMPT
         grounded_content = f"Konteks:\n{context}\n\nPertanyaan: {last_user_message}"
     else:
@@ -369,7 +386,10 @@ GOAL:
   base_url=OLLAMA_BASE_URL), lalu results =
   vector_store.search(query_embedding, top_k=2); di except
   httpx.HTTPError: results = []. Kalau results ada isinya, susun
-  context dari r["text"] tiap hasil, system_prompt =
+  context dengan MEMBERI LABEL SUMBER tiap hasil — gabung
+  f"[{r['metadata']['source']}]\n{r['text']}" (bukan cuma r["text"]),
+  supaya model bisa membedakan asal tiap potongan dan tidak mencampur
+  angka antar-dokumen. Lalu system_prompt =
   NALA_SYSTEM_PROMPT, grounded_content = f"Konteks:\n{context}\n\n
   Pertanyaan: {last_user_message}"; kalau tidak, system_prompt =
   NALA_SYSTEM_PROMPT_NO_CONTEXT, grounded_content =
@@ -379,8 +399,8 @@ GOAL:
   [{"role": "user", "content": grounded_content}].
 
 CONTEXT:
-- vector_store, embed_text, NALA_SYSTEM_PROMPT_NO_CONTEXT sudah
-  di-setup di Langkah 2.
+- vector_store, embed_text, NALA_SYSTEM_PROMPT_NO_CONTEXT, dan
+  konstanta modul OLLAMA_BASE_URL sudah di-setup di Langkah 2.
 - Validasi 400 dan windowing (HISTORY_WINDOW) yang sudah ada dari
   Module 8 TIDAK berubah.
 - Ini SATU-SATUNYA endpoint chat sejak Module 8 — tidak ada endpoint
@@ -445,7 +465,9 @@ from app.system_prompt import (
         results = []
 
     if request.use_rag and results:
-        context = "\n\n".join(r["text"] for r in results)
+        context = "\n\n".join(
+            f"[{r['metadata']['source']}]\n{r['text']}" for r in results
+        )
         system_prompt = NALA_SYSTEM_PROMPT
         grounded_content = f"Konteks:\n{context}\n\nPertanyaan: {last_user_message}"
     elif request.use_rag:
@@ -545,6 +567,156 @@ GUARDRAIL:
   yang sudah ada dari Module 8.
 - JANGAN ubah endpoint /health, /, atau file lain di luar yang
   disebutkan.
+```
+
+</details>
+
+**Langkah 5 — Indikator loading saat menunggu balasan**
+
+Dengan retrieval aktif, tiap pesan sekarang melewati **embed pesan → pencarian OpenSearch → token pertama dari Ollama** sebelum satu huruf pun muncul — jeda ini bisa beberapa detik di CPU. Sepanjang jeda itu, bubble NALA di `chat.html` (Module 8) cuma diam kosong, jadi user tidak tahu apakah sistemnya bekerja atau menggantung. Tambahkan indikator "sedang mengetik" yang muncul begitu pesan dikirim dan otomatis hilang saat token pertama tiba, plus kunci tombol Kirim selama menunggu supaya tidak ada kiriman ganda.
+
+Pertama, tambah satu referensi tombol Kirim di baris `const` paling atas `<script>` (di dekat `const input = ...` yang sudah ada):
+
+```javascript
+// app/templates/chat.html, di dalam <script>
+const submitBtn = form.querySelector("button[type=submit]");
+```
+
+Lalu ganti **handler submit** dari Module 8 supaya menampilkan indikator, mengunci input, dan membungkus streaming dalam `try/finally`:
+
+```javascript
+// app/templates/chat.html, handler submit (menggantikan versi Module 8/Langkah 4)
+form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const message = input.value;
+    input.value = "";
+
+    conversation.push({ role: "user", content: message });
+    history.innerHTML += `<p class="user"><b>Anda:</b> ${escapeHtml(message)}</p>`;
+    const replyEl = document.createElement("p");
+    replyEl.className = "nala";
+    replyEl.innerHTML = `<b>NALA:</b> <span class="typing">sedang mengetik<i></i><i></i><i></i></span>`;
+    history.appendChild(replyEl);
+    history.scrollTop = history.scrollHeight;
+
+    // Kunci input selama menunggu balasan, cegah kirim ganda.
+    submitBtn.disabled = true;
+    input.disabled = true;
+
+    const useRag = document.getElementById("useRagToggle").checked;
+
+    try {
+        const response = await fetch("/chat/stream", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ messages: conversation, use_rag: useRag }),
+        });
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let fullReply = "";
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            // Token pertama otomatis menimpa indikator "sedang mengetik".
+            fullReply += decoder.decode(value, { stream: true });
+            replyEl.innerHTML = `<b>NALA:</b> ${escapeHtml(fullReply)}`;
+            history.scrollTop = history.scrollHeight;
+        }
+
+        conversation.push({ role: "assistant", content: fullReply });
+        updateMeta();
+    } catch (err) {
+        replyEl.innerHTML = `<b>NALA:</b> <span class="error">Gagal memuat balasan: ${escapeHtml(err.message)}</span>`;
+    } finally {
+        submitBtn.disabled = false;
+        input.disabled = false;
+        input.focus();
+    }
+});
+```
+
+- **Indikator ditimpa sendiri oleh token pertama**: `replyEl.innerHTML = ...` di dalam loop menulis ulang seluruh isi bubble, jadi begitu token pertama tiba, `<span class="typing">` otomatis lenyap — tidak perlu kode khusus untuk menghapusnya.
+- **`try/finally`**: blok `finally` menyalakan kembali tombol & input **apa pun yang terjadi** — termasuk kalau `fetch`/streaming gagal (`catch` menampilkan pesan error di bubble). Tanpa ini, satu request gagal akan membuat tombol Kirim terkunci selamanya.
+
+Terakhir, tambah animasi tiga titik di `app/static/style.css`:
+
+```css
+/* app/static/style.css */
+button:disabled {
+    background: #9ca3af;
+    cursor: not-allowed;
+}
+
+.typing {
+    color: #6b7280;
+    font-style: italic;
+}
+
+.typing i {
+    display: inline-block;
+    width: 5px;
+    height: 5px;
+    margin-left: 3px;
+    border-radius: 50%;
+    background: currentColor;
+    animation: typing-blink 1.2s infinite both;
+}
+
+.typing i:nth-child(2) { animation-delay: 0.2s; }
+.typing i:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes typing-blink {
+    0%, 80%, 100% { opacity: 0.2; }
+    40% { opacity: 1; }
+}
+
+.error {
+    color: #b91c1c;
+}
+```
+
+**▶️ Jalankan & lihat hasilnya**
+
+```bash
+docker compose up --build api
+```
+
+Buka `http://localhost:8000`, kirim pertanyaan apa pun. ✅ **Indikator sukses**: sebelum jawaban muncul, tampil "sedang mengetik" dengan tiga titik berdenyut, tombol Kirim non-aktif (abu-abu); begitu token pertama tiba, indikator langsung berganti jadi teks jawaban yang mengalir, dan tombol aktif lagi setelah selesai. Efeknya paling terasa saat toggle "Pakai RAG" **menyala** (ada jeda retrieval) dibanding saat mati.
+
+<details>
+<summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 5</strong></summary>
+
+```
+Tambah indikator loading "sedang mengetik" di chat.html saat menunggu
+balasan /chat/stream (Module 14, Langkah 5).
+
+GOAL:
+- Di Nala/app/templates/chat.html, di dalam <script>:
+  - Tambah `const submitBtn = form.querySelector("button[type=submit]");`
+    di dekat const form/history/input yang sudah ada.
+  - Di handler submit yang sudah ada: saat membuat bubble balasan NALA,
+    isi innerHTML awalnya dengan indikator
+    `<b>NALA:</b> <span class="typing">sedang mengetik<i></i><i></i><i></i></span>`
+    (bukan cuma "<b>NALA:</b> "). Sebelum fetch, set submitBtn.disabled
+    dan input.disabled = true. Bungkus fetch + loop baca stream dalam
+    try; tambah catch(err) yang menampilkan pesan error di bubble; tambah
+    finally yang mengembalikan submitBtn.disabled dan input.disabled =
+    false lalu input.focus(). Loop streaming yang menulis
+    replyEl.innerHTML = `<b>NALA:</b> ${escapeHtml(fullReply)}` TIDAK
+    berubah — token pertama otomatis menimpa indikator.
+- Di Nala/app/static/style.css: tambah style .typing + animasi tiga titik
+  (.typing i dengan @keyframes typing-blink), button:disabled, dan .error.
+
+CONTEXT:
+- Handler submit + streaming reader sudah ada dari Module 8; use_rag dari
+  Langkah 4. Ini murni penambahan UX, tidak menyentuh backend.
+
+GUARDRAIL:
+- JANGAN ubah endpoint atau file Python apa pun (main.py, dst).
+- JANGAN ubah logika penyusunan `conversation`, windowing badge, atau
+  tombol reset yang sudah ada.
 ```
 
 </details>
