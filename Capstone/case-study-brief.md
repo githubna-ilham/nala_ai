@@ -2,14 +2,14 @@
 
 ## Latar Belakang
 
-PT Nusantara Finance baru saja meluncurkan lini bisnis baru: **leasing kendaraan operasional untuk korporat** (mobil dan motor untuk perusahaan mitra, bukan pembiayaan retail perorangan seperti kredit yang sudah dilayani NALA sejak Module 1-25). Divisi Leasing meminta akses ke NALA, tapi kebutuhan mereka sedikit berbeda dari divisi Kredit yang jadi basis studi kasus sejak awal training:
+PT Nusantara Finance baru saja meluncurkan lini bisnis baru: **leasing kendaraan operasional untuk korporat** (mobil dan motor untuk perusahaan mitra, bukan pembiayaan retail perorangan seperti kredit yang sudah dilayani NALA sejak Module 1-27). Divisi Leasing meminta akses ke NALA, tapi kebutuhan mereka sedikit berbeda dari divisi Kredit yang jadi basis studi kasus sejak awal training:
 
 1. **Dokumen SOP baru**: Divisi Leasing punya SOP sendiri — *"SOP Leasing Kendaraan Operasional Korporat"* — yang belum pernah masuk ke knowledge base NALA. Dokumen ini mencakup syarat pengajuan leasing korporat, proses appraisal kendaraan, skema pembayaran (bulanan vs tahunan), dan prosedur perpanjangan/terminasi kontrak.
-2. **Jenis pertanyaan operasional baru**: staf Leasing perlu bertanya soal data kontrak leasing aktif — misalnya "Berapa banyak kontrak leasing yang jatuh tempo bulan ini?" atau "Unit kendaraan apa saja yang sedang dalam proses appraisal untuk klien PT Mitra Jaya?" — pertanyaan ini **tidak bisa** dijawab dari dokumen SOP (itu prosedur, bukan data transaksional), harus di-routing ke SQL tool seperti pertanyaan data pengajuan kredit di Module 21-25, tapi menyentuh tabel/data yang berbeda (data kontrak leasing, bukan data pengajuan kredit).
+2. **Jenis pertanyaan operasional baru**: staf Leasing perlu bertanya soal data kontrak leasing aktif — misalnya "Berapa banyak kontrak leasing yang jatuh tempo bulan ini?" atau "Unit kendaraan apa saja yang sedang dalam proses appraisal untuk klien PT Mitra Jaya?" — pertanyaan ini **tidak bisa** dijawab dari dokumen SOP (itu prosedur, bukan data transaksional), harus di-routing ke SQL tool seperti pertanyaan data pengajuan kredit di Module 23-27, tapi menyentuh tabel/data yang berbeda (data kontrak leasing, bukan data pengajuan kredit).
 
 ## Tugas Capstone
 
-Gunakan NALA (hasil Module 1-29 Anda) untuk menjawab kebutuhan Divisi Leasing di atas. Secara konkret:
+Gunakan NALA (hasil Module 1-31 Anda) untuk menjawab kebutuhan Divisi Leasing di atas. Secara konkret:
 
 ### 1. Tambahkan dokumen SOP baru ke knowledge base
 
@@ -23,18 +23,18 @@ Upload dokumen ini lewat `/upload` (Module 15), verifikasi ter-index (Module 12-
 
 ### 2. Siapkan data operasional dummy untuk kontrak leasing
 
-Buat tabel/data dummy baru di PostgreSQL (terpisah atau menyatu dengan skema data operasional Module 21-25, sesuai desain Anda) yang merepresentasikan kontrak leasing aktif — minimal kolom: nama klien korporat, jenis/jumlah kendaraan, tanggal mulai kontrak, tanggal jatuh tempo, status (aktif/proses appraisal/berakhir), skema pembayaran.
+Buat tabel/data dummy baru di PostgreSQL (terpisah atau menyatu dengan skema data operasional Module 23-27, sesuai desain Anda) yang merepresentasikan kontrak leasing aktif — minimal kolom: nama klien korporat, jenis/jumlah kendaraan, tanggal mulai kontrak, tanggal jatuh tempo, status (aktif/proses appraisal/berakhir), skema pembayaran.
 
-### 3. Perluas atau verifikasi agent routing (Module 21-25)
+### 3. Perluas atau verifikasi agent routing (Module 23-27)
 
 Pastikan agent NALA bisa membedakan dengan benar:
 - Pertanyaan prosedural leasing → RAG (dokumen SOP baru)
 - Pertanyaan data kontrak leasing → SQL tool (tabel baru)
-- Pertanyaan lama seputar kredit (Module 1-25) → tetap berfungsi seperti sebelumnya, tidak boleh regresi
+- Pertanyaan lama seputar kredit (Module 1-27) → tetap berfungsi seperti sebelumnya, tidak boleh regresi
 
 ### 4. Review keamanan untuk kasus baru ini
 
-Terapkan checklist Module 27 Bagian 3 khusus untuk data leasing baru ini — misalnya: apakah data kontrak korporat butuh pembatasan akses berbeda dari data kredit perorangan (RBAC)? Apakah ada risiko prompt injection baru kalau dokumen SOP leasing berasal dari draft yang belum direview penuh?
+Terapkan checklist Module 29 Bagian 3 khusus untuk data leasing baru ini — misalnya: apakah data kontrak korporat butuh pembatasan akses berbeda dari data kredit perorangan (RBAC)? Apakah ada risiko prompt injection baru kalau dokumen SOP leasing berasal dari draft yang belum direview penuh?
 
 ## Yang Dinilai Saat Demo Capstone
 
