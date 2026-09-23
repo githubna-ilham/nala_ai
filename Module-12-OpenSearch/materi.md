@@ -205,9 +205,74 @@ GUARDRAIL:
 
 </details>
 
-**Uji lanjutan — simpan & cari vektor sungguhan lewat `curl` (sebelum Dashboards dipasang)**
+**Langkah 2 — Service `opensearch-dashboards` (UI visual untuk OpenSearch)**
 
-Sejauh ini OpenSearch baru terbukti **menyala** — belum pernah dibuktikan bisa benar-benar **menyimpan dan mencari vektor**. Sebelum Module 13 mengotomasi ini lewat kode Python (`VectorStore`), buktikan dulu secara manual lewat `curl` — supaya saat kode Python-nya ditulis nanti, Anda sudah tahu persis apa yang sebenarnya terjadi di baliknya, bukan cuma percaya begitu saja. Ini juga membuktikan OpenSearch **sendirian** (tanpa Dashboards) sudah cukup untuk menyimpan & mencari vektor — Dashboards di Langkah 2 nanti cuma cara yang lebih nyaman melakukan hal yang sama, bukan syarat.
+Sejauh ini, satu-satunya cara "melihat" isi OpenSearch adalah lewat `curl`/Postman — cukup untuk verifikasi cepat, tapi tidak praktis untuk menjelajahi data atau menulis query lebih rumit. **OpenSearch Dashboards** (setara Kibana) memberi tampilan web visual: **Dev Tools** untuk menulis & menjalankan query langsung dari browser (tanpa perlu `curl`/file `.json` terpisah), dan **Discover** untuk menelusuri isi index per baris tanpa perlu mengetik query sama sekali. Tambahkan sebagai service baru di `docker-compose.yml`, sejajar dengan `opensearch`:
+
+```yaml
+  opensearch-dashboards:
+    image: opensearchproject/opensearch-dashboards:2.11.0
+    environment:
+      - 'OPENSEARCH_HOSTS=["http://opensearch:9200"]'
+      - DISABLE_SECURITY_DASHBOARDS_PLUGIN=true
+    ports:
+      - '5601:5601'
+    depends_on:
+      - opensearch
+```
+
+- **`OPENSEARCH_HOSTS`**: memberi tahu Dashboards di mana OpenSearch-nya — pakai hostname `opensearch` (nama service di Docker Compose network), bukan `localhost`, karena Dashboards mengaksesnya dari **dalam** container lain, bukan dari laptop Anda.
+- **`DISABLE_SECURITY_DASHBOARDS_PLUGIN=true`**: pasangan dari `plugins.security.disabled=true` di service `opensearch` — Dashboards juga punya plugin security sendiri yang harus dimatikan senada, supaya tidak minta login padahal OpenSearch di baliknya sudah tanpa autentikasi sama sekali.
+- **`depends_on: opensearch`**: Dashboards tidak ada gunanya kalau OpenSearch-nya sendiri belum menyala — urutan start dijamin, walau (seperti biasa) `depends_on` tanpa `condition` cuma menjamin urutan *start*, bukan urutan *siap* (dibahas lebih detail nanti di Module 27).
+- **Tambahan RAM**: ~512MB-1GB di atas kebutuhan `opensearch` sendiri — total alokasi RAM Docker Desktop 16GB+ (Module 7) sudah memperhitungkan ini.
+
+**▶️ Jalankan & lihat hasilnya**
+
+```bash
+docker compose up -d --build opensearch-dashboards
+```
+
+Tunggu sampai siap (biasanya lebih cepat dari `opensearch` sendiri):
+
+```bash
+docker compose logs -f opensearch-dashboards
+```
+
+Tunggu sampai muncul log semacam `Server running at http://0.0.0.0:5601`, lalu `Ctrl+C`. Buka `http://localhost:5601` di browser — halaman OpenSearch Dashboards akan muncul (skip langkah "create tenant"/login kalau muncul, karena security plugin sudah dimatikan).
+
+✅ **Indikator sukses**: `http://localhost:5601` terbuka di browser tanpa error, dan lewat menu **Dev Tools** Anda bisa menjalankan `GET nala-docs/_count` (setelah index `nala-docs` dibuat di Module 13) dan melihat hasilnya langsung di layar, tanpa terminal.
+
+<details>
+<summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 2</strong></summary>
+
+```
+Tambah service opensearch-dashboards di docker-compose.yml NALA
+(Module 12, Langkah 2) — BELUM membuat kode Python apa pun.
+
+GOAL:
+- Di Nala/docker-compose.yml: tambah service baru
+  `opensearch-dashboards` (image
+  opensearchproject/opensearch-dashboards:2.11.0, environment
+  OPENSEARCH_HOSTS=["http://opensearch:9200"] dan
+  DISABLE_SECURITY_DASHBOARDS_PLUGIN=true, port 5601:5601,
+  depends_on: opensearch).
+
+CONTEXT:
+- Service opensearch sudah ada dari Langkah 1 — opensearch-dashboards
+  cuma UI visual tambahan untuk melihat isinya, tidak dipanggil oleh
+  kode Python NALA sama sekali.
+
+GUARDRAIL:
+- JANGAN ubah service opensearch, api, atau ollama.
+- JANGAN tambah volume baru — opensearch-dashboards tidak menyimpan
+  data sendiri, semua datanya ada di opensearch.
+```
+
+</details>
+
+**Langkah 3 — Uji simpan & cari vektor sungguhan lewat `curl`**
+
+Sejauh ini OpenSearch baru terbukti **menyala** — belum pernah dibuktikan bisa benar-benar **menyimpan dan mencari vektor**. Sebelum Module 13 mengotomasi ini lewat kode Python (`VectorStore`), buktikan dulu secara manual lewat `curl` — supaya saat kode Python-nya ditulis nanti, Anda sudah tahu persis apa yang sebenarnya terjadi di baliknya, bukan cuma percaya begitu saja.
 
 **a. Buat index `nala-docs`:**
 
@@ -283,78 +348,13 @@ Salin embedding hasilnya ke file `query.json`:
 curl -X POST http://localhost:9200/nala-docs/_search -H 'Content-Type: application/json' -d @query.json
 ```
 
-✅ **Indikator sukses**: hasil pencarian menampilkan dokumen `test-1` walau kata-kata query ("kapan", "beroperasi") sama sekali berbeda dari kata-kata dokumen aslinya ("buka") — bukti nyata pencarian semantik bekerja, dilakukan manual lewat `curl`, **sebelum** Dashboards dipasang dan **sebelum** satu baris kode Python pun ditulis. Module 13 mengotomasi persis alur a-d ini jadi tiga method (`ensure_index()`, `index_document()`, `search()`) di class `VectorStore`.
+✅ **Indikator sukses**: hasil pencarian menampilkan dokumen `test-1` walau kata-kata query ("kapan", "beroperasi") sama sekali berbeda dari kata-kata dokumen aslinya ("buka") — bukti nyata pencarian semantik bekerja, dilakukan manual lewat `curl`, **sebelum** satu baris kode Python pun ditulis. Module 13 mengotomasi persis alur a-d ini jadi tiga method (`ensure_index()`, `index_document()`, `search()`) di class `VectorStore`.
 
-**Langkah 2 — Service `opensearch-dashboards` (UI visual untuk OpenSearch)**
+**Langkah 4 — Coba ulang uji yang sama lewat Dev Tools (bandingkan dengan `curl`)**
 
-Sejauh ini, satu-satunya cara "melihat" isi OpenSearch adalah lewat `curl`/Postman — cukup untuk verifikasi cepat (persis yang baru dilakukan di atas), tapi tidak praktis untuk menjelajahi data atau menulis query lebih rumit. **OpenSearch Dashboards** (setara Kibana) memberi tampilan web visual: **Dev Tools** untuk menulis & menjalankan query langsung dari browser (tanpa perlu `curl`/file `.json` terpisah), dan **Discover** untuk menelusuri isi index per baris tanpa perlu mengetik query sama sekali. Tambahkan sebagai service baru di `docker-compose.yml`, sejajar dengan `opensearch`:
+Anda baru saja membuktikan lewat `curl` (Langkah 3) bahwa OpenSearch bisa menyimpan & mencari vektor. Sekarang coba lakukan **query yang sama persis** lewat **Dev Tools** — supaya terasa langsung bedanya: tidak perlu lagi `-H`/`-d @file.json`/`curl -X`, cukup tempel body JSON-nya saja.
 
-```yaml
-  opensearch-dashboards:
-    image: opensearchproject/opensearch-dashboards:2.11.0
-    environment:
-      - 'OPENSEARCH_HOSTS=["http://opensearch:9200"]'
-      - DISABLE_SECURITY_DASHBOARDS_PLUGIN=true
-    ports:
-      - '5601:5601'
-    depends_on:
-      - opensearch
-```
-
-- **`OPENSEARCH_HOSTS`**: memberi tahu Dashboards di mana OpenSearch-nya — pakai hostname `opensearch` (nama service di Docker Compose network), bukan `localhost`, karena Dashboards mengaksesnya dari **dalam** container lain, bukan dari laptop Anda.
-- **`DISABLE_SECURITY_DASHBOARDS_PLUGIN=true`**: pasangan dari `plugins.security.disabled=true` di service `opensearch` — Dashboards juga punya plugin security sendiri yang harus dimatikan senada, supaya tidak minta login padahal OpenSearch di baliknya sudah tanpa autentikasi sama sekali.
-- **`depends_on: opensearch`**: Dashboards tidak ada gunanya kalau OpenSearch-nya sendiri belum menyala — urutan start dijamin, walau (seperti biasa) `depends_on` tanpa `condition` cuma menjamin urutan *start*, bukan urutan *siap* (dibahas lebih detail nanti di Module 27).
-- **Tambahan RAM**: ~512MB-1GB di atas kebutuhan `opensearch` sendiri — total alokasi RAM Docker Desktop 16GB+ (Module 7) sudah memperhitungkan ini.
-
-**▶️ Jalankan & lihat hasilnya**
-
-```bash
-docker compose up -d --build opensearch-dashboards
-```
-
-Tunggu sampai siap (biasanya lebih cepat dari `opensearch` sendiri):
-
-```bash
-docker compose logs -f opensearch-dashboards
-```
-
-Tunggu sampai muncul log semacam `Server running at http://0.0.0.0:5601`, lalu `Ctrl+C`. Buka `http://localhost:5601` di browser — halaman OpenSearch Dashboards akan muncul (skip langkah "create tenant"/login kalau muncul, karena security plugin sudah dimatikan).
-
-✅ **Indikator sukses**: `http://localhost:5601` terbuka di browser tanpa error, dan lewat menu **Dev Tools** Anda bisa menjalankan `GET nala-docs/_count` (setelah index `nala-docs` dibuat di Module 13) dan melihat hasilnya langsung di layar, tanpa terminal.
-
-<details>
-<summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 2</strong></summary>
-
-```
-Tambah service opensearch-dashboards di docker-compose.yml NALA
-(Module 12, Langkah 2) — BELUM membuat kode Python apa pun.
-
-GOAL:
-- Di Nala/docker-compose.yml: tambah service baru
-  `opensearch-dashboards` (image
-  opensearchproject/opensearch-dashboards:2.11.0, environment
-  OPENSEARCH_HOSTS=["http://opensearch:9200"] dan
-  DISABLE_SECURITY_DASHBOARDS_PLUGIN=true, port 5601:5601,
-  depends_on: opensearch).
-
-CONTEXT:
-- Service opensearch sudah ada dari Langkah 1 — opensearch-dashboards
-  cuma UI visual tambahan untuk melihat isinya, tidak dipanggil oleh
-  kode Python NALA sama sekali.
-
-GUARDRAIL:
-- JANGAN ubah service opensearch, api, atau ollama.
-- JANGAN tambah volume baru — opensearch-dashboards tidak menyimpan
-  data sendiri, semua datanya ada di opensearch.
-```
-
-</details>
-
-**Langkah 3 — Coba ulang uji yang sama lewat Dev Tools (bandingkan dengan `curl`)**
-
-Anda baru saja membuktikan lewat `curl` (sebelum Langkah 2) bahwa OpenSearch bisa menyimpan & mencari vektor. Sekarang, dengan Dashboards sudah menyala, coba lakukan **query yang sama persis** lewat **Dev Tools** — supaya terasa langsung bedanya: tidak perlu lagi `-H`/`-d @file.json`/`curl -X`, cukup tempel body JSON-nya saja.
-
-Buka `http://localhost:5601` → menu **Dev Tools** (ikon di kiri, atau lewat menu hamburger ☰ → Management → Dev Tools). Coba jalankan ulang query pencarian dari Langkah 1 (paste, lalu klik ▶️ atau `Ctrl+Enter`/`Cmd+Enter`) — kali ini tanpa perlu bikin file `query.json` dulu:
+Buka `http://localhost:5601` → menu **Dev Tools** (ikon di kiri, atau lewat menu hamburger ☰ → Management → Dev Tools). Coba jalankan ulang query pencarian dari Langkah 3 (paste, lalu klik ▶️ atau `Ctrl+Enter`/`Cmd+Enter`) — kali ini tanpa perlu bikin file `query.json` dulu:
 
 ```
 GET nala-docs/_count
@@ -365,12 +365,12 @@ POST nala-docs/_search
 {
   "size": 3,
   "query": {
-    "knn": { "embedding": { "vector": [ ...tempel array embedding query, sama seperti Langkah 1.d ... ], "k": 3 } }
+    "knn": { "embedding": { "vector": [ ...tempel array embedding query, sama seperti Langkah 3.d ... ], "k": 3 } }
   }
 }
 ```
 
-✅ **Indikator sukses**: `GET nala-docs/_count` menunjukkan `"count": 1` (dokumen `test-1` dari Langkah 1 masih ada — Dashboards cuma *melihat* data yang sama, bukan penyimpanan terpisah), dan pencarian k-NN di Dev Tools mengembalikan hasil yang identik dengan hasil `curl` sebelumnya. Ini membuktikan Dev Tools cuma **antarmuka lain** ke REST API yang sama persis — bukan sistem terpisah.
+✅ **Indikator sukses**: `GET nala-docs/_count` menunjukkan `"count": 1` (dokumen `test-1` dari Langkah 3 masih ada — Dashboards cuma *melihat* data yang sama, bukan penyimpanan terpisah), dan pencarian k-NN di Dev Tools mengembalikan hasil yang identik dengan hasil `curl` sebelumnya. Ini membuktikan Dev Tools cuma **antarmuka lain** ke REST API yang sama persis — bukan sistem terpisah.
 
 ⚠️ **Kenapa langkah manual (curl maupun Dev Tools) tidak dipakai sungguhan**: menyalin-tempel array 768 angka jelas tidak praktis — ini murni latihan pembuktian konsep. Begitu jelas OpenSearch memang bisa menyimpan dan mencari vektor seperti yang diharapkan, Module 13 menulis kode Python yang melakukan proses identik secara otomatis (memanggil `embed_text()`, mengirim hasilnya ke OpenSearch, tanpa copy-paste manual).
 
@@ -446,8 +446,8 @@ Yang perlu dipastikan sebelum lanjut ke Module 13:
 
 - [ ] `docker compose logs opensearch` menunjukkan cluster health `green`/`yellow`, bukan `red`
 - [ ] `http://localhost:5601` (OpenSearch Dashboards) terbuka di browser tanpa error
-- [ ] Index `nala-docs` berhasil dibuat dan diisi lewat `curl` (sebelum Langkah 2), dan pencarian k-NN manual menemukan dokumen walau kata query berbeda dari kata dokumen aslinya
-- [ ] Query yang sama juga berhasil diulang lewat Dev Tools (Langkah 3), menghasilkan hasil yang identik dengan `curl`
+- [ ] Index `nala-docs` berhasil dibuat dan diisi lewat `curl` (Langkah 3), dan pencarian k-NN manual menemukan dokumen walau kata query berbeda dari kata dokumen aslinya
+- [ ] Query yang sama juga berhasil diulang lewat Dev Tools (Langkah 4), menghasilkan hasil yang identik dengan `curl`
 - [ ] Kita paham OpenSearch pada dasarnya adalah full-text search engine (fork open-source Elasticsearch) yang belakangan ditambahi kemampuan vector search — bukan produk yang dari awal dibangun cuma untuk vektor
 - [ ] Kita bisa menjelaskan konsep index dan document di OpenSearch, dan kenapa NALA mengaksesnya lewat REST API HTTP biasa (`httpx`), bukan library client khusus
 - [ ] Kita paham alasan utama NALA memilih OpenSearch dibanding vector database khusus atau pgvector
