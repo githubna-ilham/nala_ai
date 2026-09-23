@@ -298,6 +298,18 @@ PUT nala-docs
 
 Respons `{"acknowledged": true, ...}` berarti index berhasil dibuat — ini persis mapping yang sama yang nanti ditulis ulang jadi kode di `ensure_index()` (Module 13), cuma sekarang dijalankan manual dulu.
 
+**Penjelasan tiap baris:**
+
+- **`PUT nala-docs`** — permintaan buat index baru bernama `nala-docs`, ibarat "buat lemari arsip baru" (istilah dari Bagian 2).
+- **`"settings": { "index": { "knn": true } }`** — mengaktifkan kemampuan k-NN di level index ini. Tanpa baris ini, OpenSearch akan **menolak** field bertipe `knn_vector` di bawah — settingnya harus dinyalakan dulu sebelum index boleh punya field vektor.
+- **`"mappings": { "properties": { ... } }`** — mendefinisikan struktur/skema dokumen yang akan disimpan: field apa saja yang ada, dan tipe datanya masing-masing. Seperti menentukan "kolom apa saja yang ada di formulir" sebelum formulirnya mulai diisi.
+- **`"text": { "type": "text" }`** — field untuk teks asli chunk dokumen. Tipe `"text"` artinya field ini **dianalisis/dipecah jadi kata-kata** (tokenized) di belakang layar — inilah yang memungkinkan pencarian kata kunci (BM25) nanti bekerja di field ini (dibahas Module 18).
+- **`"embedding": { "type": "knn_vector", ... }`** — field untuk vektor hasil embedding:
+  - `"type": "knn_vector"` — tipe field khusus, memberi tahu OpenSearch "ini bukan teks biasa, ini array angka yang bisa dicari lewat k-NN".
+  - `"dimension": 768` — jumlah angka dalam satu vektor. **Wajib** persis sama dengan output model embedding yang dipakai (`nomic-embed-text` menghasilkan 768 angka) — kalau beda, OpenSearch menolak menyimpan dokumennya.
+  - `"method"` — cara mencari kemiripan di field ini: `"engine": "nmslib"` adalah **library** yang menjalankan algoritmanya di balik layar (salah satu dari beberapa pilihan OpenSearch: `nmslib`, `faiss`, `lucene`); `"space_type": "cosinesimil"` adalah **metrik kemiripan** yang dipakai (cosine similarity, dibahas panjang lebar di Module 13 Bagian 2 — eksplisit dipilih, bukan dibiarkan default L2); `"name": "hnsw"` adalah **algoritma pencarian**-nya (Hierarchical Navigable Small World — analogi "teman dari teman" dari Bagian 2).
+- **`"metadata": { "type": "object" }`** — field untuk data tambahan bebas bentuk (misal `{"source": "manual-test"}`). Tipe `"object"` artinya boleh berisi JSON apa saja di dalamnya, tidak dibatasi struktur tertentu, cocok untuk informasi pendukung yang formatnya bisa berubah-ubah antar dokumen.
+
 **b. Ambil satu embedding sungguhan** — di terminal (bukan Dev Tools, karena ini memanggil Ollama, bukan OpenSearch), pola yang sama seperti Module 4 Bagian 4.1:
 
 ```bash
@@ -342,6 +354,15 @@ POST nala-docs/_search
   }
 }
 ```
+
+**Penjelasan tiap baris:**
+
+- **`POST nala-docs/_search`** — permintaan **mencari** dokumen di index `nala-docs`. `POST` (bukan `GET`) dipakai karena request pencariannya butuh mengirim body JSON (query-nya) — beda dengan `GET nala-docs/_count` sebelumnya yang tidak butuh body sama sekali.
+- **`"size": 3`** — jumlah hasil maksimal yang dikembalikan, alias **top-K** yang sudah dibahas di Bagian 1 (di kode Python nanti, ini jadi parameter `top_k`).
+- **`"query": { "knn": { ... } }`** — jenis query-nya: **k-NN** (k-Nearest Neighbors), bukan query kata kunci biasa (`match`) — inilah yang membuat pencarian ini **semantik**, bukan pencocokan kata literal.
+- **`"embedding": { "vector": [...], "k": 3 }`** — parameter query k-NN-nya:
+  - `"vector"` — vektor **query**-nya (hasil embed pertanyaan Anda di Langkah d), dibandingkan kemiripannya dengan vektor `embedding` di setiap dokumen yang tersimpan.
+  - `"k": 3` — jumlah tetangga terdekat yang dicari **per shard** secara internal, sebelum digabung dan dipotong jadi `"size"` di atas — untuk index kecil single-node seperti ini, nilainya biasanya disamakan saja dengan `"size"`.
 
 ✅ **Indikator sukses**: hasil pencarian menampilkan dokumen `test-1` walau kata-kata query ("kapan", "beroperasi") sama sekali berbeda dari kata-kata dokumen aslinya ("buka") — bukti nyata pencarian semantik bekerja, dilakukan manual lewat Dev Tools, **sebelum** satu baris kode Python pun ditulis. Module 13 mengotomasi persis alur a-d ini jadi tiga method (`ensure_index()`, `index_document()`, `search()`) di class `VectorStore`.
 
