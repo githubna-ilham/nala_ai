@@ -25,7 +25,7 @@ flowchart LR
 - `chunk_markdown()` pada `sop-pengajuan-kredit.md` menghasilkan chunk yang tiap potongannya mulai dari baris heading, bukan potongan sembarang
 - `ingest_document()` ter-upgrade: sekarang mengembalikan jumlah **chunk** dari satu dokumen (bukan `None`), dan `ingest_documents()` (tidak diubah sama sekali) otomatis ikut menjumlahkan total chunk yang lebih besar dari hasil Module 14
 - `/chat/stream` tetap menjawab dengan benar setelah `top_k` dinaikkan dan index diisi ulang dengan chunk
-- Kita memahami keterbatasan nyata retrieval semantic murni **level-chunk** (Bagian 9) sebagai motivasi jujur untuk hybrid search (Module 18) + reranking (Module 19)
+- Kita memahami keterbatasan nyata retrieval semantic murni **level-chunk** (Bagian 9) sebagai motivasi jujur untuk BM25 + hybrid search (Module 18-19) + reranking (Module 20)
 - `/chat/stream` (Module 7) tetap berfungsi seperti sebelumnya
 
 ## 1. Kenapa Sekarang, Bukan dari Awal
@@ -408,7 +408,7 @@ GUARDRAIL:
 
 </details>
 
-## 9. Catatan: Keterbatasan Retrieval Semantic Murni (Preview Module 18-19)
+## 9. Catatan: Keterbatasan Retrieval Semantic Murni (Preview Module 18-20)
 
 Kalau Anda coba pertanyaan spesifik seperti *"Apa saja syarat pengajuan kredit untuk nasabah perorangan?"* dan jawabannya terasa kurang lengkap atau bilang "tidak ditemukan" padahal Anda tahu isinya ada di dokumen — itu **bukan bug**, tapi keterbatasan nyata dari vector search murni, bahkan setelah chunking (Bagian 1-Bagian 8) diterapkan.
 
@@ -416,7 +416,7 @@ Kalau Anda coba pertanyaan spesifik seperti *"Apa saja syarat pengajuan kredit u
 
 **Sudah dibuktikan langsung** (diuji ulang ke index OpenSearch yang berjalan): chunk jawaban `### 2.1 Untuk Nasabah Perorangan` berperingkat **#11 dari 14** chunk berdasarkan k-NN similarity — jauh di luar jangkauan `top_k=6` (Bagian 8 Langkah 4). Menaikkan `top_k` bukan solusi murah — mengirim lebih banyak chunk (mayoritas tidak relevan) ke `llama3.2:3b` (model kecil, context window terbatas) berisiko lebih banyak "mengencerkan" fokus model daripada membantu.
 
-Ini **persis** motivasi Module 18 dan 19: **hybrid search** (Module 18 — kombinasi BM25 keyword-matching + vector semantic search) dan **reranking** (Module 19 — cross-encoder menyortir ulang top-N besar jadi top-K yang benar-benar relevan). Grounding yang sudah dibangun di Module 14 Bagian 4 sudah bekerja **benar** — yang belum optimal adalah retrieval-nya, bukan generation-nya. Chunking (module ini) sudah jadi perbaikan nyata dibanding Module 14 (level-dokumen) — tapi belum jadi solusi lengkap.
+Ini **persis** motivasi Module 18-20: **BM25 + hybrid search** (Module 18-19 — kombinasi BM25 keyword-matching + vector semantic search lewat RRF) dan **reranking** (Module 20 — cross-encoder menyortir ulang top-N besar jadi top-K yang benar-benar relevan). Grounding yang sudah dibangun di Module 14 Bagian 4 sudah bekerja **benar** — yang belum optimal adalah retrieval-nya, bukan generation-nya. Chunking (module ini) sudah jadi perbaikan nyata dibanding Module 14 (level-dokumen) — tapi belum jadi solusi lengkap.
 
 ## 10. Bentuk Uji Coba per Checklist
 
@@ -430,7 +430,7 @@ Yang perlu dipastikan sebelum lanjut ke Module 16:
 - [ ] `chunk_markdown()` pada `sop-pengajuan-kredit.md` menghasilkan 13 chunk, tiap potongannya dimulai dari baris heading
 - [ ] `ingest_document()` mengembalikan jumlah chunk dari satu dokumen (bukan lagi `None`), dan `ingest_documents()` (tidak diubah) mengembalikan total chunk yang jauh lebih besar dari jumlah dokumen di Module 14
 - [ ] `top_k=6` sudah dipakai di `/chat/stream` (bukan lagi `top_k=2`)
-- [ ] Kita paham keterbatasan retrieval semantic murni level-chunk (Bagian 9) sebagai motivasi Module 18-19
+- [ ] Kita paham keterbatasan retrieval semantic murni level-chunk (Bagian 9) sebagai motivasi Module 18-20
 - [ ] `/chat/stream` (Module 7) masih berfungsi seperti sebelumnya, dengan jawaban yang sekarang berbasis chunk yang lebih fokus
 
 Begitu semua hal di atas terverifikasi, lanjut ke Module 16 — form upload web, cara staff menambahkan dokumen baru ke sistem yang **sudah hidup dan sudah level-chunk** ini.
