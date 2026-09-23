@@ -17,8 +17,8 @@ flowchart LR
 ## Hasil Akhir yang Diharapkan
 
 - OpenSearch berjalan sehat (`docker compose logs opensearch` menunjukkan cluster health `green`/`yellow`)
-- Terbukti lewat `curl` bahwa OpenSearch sendirian (tanpa Dashboards) sudah bisa menyimpan & mencari vektor sungguhan
-- `http://localhost:5601` (OpenSearch Dashboards) bisa dibuka di browser untuk menjelajahi isi OpenSearch secara visual, dan bisa melakukan query yang sama persis lewat Dev Tools
+- `http://localhost:5601` (OpenSearch Dashboards) bisa dibuka di browser untuk menjelajahi isi OpenSearch secara visual
+- Terbukti lewat Dev Tools bahwa OpenSearch sudah bisa menyimpan & mencari vektor sungguhan
 - Kita paham apa itu OpenSearch secara umum (asal-usulnya, konsep index/document, akses lewat REST API) — bukan cuma tahu cara memakainya
 - Kita paham kenapa NALA akhirnya memilih OpenSearch dibanding alternatif lain
 - `/chat/stream` (Module 7) tetap berfungsi seperti sebelumnya
@@ -270,14 +270,17 @@ GUARDRAIL:
 
 </details>
 
-**Langkah 3 — Uji simpan & cari vektor sungguhan lewat `curl`**
+**Langkah 3 — Uji simpan & cari vektor sungguhan lewat Dev Tools**
 
-Sejauh ini OpenSearch baru terbukti **menyala** — belum pernah dibuktikan bisa benar-benar **menyimpan dan mencari vektor**. Sebelum Module 13 mengotomasi ini lewat kode Python (`VectorStore`), buktikan dulu secara manual lewat `curl` — supaya saat kode Python-nya ditulis nanti, Anda sudah tahu persis apa yang sebenarnya terjadi di baliknya, bukan cuma percaya begitu saja.
+Sejauh ini OpenSearch baru terbukti **menyala** — belum pernah dibuktikan bisa benar-benar **menyimpan dan mencari vektor**. Sebelum Module 13 mengotomasi ini lewat kode Python (`VectorStore`), buktikan dulu secara manual lewat **Dev Tools** di OpenSearch Dashboards — supaya saat kode Python-nya ditulis nanti, Anda sudah tahu persis apa yang sebenarnya terjadi di baliknya, bukan cuma percaya begitu saja.
 
-**a. Buat index `nala-docs`:**
+Buka `http://localhost:5601` → menu **Dev Tools** (ikon di kiri, atau lewat menu hamburger ☰ → Management → Dev Tools).
 
-```bash
-curl -X PUT http://localhost:9200/nala-docs -H 'Content-Type: application/json' -d '{
+**a. Buat index `nala-docs`** — paste ini di Dev Tools, lalu klik ikon ▶️ (atau `Ctrl+Enter`/`Cmd+Enter`):
+
+```
+PUT nala-docs
+{
   "settings": { "index": { "knn": true } },
   "mappings": {
     "properties": {
@@ -290,12 +293,12 @@ curl -X PUT http://localhost:9200/nala-docs -H 'Content-Type: application/json' 
       "metadata": { "type": "object" }
     }
   }
-}'
+}
 ```
 
 Respons `{"acknowledged": true, ...}` berarti index berhasil dibuat — ini persis mapping yang sama yang nanti ditulis ulang jadi kode di `ensure_index()` (Module 13), cuma sekarang dijalankan manual dulu.
 
-**b. Ambil satu embedding sungguhan** (pola yang sama seperti Module 4 Bagian 4.1):
+**b. Ambil satu embedding sungguhan** — di terminal (bukan Dev Tools, karena ini memanggil Ollama, bukan OpenSearch), pola yang sama seperti Module 4 Bagian 4.1:
 
 ```bash
 curl http://localhost:11434/api/embed -d '{
@@ -304,22 +307,17 @@ curl http://localhost:11434/api/embed -d '{
 }'
 ```
 
-Responsnya berisi `"embeddings": [[...768 angka...]]`. **Salin seluruh array angka di dalamnya** (dari `[` sampai `]` yang paling dalam).
+Responsnya berisi `"embeddings": [[...768 angka...]]`. **Salin seluruh array angka di dalamnya** (dari `[` sampai `]` yang paling dalam) — akan ditempel ke Dev Tools di langkah berikutnya.
 
-**c. Simpan dokumen berisi vektor itu** — array 768 angka terlalu panjang untuk ditempel langsung ke satu baris `curl -d`, jadi simpan dulu ke file. Buat `doc.json`:
+**c. Simpan dokumen berisi vektor itu** — kembali ke Dev Tools, tempel array yang disalin ke field `embedding`:
 
-```json
+```
+PUT nala-docs/_doc/test-1?refresh=true
 {
   "text": "Kantor cabang Surabaya buka Senin-Jumat",
   "embedding": [ ...tempel array 768 angka di sini... ],
   "metadata": { "source": "manual-test" }
 }
-```
-
-Lalu kirim file itu:
-
-```bash
-curl -X PUT "http://localhost:9200/nala-docs/_doc/test-1?refresh=true" -H 'Content-Type: application/json' -d @doc.json
 ```
 
 `?refresh=true` supaya dokumen langsung bisa dicari seketika (sama alasannya dengan `params={"refresh": "true"}` yang nanti dipakai `index_document()` di Module 13).
@@ -333,9 +331,10 @@ curl http://localhost:11434/api/embed -d '{
 }'
 ```
 
-Salin embedding hasilnya ke file `query.json`:
+Salin embedding hasilnya, lalu jalankan query k-NN di Dev Tools:
 
-```json
+```
+POST nala-docs/_search
 {
   "size": 3,
   "query": {
@@ -344,35 +343,9 @@ Salin embedding hasilnya ke file `query.json`:
 }
 ```
 
-```bash
-curl -X POST http://localhost:9200/nala-docs/_search -H 'Content-Type: application/json' -d @query.json
-```
+✅ **Indikator sukses**: hasil pencarian menampilkan dokumen `test-1` walau kata-kata query ("kapan", "beroperasi") sama sekali berbeda dari kata-kata dokumen aslinya ("buka") — bukti nyata pencarian semantik bekerja, dilakukan manual lewat Dev Tools, **sebelum** satu baris kode Python pun ditulis. Module 13 mengotomasi persis alur a-d ini jadi tiga method (`ensure_index()`, `index_document()`, `search()`) di class `VectorStore`.
 
-✅ **Indikator sukses**: hasil pencarian menampilkan dokumen `test-1` walau kata-kata query ("kapan", "beroperasi") sama sekali berbeda dari kata-kata dokumen aslinya ("buka") — bukti nyata pencarian semantik bekerja, dilakukan manual lewat `curl`, **sebelum** satu baris kode Python pun ditulis. Module 13 mengotomasi persis alur a-d ini jadi tiga method (`ensure_index()`, `index_document()`, `search()`) di class `VectorStore`.
-
-**Langkah 4 — Coba ulang uji yang sama lewat Dev Tools (bandingkan dengan `curl`)**
-
-Anda baru saja membuktikan lewat `curl` (Langkah 3) bahwa OpenSearch bisa menyimpan & mencari vektor. Sekarang coba lakukan **query yang sama persis** lewat **Dev Tools** — supaya terasa langsung bedanya: tidak perlu lagi `-H`/`-d @file.json`/`curl -X`, cukup tempel body JSON-nya saja.
-
-Buka `http://localhost:5601` → menu **Dev Tools** (ikon di kiri, atau lewat menu hamburger ☰ → Management → Dev Tools). Coba jalankan ulang query pencarian dari Langkah 3 (paste, lalu klik ▶️ atau `Ctrl+Enter`/`Cmd+Enter`) — kali ini tanpa perlu bikin file `query.json` dulu:
-
-```
-GET nala-docs/_count
-```
-
-```
-POST nala-docs/_search
-{
-  "size": 3,
-  "query": {
-    "knn": { "embedding": { "vector": [ ...tempel array embedding query, sama seperti Langkah 3.d ... ], "k": 3 } }
-  }
-}
-```
-
-✅ **Indikator sukses**: `GET nala-docs/_count` menunjukkan `"count": 1` (dokumen `test-1` dari Langkah 3 masih ada — Dashboards cuma *melihat* data yang sama, bukan penyimpanan terpisah), dan pencarian k-NN di Dev Tools mengembalikan hasil yang identik dengan hasil `curl` sebelumnya. Ini membuktikan Dev Tools cuma **antarmuka lain** ke REST API yang sama persis — bukan sistem terpisah.
-
-⚠️ **Kenapa langkah manual (curl maupun Dev Tools) tidak dipakai sungguhan**: menyalin-tempel array 768 angka jelas tidak praktis — ini murni latihan pembuktian konsep. Begitu jelas OpenSearch memang bisa menyimpan dan mencari vektor seperti yang diharapkan, Module 13 menulis kode Python yang melakukan proses identik secara otomatis (memanggil `embed_text()`, mengirim hasilnya ke OpenSearch, tanpa copy-paste manual).
+⚠️ **Kenapa cuma manual di sini, bukan otomatis**: menyalin-tempel array 768 angka jelas tidak praktis untuk dipakai sungguhan — ini murni latihan pembuktian konsep. Begitu jelas OpenSearch memang bisa menyimpan dan mencari vektor seperti yang diharapkan, Module 13 menulis kode Python yang melakukan proses identik secara otomatis (memanggil `embed_text()`, mengirim hasilnya ke OpenSearch, tanpa copy-paste manual).
 
 ## 5. Referensi: Operasi yang Tersedia di OpenSearch REST API
 
@@ -446,11 +419,10 @@ Yang perlu dipastikan sebelum lanjut ke Module 13:
 
 - [ ] `docker compose logs opensearch` menunjukkan cluster health `green`/`yellow`, bukan `red`
 - [ ] `http://localhost:5601` (OpenSearch Dashboards) terbuka di browser tanpa error
-- [ ] Index `nala-docs` berhasil dibuat dan diisi lewat `curl` (Langkah 3), dan pencarian k-NN manual menemukan dokumen walau kata query berbeda dari kata dokumen aslinya
-- [ ] Query yang sama juga berhasil diulang lewat Dev Tools (Langkah 4), menghasilkan hasil yang identik dengan `curl`
+- [ ] Index `nala-docs` berhasil dibuat dan diisi lewat Dev Tools (Langkah 3), dan pencarian k-NN manual menemukan dokumen walau kata query berbeda dari kata dokumen aslinya
 - [ ] Kita paham OpenSearch pada dasarnya adalah full-text search engine (fork open-source Elasticsearch) yang belakangan ditambahi kemampuan vector search — bukan produk yang dari awal dibangun cuma untuk vektor
 - [ ] Kita bisa menjelaskan konsep index dan document di OpenSearch, dan kenapa NALA mengaksesnya lewat REST API HTTP biasa (`httpx`), bukan library client khusus
 - [ ] Kita paham alasan utama NALA memilih OpenSearch dibanding vector database khusus atau pgvector
 - [ ] `/chat/stream` (Module 7) masih berfungsi seperti sebelumnya
 
-Begitu kedelapan hal ini terverifikasi, lanjut ke Module 13 — membangun **semantic search** sungguhan di atas OpenSearch yang sudah menyala ini: memahami metrik kemiripan (cosine similarity, L2, dot product) dan membangun class `VectorStore` yang menyambungkan embedding (Module 11) ke OpenSearch (module ini).
+Begitu ketujuh hal ini terverifikasi, lanjut ke Module 13 — membangun **semantic search** sungguhan di atas OpenSearch yang sudah menyala ini: memahami metrik kemiripan (cosine similarity, L2, dot product) dan membangun class `VectorStore` yang menyambungkan embedding (Module 11) ke OpenSearch (module ini).
