@@ -105,6 +105,22 @@ def ingest_documents(folder_path: str) -> int:
 docker compose up --build api
 ```
 
+Uji dulu `ingest_document()` (tunggal) ke **satu** file spesifik — ini yang paling sering dipakai sehari-hari (dan nanti jadi dasar Module 16):
+
+```bash
+docker compose exec api python -c "from app.ingest import ingest_document; ingest_document('/app/knowledge-base/sop-pengajuan-kredit.md')"
+```
+
+Tidak ada nilai balik (return `None`). Verifikasi lewat OpenSearch langsung — cek dokumen itu memang tersimpan, pakai `doc_id`-nya (nama file):
+
+```bash
+curl "http://localhost:9200/nala-docs/_doc/sop-pengajuan-kredit.md"
+```
+
+✅ **Indikator sukses**: `"found": true`, dengan `_source.text` berisi isi file itu dan `_source.embedding` berisi array angka (vektor). Jalankan perintah `ingest_document()` yang sama sekali lagi — hasilnya tetap satu dokumen tersimpan (menimpa, bukan menduplikasi), sesuai penjelasan idempotency di atas.
+
+Setelah itu, isi **seluruh** folder sekaligus pakai `ingest_documents()` (jamak) — perlu untuk Bagian 3 nanti (RAG butuh semua SOP, bukan cuma satu):
+
 ```bash
 docker compose exec api python -c "from app.ingest import ingest_documents; print(ingest_documents('/app/knowledge-base'))"
 ```
@@ -116,14 +132,6 @@ curl "http://localhost:9200/nala-docs/_count"
 ```
 
 harus menunjukkan angka yang sama.
-
-Coba juga `ingest_document()` (tunggal) langsung — meng-ingest **satu** file spesifik, tanpa menyentuh dokumen lain:
-
-```bash
-docker compose exec api python -c "from app.ingest import ingest_document; ingest_document('/app/knowledge-base/sop-pengajuan-kredit.md')"
-```
-
-Tidak ada nilai balik (return `None`) — cek lewat `curl "http://localhost:9200/nala-docs/_count"` yang sama: `count` tidak bertambah kalau file itu sudah pernah di-ingest sebelumnya (overwrite, bukan duplikat), sesuai penjelasan idempotency di atas.
 
 > 🔧 **Troubleshooting — chat menjawab generik / bilang belum ada dokumen internal padahal sudah ingest**: `/chat/stream` (Bagian 2) otomatis jatuh ke mode tanpa-konteks saat index OpenSearch masih kosong (atau belum menyala) — itu normal, bukan error, tapi tandanya ingest belum berhasil. Cek lagi `curl http://localhost:9200/nala-docs/_count` — kalau `count` bernilai 0, index memang kosong, jalankan ulang Langkah 1 ini.
 
