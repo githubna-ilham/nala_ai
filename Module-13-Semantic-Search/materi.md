@@ -181,6 +181,49 @@ Ketiganya menghasilkan ranking identik untuk vektor ternormalisasi seperti `nomi
 
 **Kesimpulan untuk NALA**: cosine similarity adalah pilihan paling tepat secara konsep (sesuai keputusan eksplisit di `space_type: "cosinesimil"` pada Bagian 3), dot product adalah alternatif yang secara matematis setara dan lebih cepat kalau suatu saat skalanya membesar, sementara L2 tetap aman dipakai tapi bukan pilihan yang paling langsung menyampaikan maksud "mengukur makna".
 
+**g. Konfigurasi Praktis: Cara Mengaktifkan Tiap Metrik di Mapping OpenSearch**
+
+Ketiga metrik di atas bukan cuma teori — di OpenSearch, memilih salah satunya semudah mengganti **satu nilai** (`space_type`) di dalam `method` pada mapping index (field `embedding`, dibahas lengkap di Bagian 3). Untuk `engine: "nmslib"` yang dipakai NALA, tiga nilai `space_type` ini yang berpadanan langsung dengan tiga metrik yang sudah dibahas:
+
+| Metrik | Nilai `space_type` | Kapan dipakai |
+|---|---|---|
+| Cosine Similarity | `"cosinesimil"` | **Pilihan NALA** — lihat Bagian 3 |
+| Euclidean Distance (L2) | `"l2"` | Data numerik/spasial, bukan embedding teks (Bagian 2.f) |
+| Dot Product | `"innerproduct"` | Optimisasi performa skala besar, vektor sudah ternormalisasi (Bagian 2.f) |
+
+Perhatikan: cuma nilai `"method.space_type"` yang berbeda — struktur mapping selebihnya (nama field, `"type": "knn_vector"`, `"dimension"`, `"engine"`, `"name": "hnsw"`) **persis sama** di ketiganya. Berikut tiga versi mapping index `nala-docs`, berdampingan supaya perbedaannya jelas:
+
+**Cosine Similarity** (yang sebenarnya dipakai NALA, lihat Bagian 3):
+```json
+"embedding": {
+  "type": "knn_vector",
+  "dimension": 768,
+  "method": { "engine": "nmslib", "space_type": "cosinesimil", "name": "hnsw" }
+}
+```
+
+**Euclidean Distance / L2** (seandainya dipilih — bukan yang dipakai NALA):
+```json
+"embedding": {
+  "type": "knn_vector",
+  "dimension": 768,
+  "method": { "engine": "nmslib", "space_type": "l2", "name": "hnsw" }
+}
+```
+
+**Dot Product / Inner Product** (seandainya dipilih — bukan yang dipakai NALA):
+```json
+"embedding": {
+  "type": "knn_vector",
+  "dimension": 768,
+  "method": { "engine": "nmslib", "space_type": "innerproduct", "name": "hnsw" }
+}
+```
+
+**Cara mencobanya sendiri** (opsional, tidak wajib untuk lanjut ke Bagian 3) — di Dev Tools (Module 12 Bagian 4 Langkah 3), buat index percobaan dengan nama berbeda supaya tidak bentrok dengan `nala-docs`, misal `PUT nala-docs-test-l2` memakai mapping L2 di atas, lalu ulangi Langkah 3.b-d (index satu dokumen, cari lagi) — untuk `nomic-embed-text` yang sudah ternormalisasi, urutan hasilnya akan **identik** dengan `nala-docs` (cosine), persis seperti yang dibuktikan di Bagian 2.d-2.e, cuma nilai skor mentahnya yang tampil beda.
+
+⚠️ **Satu hal yang perlu diingat**: `space_type` sebuah index **tidak bisa diubah setelah index dibuat** — mengubah field ini di mapping yang sudah ada tidak akan berpengaruh pada index yang sudah berjalan (dibahas lagi di catatan Bagian 3). Kalau suatu saat perlu ganti metrik untuk index yang sudah terisi data, satu-satunya cara adalah hapus index (`DELETE /{index}`) dan buat ulang dari awal dengan `space_type` baru, lalu index ulang semua dokumennya.
+
 ## 3. Struktur Kode yang Ditambahkan: `app/vector_store.py`
 
 **Prasyarat**: OpenSearch sudah menyala sehat (Module 12) — `docker compose logs opensearch` menunjukkan cluster health `green`/`yellow`, dan `OPENSEARCH_BASE_URL` sudah ada di `environment:` service `api`.
