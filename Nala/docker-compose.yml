@@ -1,10 +1,48 @@
-services:                         # daftar semua container yang akan dijalankan
-  ollama:                         # nama service (bebas, tapi jadi hostname internal Docker)
-    image: ollama/ollama:latest   # pakai image resmi dari Docker Hub, bukan build sendiri
+services:
+  ollama:
+    image: ollama/ollama:latest
     ports:
-      - '11434:11434'             # port 11434 di laptop <-> port 11434 di dalam container
+      - "11434:11434"
     volumes:
-      - ollama_data:/root/.ollama # simpan model Ollama ke volume, tidak hilang saat container dihapus
+      - ollama_data:/root/.ollama
 
-volumes:                          # deklarasi named volume di level top (bukan di dalam service)
-  ollama_data:                    # nama volume yang dipakai service ollama di atas, kosong = default Docker
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - OLLAMA_MODEL=llama3.2:3b
+      - KNOWLEDGE_BASE_PATH=/app/knowledge-base
+      - OPENSEARCH_BASE_URL=http://opensearch:9200
+    volumes:
+      - ./knowledge-base:/app/knowledge-base
+    depends_on:
+      - ollama
+      - opensearch
+
+  opensearch:
+    image: opensearchproject/opensearch:2.11.0
+    environment:
+      - discovery.type=single-node
+      - plugins.security.disabled=true
+      - OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m
+      - DISABLE_INSTALL_DEMO_CONFIG=true
+    ports:
+      - "9200:9200"
+    volumes:
+      - opensearch_data:/usr/share/opensearch/data
+
+  opensearch-dashboards:
+    image: opensearchproject/opensearch-dashboards:2.11.0
+    environment:
+      - 'OPENSEARCH_HOSTS=["http://opensearch:9200"]'
+      - DISABLE_SECURITY_DASHBOARDS_PLUGIN=true
+    ports:
+      - "5601:5601"
+    depends_on:
+      - opensearch
+
+volumes:
+  ollama_data:
+  opensearch_data:

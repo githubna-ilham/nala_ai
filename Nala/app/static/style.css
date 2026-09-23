@@ -1,0 +1,103 @@
+body {
+    max-width: 640px;
+    margin: 2rem auto;
+    padding: 0 1rem;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    line-height: 1.5;
+    color: #1a1a1a;
+}
+
+h1 {
+    text-align: center;
+}
+
+#history {
+    height: 400px;
+    overflow-y: auto;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    padding: 1rem;
+    margin-bottom: 1rem;
+    background: #fafafa;
+}
+
+.message {
+    margin-bottom: 0.75rem;
+}
+
+.user {
+    color: #1d4ed8;
+}
+
+.nala {
+    color: #047857;
+}
+
+#chat-form {
+    display: flex;
+    gap: 0.5rem;
+}
+
+#message {
+    flex: 1;
+    padding: 0.6rem 0.8rem;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    font-size: 1rem;
+}
+
+button {
+    padding: 0.6rem 1.2rem;
+    border: none;
+    border-radius: 6px;
+    background: #1d4ed8;
+    color: #fff;
+    font-size: 1rem;
+    cursor: pointer;
+}
+
+button:hover {
+    background: #1e40af;
+}
+
+button:disabled {
+    background: #9ca3af;
+    cursor: not-allowed;
+}
+
+/* Indikator "sedang mengetik" saat menunggu balasan server */
+.typing {
+    color: #6b7280;
+    font-style: italic;
+}
+
+.typing i {
+    display: inline-block;
+    width: 5px;
+    height: 5px;
+    margin-left: 3px;
+    border-radius: 50%;
+    background: currentColor;
+    animation: typing-blink 1.2s infinite both;
+}
+
+.typing i:nth-child(2) {
+    animation-delay: 0.2s;
+}
+
+.typing i:nth-child(3) {
+    animation-delay: 0.4s;
+}
+
+@keyframes typing-blink {
+    0%, 80%, 100% {
+        opacity: 0.2;
+    }
+    40% {
+        opacity: 1;
+    }
+}
+
+.error {
+    color: #b91c1c;
+}
