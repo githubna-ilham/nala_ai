@@ -2,7 +2,7 @@
 
 ## Tujuan
 
-Menggabungkan BM25 (Module 18) dan vector search (Module 13) jadi satu daftar peringkat lewat **Reciprocal Rank Fusion (RRF)** — method baru `search_hybrid()` di `VectorStore` — lalu menyambungkannya ke `/chat/stream`, satu-satunya endpoint chat NALA sejak Module 8. Ini menutup celah nyata yang didokumentasikan di Module 15 Bagian 9 dan dibuktikan lagi di Module 18 Bagian 1: chunk jawaban yang benar bisa kalah oleh chunk pendek yang cuma "mirip" secara makna.
+Menggabungkan BM25 (Module 18) dan vector search (Module 13) jadi satu daftar peringkat lewat **Reciprocal Rank Fusion (RRF)** — method baru `search_hybrid()` di `VectorStore` — lalu memperluas switch `search_method` (Module 18 Bagian 5) dengan opsi `"hybrid"` sebagai default baru di `/chat/stream`, satu-satunya endpoint chat NALA sejak Module 8. Ini menutup celah nyata yang didokumentasikan di Module 15 Bagian 9 dan dibuktikan lagi di Module 18 Bagian 1: chunk jawaban yang benar bisa kalah oleh chunk pendek yang cuma "mirip" secara makna.
 
 ## Definisi
 
@@ -33,8 +33,9 @@ flowchart LR
 
 ## Hasil Akhir yang Diharapkan
 
-- `VectorStore` punya method baru `search_hybrid()`, memakai `search()` (Module 13) dan `search_bm25()` (Module 18) di baliknya, tanpa perlu reindex `nala-docs`
-- `/chat/stream` (satu-satunya endpoint chat NALA sejak Module 8) memanggil `search_hybrid()` (bukan `search()` murni) untuk retrieval
+- `VectorStore` punya method baru `search_hybrid()`, memakai `search()` (Module 13) dan `search_bm25()` (Module 18) di baliknya sekaligus, tanpa perlu reindex `nala-docs`
+- `search_method` (switch Module 18 Bagian 5) punya opsi baru `"hybrid"`, sekarang jadi **default** — request tanpa `search_method` otomatis pakai hybrid, tapi `"vector"`/`"bm25"` tetap bisa dipilih manual untuk perbandingan
+- Kita paham: memilih `"hybrid"` **tidak** berarti dua opsi lain ikut dicentang terpisah — `search_hybrid()` sendiri yang memanggil BM25 dan vector search sekaligus di baliknya, `chat_stream()` cuma memanggilnya sekali
 - Kita paham kenapa `bool` query naif (skor BM25 + skor `knn` dijumlah langsung) salah, dan kenapa RRF (berbasis rank, bukan skor mentah) jadi solusinya
 - Diuji nyata dan dicatat jujur: hybrid search menaikkan recall di level kandidat, tapi untuk kasus keras "syarat kredit nasabah perorangan" chunk yang benar masih di posisi #8 — belum masuk `top_k=3`, motivasi langsung untuk Module 20 (reranking)
 
@@ -99,9 +100,9 @@ RRF(Dok C) = 1/(60+1)  +  1/(60+3)  = 0.01639 + 0.01587 = 0.03226   (peringkat 1
 
 ## 3. Struktur Kode yang Ditambahkan
 
-Dua Tahap: **Tahap A** menambah method baru `search_hybrid()` di `VectorStore`, belum dipakai siapa pun. **Tahap B** mengganti pemanggilan `vector_store.search()` di `/chat/stream` (`app/main.py`) jadi `vector_store.search_hybrid()`.
+Dua Tahap: **Tahap A** menambah method baru `search_hybrid()` di `VectorStore`, belum dipakai siapa pun. **Tahap B** memperluas switch `search_method` (Module 18 Bagian 5) dengan opsi `"hybrid"` — bukan menggantikan `"vector"`/`"bm25"`, ketiganya tetap bisa dipilih.
 
-**Prasyarat**: sudah menyelesaikan **Module 18** (BM25 Search) — `search_bm25()` sudah ada dan sudah diuji berdiri sendiri.
+**Prasyarat**: sudah menyelesaikan **Module 18** (BM25 Search) — `search_bm25()` sudah ada dan sudah diuji berdiri sendiri, dan switch `search_method` sudah ada di `/chat/stream`.
 
 ### Tahap A — Tambah `search_hybrid()` di `app/vector_store.py`
 
@@ -393,31 +394,49 @@ class VectorStore:
         ]
 ```
 
-### Tahap B — Ganti Pemanggilan di `/chat/stream`
+### Tahap B — Perluas Switch `search_method` dengan Opsi `"hybrid"`
 
-**Langkah 3 — Ganti `vector_store.search()` jadi `vector_store.search_hybrid()`**
+**Langkah 3 — Tambah `"hybrid"` ke `search_method` di `app/main.py`**
 
-Di `app/main.py`, endpoint `/chat/stream` (satu-satunya endpoint chat NALA sejak Module 8, dibangun sebagai RAG chain di Module 14) memanggil:
-
-```python
-# SEBELUM (Module 14) — di dalam chat_stream()
-query_embedding = embed_text(last_user_message, base_url=OLLAMA_BASE_URL)
-results = vector_store.search(query_embedding, top_k=3)
-```
-
-Ganti jadi:
+Module 18 Bagian 5 sudah menambah field `search_method: Literal["vector", "bm25"] = "vector"` ke `ChatStreamRequest`, plus cabang `if/else` yang memilih `search()` atau `search_bm25()`. Langkah ini memperluasnya jadi tiga opsi — **bukan menulis ulang switch-nya**, cuma menambah satu cabang baru dan mengubah default:
 
 ```python
-# SESUDAH (Module 19) — di dalam chat_stream()
-query_embedding = embed_text(last_user_message, base_url=OLLAMA_BASE_URL)
-results = vector_store.search_hybrid(
-    query_text=last_user_message,
-    query_embedding=query_embedding,
-    top_k=3,
-)
+# app/main.py — ganti Literal dan default yang sudah ada dari Module 18
+class ChatStreamRequest(BaseModel):
+    messages: list[ChatMessage]
+    use_rag: bool = True
+    search_method: Literal["vector", "bm25", "hybrid"] = "hybrid"
 ```
 
-Tidak ada yang lain berubah — blok `try/except httpx.HTTPError` di sekitarnya (fallback ke `NALA_SYSTEM_PROMPT_NO_CONTEXT`, lihat Module 14 Bagian 2.d) tetap sama persis, karena `search_hybrid()` bisa melempar `httpx.HTTPError` yang sama seperti `search()` (dua-duanya memanggil OpenSearch lewat `httpx`). `top_k=3` di module ini **belum** memakai `candidate_pool=20` secara sengaja — itu baru relevan mulai Module 20 begitu ada reranker yang bisa memanfaatkan kandidat sebanyak itu. Dengan `top_k=3`, `search_hybrid()` tetap mengambil 20 kandidat dari masing-masing metode di baliknya (default `candidate_pool=20`), tapi langsung memotong ke 3 teratas via RRF sebelum dikembalikan — cukup untuk manfaat hybrid search saja, sebelum reranking ditambahkan.
+`"hybrid"` sengaja dijadikan **default baru** — sekarang metode terbaik yang tersedia (RRF menggabungkan sinyal BM25+vector, Bagian 2), sementara `"vector"` dan `"bm25"` tetap ada sebagai opsi untuk **perbandingan/debugging**, bukan dihapus. Request lama tanpa field `search_method` sama sekali (dari sebelum Module 18) otomatis dapat `"hybrid"`, bukan lagi `"vector"` — ini satu-satunya perubahan perilaku default di module ini.
+
+```python
+# app/main.py, di dalam chat_stream() — tambah SATU cabang baru (elif) ke if/else yang sudah ada dari Module 18
+    if request.use_rag:
+        try:
+            if request.search_method == "bm25":
+                results = vector_store.search_bm25(last_user_message, top_k=6)
+            elif request.search_method == "hybrid":
+                query_embedding = embed_text(last_user_message, base_url=OLLAMA_BASE_URL)
+                results = vector_store.search_hybrid(
+                    query_text=last_user_message,
+                    query_embedding=query_embedding,
+                    top_k=3,
+                )
+            else:
+                query_embedding = embed_text(last_user_message, base_url=OLLAMA_BASE_URL)
+                results = vector_store.search(query_embedding, top_k=6)
+        except httpx.HTTPError:
+            results = []
+    else:
+        results = []
+```
+
+**Menjawab langsung pertanyaan yang mungkin muncul: apakah `"hybrid"` berarti dua checkbox (BM25 **dan** vector) dicentang sekaligus?** Bukan — tidak ada dua checkbox terpisah untuk `"hybrid"`. Satu opsi `"hybrid"` di dropdown/request sudah otomatis memanggil **keduanya** di balik layar: `search_hybrid()` (Bagian 3 Tahap A) sendiri yang memanggil `self.search_bm25(...)` **dan** `self.search(...)` lalu menggabungkannya lewat RRF (Bagian 2) — `chat_stream()` di atas cuma memanggil `search_hybrid()` satu kali, tidak pernah memanggil `search_bm25()`/`search()` secara terpisah untuk kasus ini. Jadi urutannya: user pilih `"hybrid"` → `chat_stream()` panggil `search_hybrid()` → `search_hybrid()` **sendiri** yang menjalankan BM25+vector secara internal. Beda dengan `"vector"` atau `"bm25"` di atas, yang masing-masing cuma menjalankan **satu** metode saja.
+
+`top_k=3` untuk `"hybrid"` (beda dari `top_k=6` di dua cabang lain) **belum** memakai `candidate_pool=20` secara sengaja — itu baru relevan mulai Module 20 begitu ada reranker yang bisa memanfaatkan kandidat sebanyak itu. Dengan `top_k=3`, `search_hybrid()` tetap mengambil 20 kandidat dari masing-masing metode di baliknya (default `candidate_pool=20`), tapi langsung memotong ke 3 teratas via RRF sebelum dikembalikan.
+
+Sisa logika di bawahnya **tidak berubah sama sekali** — blok `try/except httpx.HTTPError` (fallback ke `NALA_SYSTEM_PROMPT_NO_CONTEXT`, Module 14 Bagian 2) dan blok grounding tiga-cabang (`use_rag`+`results`/`use_rag` saja/`else`, Module 14 Bagian 2 Langkah 4) tetap sama persis untuk ketiga `search_method` — `search_hybrid()` mengembalikan bentuk dict yang sama (`text`, `score`, `metadata`, plus `rrf_score`) seperti `search()`/`search_bm25()`, jadi kode di bawahnya tidak peduli metode mana yang dipakai.
 
 **▶️ Jalankan & lihat hasilnya**
 
@@ -425,51 +444,105 @@ Tidak ada yang lain berubah — blok `try/except httpx.HTTPError` di sekitarnya 
 docker compose up --build api
 ```
 
+Bandingkan ketiga metode untuk pertanyaan yang sama:
+
 ```bash
 curl -N -X POST http://localhost:8000/chat/stream \
   -H "Content-Type: application/json" \
   -d '{"messages": [{"role": "user", "content": "Apa saja syarat pengajuan kredit untuk nasabah perorangan?"}]}'
 ```
 
-✅ **Indikator sukses**: jawaban terasa lebih relevan dibanding sebelumnya, idealnya menyebut item konkret dari `### 2.1` (KTP, Kartu Keluarga, slip gaji, dst) — bandingkan dengan jawaban yang lebih umum/tidak lengkap yang didapat di Module 14 sebelum hybrid search ditambahkan, muncul bertahap seperti biasa (flag `-N`).
+(tanpa `search_method` sama sekali — otomatis pakai default baru `"hybrid"`)
 
-Tapi untuk pertanyaan spesifik ini, jawaban **belum tentu** sudah menyebut keempat item itu secara lengkap — hybrid search terbukti menaikkan peringkat chunk yang benar (dari #11 di vector murni jadi sekitar #8, lihat Bagian 4), tapi belum cukup untuk selalu masuk `top_k=3` di kasus keras ini. Kalau jawabannya masih bilang "tidak ditemukan informasi spesifik", itu **bukan tanda ada yang salah** — itu justru bukti grounding masih bekerja jujur (Module 14 Bagian 2.d), dan alasan kenapa Module 20 (reranking) berikutnya diperlukan. Lihat Bagian 4 untuk hasil uji nyata sebelum lanjut ke Module 20.
+```bash
+curl -N -X POST http://localhost:8000/chat/stream \
+  -H "Content-Type: application/json" \
+  -d '{"messages": [{"role": "user", "content": "Apa saja syarat pengajuan kredit untuk nasabah perorangan?"}], "search_method": "vector"}'
+```
+
+```bash
+curl -N -X POST http://localhost:8000/chat/stream \
+  -H "Content-Type: application/json" \
+  -d '{"messages": [{"role": "user", "content": "Apa saja syarat pengajuan kredit untuk nasabah perorangan?"}], "search_method": "bm25"}'
+```
+
+✅ **Indikator sukses**: ketiga request sukses, dan jawaban `"hybrid"` (default) terasa lebih relevan dibanding `"vector"` — idealnya menyebut item konkret dari `### 2.1` (KTP, Kartu Keluarga, slip gaji, dst), muncul bertahap seperti biasa (flag `-N`). Kirim juga `"search_method": "hybrid-salah"` — harus ditolak `422` (validasi `Literal` dari Module 18 tetap berlaku untuk opsi baru ini).
+
+Tapi untuk pertanyaan spesifik ini, jawaban `"hybrid"` **belum tentu** sudah menyebut keempat item itu secara lengkap — hybrid search terbukti menaikkan peringkat chunk yang benar (dari #11 di vector murni jadi sekitar #8, lihat Bagian 4), tapi belum cukup untuk selalu masuk `top_k=3` di kasus keras ini. Kalau jawabannya masih bilang "tidak ditemukan informasi spesifik", itu **bukan tanda ada yang salah** — itu justru bukti grounding masih bekerja jujur (Module 14 Bagian 2.d), dan alasan kenapa Module 20 (reranking) berikutnya diperlukan. Lihat Bagian 4 untuk hasil uji nyata sebelum lanjut ke Module 20.
 
 <details>
 <summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 3</strong></summary>
 
 ```
-Ganti vector_store.search() jadi vector_store.search_hybrid() di
-/chat/stream (Module 19, Tahap B, Langkah 3).
+Perluas switch search_method (Module 18 Bagian 5) dengan opsi "hybrid"
+di /chat/stream (Module 19, Tahap B, Langkah 3).
 
 GOAL:
 - Di Nala/app/main.py:
-  - Di dalam fungsi chat_stream() (endpoint /chat/stream — satu-
-    satunya endpoint chat NALA): ganti pemanggilan `results =
-    vector_store.search(query_embedding, top_k=3)` jadi `results =
-    vector_store.search_hybrid(query_text=last_user_message,
-    query_embedding=query_embedding, top_k=3)`.
+  - Di ChatStreamRequest: ganti search_method: Literal["vector",
+    "bm25"] = "vector" (dari Module 18) jadi search_method:
+    Literal["vector", "bm25", "hybrid"] = "hybrid" — Literal dapat
+    opsi baru DAN default-nya berubah jadi "hybrid".
+  - Di dalam chat_stream(), pada blok if/elif yang sudah ada dari
+    Module 18 (if request.search_method == "bm25": ... else: ...):
+    tambah SATU cabang baru elif request.search_method == "hybrid" DI
+    ANTARA cabang "bm25" dan cabang else/"vector" — isinya panggil
+    embed_text() lalu vector_store.search_hybrid(query_text=
+    last_user_message, query_embedding=query_embedding, top_k=3).
+    Cabang "bm25" dan cabang "vector"/else yang sudah ada dari Module
+    18 JANGAN diubah isinya, cuma ditambah satu cabang baru di antara
+    keduanya.
 
 CONTEXT:
-- search_hybrid() sudah ada di app/vector_store.py sejak Tahap A.
-- Blok try/except httpx.HTTPError di sekitar pemanggilan ini TIDAK
-  berubah — search_hybrid() melempar httpx.HTTPError yang sama
-  seperti search().
+- search_hybrid() sudah ada di app/vector_store.py sejak Bagian 3
+  Tahap A module ini — memanggil search_bm25() DAN search() secara
+  internal lalu menggabungkan lewat RRF, chat_stream() cukup
+  memanggilnya SEKALI, tidak perlu memanggil search_bm25()/search()
+  terpisah untuk cabang "hybrid" ini.
+- Cabang "bm25" dan "vector" (Module 18) tetap ada sebagai opsi
+  perbandingan/debugging — TIDAK dihapus.
+- Blok grounding/fallback di bawah blok retrieval (Module 14) TIDAK
+  berubah — search_hybrid() mengembalikan bentuk dict yang sama
+  dengan search()/search_bm25().
 
 GUARDRAIL:
+- JANGAN hapus atau ubah cabang "bm25" atau "vector"/else yang sudah
+  ada dari Module 18.
 - JANGAN ubah urutan argumen embed_text() atau logika fallback
-  NALA_SYSTEM_PROMPT_NO_CONTEXT.
+  NALA_SYSTEM_PROMPT_NO_CONTEXT/blok grounding tiga-cabang use_rag.
 - JANGAN ubah endpoint /health, /, /upload.
-- JANGAN ubah app/vector_store.py di langkah ini — sudah selesai di
-  Tahap A.
+- JANGAN ubah app/vector_store.py di langkah ini — search_hybrid()
+  sudah selesai di Tahap A.
 ```
 
 </details>
 
-**📄 Kode lengkap Tahap B** (bagian relevan `app/main.py` setelah Module 19 — hanya menunjukkan fungsi yang berubah, sisanya identik dengan akhir Module 14):
+**Perbarui juga dropdown `chat.html`** (dibuat Module 18 Bagian 5) supaya opsi `"hybrid"` bisa dicoba dari browser:
+
+```html
+<!-- app/templates/chat.html — tambah satu <option>, ubah default "selected" -->
+<label class="search-method-select">
+  Metode pencarian:
+  <select id="searchMethodSelect">
+    <option value="hybrid" selected>Hybrid (BM25 + Vector, direkomendasikan)</option>
+    <option value="vector">Vector (makna)</option>
+    <option value="bm25">BM25 (kata kunci)</option>
+  </select>
+</label>
+```
+
+JavaScript pengiriman request (Module 18) tidak perlu diubah — `searchMethod` sudah dikirim apa adanya dari `<select>`, nilainya otomatis jadi `"hybrid"`, `"vector"`, atau `"bm25"` tergantung pilihan user.
+
+**📄 Kode lengkap** (`app/main.py`, bagian relevan setelah Module 19 — kumulatif dari Module 14 `use_rag` + Module 18 `search_method` + Module 19 `"hybrid"`):
 
 ```python
 # app/main.py
+class ChatStreamRequest(BaseModel):
+    messages: list[ChatMessage]
+    use_rag: bool = True
+    search_method: Literal["vector", "bm25", "hybrid"] = "hybrid"
+
+
 @app.post("/chat/stream")
 def chat_stream(request: ChatStreamRequest) -> StreamingResponse:
     if not request.messages or request.messages[-1].role != "user":
@@ -481,22 +554,36 @@ def chat_stream(request: ChatStreamRequest) -> StreamingResponse:
     recent = request.messages[-HISTORY_WINDOW:]
     last_user_message = recent[-1].content
 
-    try:
-        query_embedding = embed_text(last_user_message, base_url=OLLAMA_BASE_URL)
-        results = vector_store.search_hybrid(
-            query_text=last_user_message,
-            query_embedding=query_embedding,
-            top_k=3,
-        )
-    except httpx.HTTPError:
+    if request.use_rag:
+        try:
+            if request.search_method == "bm25":
+                results = vector_store.search_bm25(last_user_message, top_k=6)
+            elif request.search_method == "hybrid":
+                query_embedding = embed_text(last_user_message, base_url=OLLAMA_BASE_URL)
+                results = vector_store.search_hybrid(
+                    query_text=last_user_message,
+                    query_embedding=query_embedding,
+                    top_k=3,
+                )
+            else:
+                query_embedding = embed_text(last_user_message, base_url=OLLAMA_BASE_URL)
+                results = vector_store.search(query_embedding, top_k=6)
+        except httpx.HTTPError:
+            results = []
+    else:
         results = []
 
-    if results:
-        context = "\n\n".join(r["text"] for r in results)
+    if request.use_rag and results:
+        context = "\n\n".join(
+            f"[{r['metadata']['source']}]\n{r['text']}" for r in results
+        )
         system_prompt = NALA_SYSTEM_PROMPT
         grounded_content = f"Konteks:\n{context}\n\nPertanyaan: {last_user_message}"
-    else:
+    elif request.use_rag:
         system_prompt = NALA_SYSTEM_PROMPT_NO_CONTEXT
+        grounded_content = last_user_message
+    else:
+        system_prompt = NALA_SYSTEM_PROMPT_RAG_OFF
         grounded_content = last_user_message
 
     ollama_messages = [{"role": "system", "content": system_prompt}]
@@ -593,6 +680,7 @@ Ini bukan bug, dan bukan berarti hybrid search di module ini gagal — dibanding
 Langkah eksekusi lengkap ada di Bagian 3 di atas (Tahap A Langkah 1-2, Tahap B Langkah 3). Yang perlu dipastikan sebelum lanjut ke Module 20:
 
 - [ ] `store.search_hybrid()` mengembalikan hasil yang berbeda urutannya dibanding `store.search()` murni, untuk query yang sama, dan skor `rrf_score` untuk chunk `### 2.1 Untuk Nasabah Perorangan` naik dibanding peringkatnya di `store.search()` murni (lihat Bagian 4 di atas — belum tentu masuk `top_k=3`, itu wajar di titik ini)
+- [ ] `search_method="hybrid"` (default baru) memanggil `search_hybrid()`, yang secara internal memanggil BM25 **dan** vector sekaligus — sementara `"vector"`/`"bm25"` (Module 18) tetap bisa dipilih manual dan cuma menjalankan satu metode
 - [ ] `/chat/stream` tetap streaming bertahap dan menjawab dengan kualitas yang lebih baik dibanding sebelum hybrid search ditambahkan
 - [ ] Kita paham kenapa `bool` query naif (skor BM25 + skor `knn` dijumlah langsung) salah, dan kenapa RRF (berbasis rank) jadi solusinya
 
