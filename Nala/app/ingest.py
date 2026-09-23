@@ -1,4 +1,5 @@
 import os
+import re
 
 from pypdf import PdfReader
 
@@ -17,22 +18,57 @@ def extract_text(file_path: str) -> str:
         return f.read()
 
 
-def ingest_documents(folder_path: str) -> int:
+def chunk_text(text: str, chunk_size: int = 500, overlap: int = 50) -> list[str]:
+    chunks = []
+    start = 0
+    while start < len(text):
+        end = start + chunk_size
+        chunks.append(text[start:end])
+        if end >= len(text):
+            break
+        start = end - overlap
+    return chunks
+
+
+def chunk_markdown(text: str, chunk_size: int = 500, overlap: int = 50) -> list[str]:
+    sections = re.split(r"\n(?=#{1,6} )", text)
+    chunks = []
+    for section in sections:
+        section = section.strip()
+        if not section:
+            continue
+        if len(section) <= chunk_size:
+            chunks.append(section)
+        else:
+            chunks.extend(chunk_text(section, chunk_size=chunk_size, overlap=overlap))
+    return chunks
+
+
+def ingest_document(file_path: str) -> int:
     store = VectorStore(base_url=OPENSEARCH_BASE_URL, index_name="nala-docs")
     store.ensure_index()
 
-    total_documents = 0
-    for filename in sorted(os.listdir(folder_path)):
-        if not filename.endswith((".md", ".txt", ".pdf")):
-            continue
-        content = extract_text(os.path.join(folder_path, filename))
-        embedding = embed_text(content, base_url=OLLAMA_BASE_URL)
+    filename = os.path.basename(file_path)
+    content = extract_text(file_path)
+    chunks = chunk_markdown(content) if filename.endswith(".md") else chunk_text(content)
+
+    for i, chunk in enumerate(chunks):
+        embedding = embed_text(chunk, base_url=OLLAMA_BASE_URL)
         store.index_document(
-            doc_id=filename,
-            text=content,
+            doc_id=f"{filename}-{i}",
+            text=chunk,
             embedding=embedding,
             metadata={"source": filename},
         )
-        total_documents += 1
 
-    return total_documents
+    return len(chunks)
+
+
+def ingest_documents(folder_path: str) -> int:
+    total_chunks = 0
+    for filename in sorted(os.listdir(folder_path)):
+        if not filename.endswith((".md", ".txt", ".pdf")):
+            continue
+        total_chunks += ingest_document(os.path.join(folder_path, filename))
+
+    return total_chunks
