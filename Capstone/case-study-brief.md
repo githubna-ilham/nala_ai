@@ -19,7 +19,7 @@ Buat (atau adaptasi dari salah satu dokumen contoh yang ada) satu dokumen SOP ba
 - Skema pembayaran yang tersedia (bulanan/tahunan) dan konsekuensi keterlambatan
 - Prosedur perpanjangan dan terminasi kontrak lebih awal
 
-Upload dokumen ini lewat `/upload` (Module 15), verifikasi ter-index (Module 12-13), dan pastikan NALA bisa menjawab pertanyaan berdasarkan isinya lewat RAG.
+Upload dokumen ini lewat `/upload` (Module 16), verifikasi ter-index (Module 12-13), dan pastikan NALA bisa menjawab pertanyaan berdasarkan isinya lewat RAG.
 
 ### 2. Siapkan data operasional dummy untuk kontrak leasing
 

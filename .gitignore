@@ -2,6 +2,10 @@ __pycache__/
 *.pyc
 .DS_Store
 
+# Panduan fasilitator — catatan pribadi pengajar, bukan materi peserta
+PANDUAN-FASILITATOR*.md
+**/PANDUAN-FASILITATOR*.md
+
 Module-23-*/
 Module-24-*/
 Module-25-*/

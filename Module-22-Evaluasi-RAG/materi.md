@@ -1,4 +1,4 @@
-# Module 21: Framework Evaluasi RAG
+# Module 22: Framework Evaluasi RAG
 
 ## Tujuan
 
@@ -147,7 +147,7 @@ Sepuluh pertanyaan ini **kecil secara sengaja** — cukup untuk mendemonstrasika
 
 Satu Tahap, empat Langkah: fungsi metrik (`app/evaluation.py`), test set (`app/eval_testset.py`, sudah ditulis di Bagian 4), skrip yang menjalankan keduanya dan mencetak tabel perbandingan, lalu LLM-as-judge lokal (Bagian 6).
 
-**Prasyarat**: Module 20 sudah selesai — `Nala/` sudah punya reranking bekerja dan terhubung ke `/chat/stream`. Tidak ada service Docker baru di module ini; alokasi RAM yang sama seperti Module 20 sudah cukup.
+**Prasyarat**: Module 21 sudah selesai — `Nala/` sudah punya reranking bekerja dan terhubung ke `/chat/stream` (Module 20), plus Langfuse sudah mencatat trace tiap request (Module 21). Tidak ada service Docker baru di module ini; alokasi RAM yang sama seperti Module 21 sudah cukup. Langfuse tidak wajib menyala untuk menjalankan evaluasi — tapi kalau menyala, tiap pemanggilan retrieval di dalam `run_evaluation.py` otomatis ikut ter-trace, sehingga pertanyaan yang skornya jeblok bisa langsung ditelusuri di dashboard.
 
 **Langkah 1 — Fungsi metrik di `app/evaluation.py`**
 
@@ -213,7 +213,7 @@ print('Reciprocal Rank:', reciprocal_rank(dummy_results, must_contain))
 
 ```
 Buat app/evaluation.py dengan fungsi metrik precision/hit-rate/MRR
-(Module 21, Langkah 1) — belum dihubungkan ke retrieval sungguhan.
+(Module 22, Langkah 1) — belum dihubungkan ke retrieval sungguhan.
 
 GOAL:
 - Buat Nala/app/evaluation.py berisi 4
@@ -255,12 +255,12 @@ Isi file ini persis seperti kode `QA_TESTSET` di Bagian 4 di atas — sepuluh di
 <summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 2</strong></summary>
 
 ```
-Buat app/eval_testset.py (test set QA berlabel) — Module 21, Langkah 2.
+Buat app/eval_testset.py (test set QA berlabel) — Module 22, Langkah 2.
 
 GOAL:
 - Buat Nala/app/eval_testset.py berisi satu konstanta QA_TESTSET: list
   of dict {"question": str, "must_contain": list[str]} — isi persis
-  seperti yang tertulis di materi Module 21 Bagian 4 (10 pertanyaan
+  seperti yang tertulis di materi Module 22 Bagian 4 (10 pertanyaan
   tentang sop-pengajuan-kredit.md).
 
 CONTEXT:
@@ -352,7 +352,7 @@ docker compose exec api python -m app.run_evaluation
 
 ```
 Buat app/run_evaluation.py (skrip perbandingan sebelum/sesudah
-reranking) — Module 21, Langkah 3.
+reranking) — Module 22, Langkah 3.
 
 GOAL:
 - Buat Nala/app/run_evaluation.py:
@@ -460,7 +460,7 @@ print(result)
 
 ```
 Buat app/llm_judge.py (LLM-as-judge lokal untuk faithfulness dan
-relevance) — Module 21, Langkah 4.
+relevance) — Module 22, Langkah 4.
 
 GOAL:
 - Buat Nala/app/llm_judge.py berisi:
@@ -468,7 +468,7 @@ GOAL:
      meminta model menilai FAITHFULNESS dan RELEVANCE masing-masing
      dengan skor 1-5, dan menjawab HANYA dalam format persis
      "FAITHFULNESS: <angka>" lalu baris "RELEVANCE: <angka>", tanpa
-     penjelasan lain. Teks lengkap persis seperti di materi Module 21
+     penjelasan lain. Teks lengkap persis seperti di materi Module 22
      Bagian 6.
   2. Fungsi judge_answer(judge_client: OllamaClient, context: str,
      question: str, answer: str) -> dict:
@@ -510,7 +510,7 @@ Framework ini dirancang untuk **bertumbuh** — test set bertambah seiring dokum
 
 ## 8. Checkpoint Praktik
 
-Langkah eksekusi lengkap ada di Bagian 5 (Langkah 1-3) dan Bagian 6 (Langkah 4) di atas. Yang perlu dipastikan sebelum lanjut ke Module 22:
+Langkah eksekusi lengkap ada di Bagian 5 (Langkah 1-3) dan Bagian 6 (Langkah 4) di atas. Yang perlu dipastikan sebelum lanjut ke Module 23:
 
 - [ ] `app/evaluation.py` lulus uji dummy (Bagian 5 Langkah 1) dengan angka yang sesuai perhitungan manual
 - [ ] `python -m app.run_evaluation` berjalan tanpa error dan mencetak tabel perbandingan sebelum/sesudah reranking
@@ -539,5 +539,9 @@ Ini melengkapi bukti kualitatif dari Module 18-20 (yang cuma menguji 1 pertanyaa
 
 Module ini mengubah klaim "hybrid search dan reranking membuat NALA lebih baik" (Module 18-20) dari pengamatan kualitatif jadi sesuatu yang bisa diukur ulang: test set berlabel kecil, tiga metrik retrieval (Precision@3, Hit Rate@3, MRR) yang masing-masing menangkap aspek berbeda, dan LLM-as-judge lokal untuk faithfulness/relevance jawaban akhir — semuanya berjalan sepenuhnya offline, tanpa API cloud.
 
-Yang jujur belum terselesaikan: framework ini kecil dan proxy-based (Bagian 7), bukan pengganti evaluasi produksi skala penuh. Tapi ia sudah cukup untuk hal yang paling penting di titik ini — mendeteksi kalau sebuah perubahan (mis. mengganti model reranker, mengubah `chunk_size`, atau menambah dokumen baru) membuat retrieval **membaik** atau **memburuk**, diukur dengan angka yang sama setiap kali, bukan tebak-tebakan. Module 22 melangkah dari "mengukur kualitas retrieval secara batch" ke "mengamati setiap request individual secara real-time" — observability dengan Langfuse, untuk kasus ketika satu jawaban tertentu terlihat buruk dan perlu ditelusuri persis di tahap mana masalahnya muncul (retrieval, reranking, atau generation).
+Yang jujur belum terselesaikan: framework ini kecil dan proxy-based (Bagian 7), bukan pengganti evaluasi produksi skala penuh. Tapi ia sudah cukup untuk hal yang paling penting di titik ini — mendeteksi kalau sebuah perubahan (mis. mengganti model reranker, mengubah `chunk_size`, atau menambah dokumen baru) membuat retrieval **membaik** atau **memburuk**, diukur dengan angka yang sama setiap kali, bukan tebak-tebakan.
+
+**Dipakai berpasangan dengan Langfuse (Module 21)**, keduanya saling menutup celah: evaluasi batch memberi tahu **apakah** ada yang memburuk secara keseluruhan, trace per-request memberi tahu **kenapa** pada kasus tertentu. Alur kerja yang masuk akal: jalankan `run_evaluation.py`, lihat pertanyaan mana yang skornya jeblok, lalu buka trace pertanyaan itu di Langfuse untuk melihat persis di tahap mana retrieval-nya meleset — tanpa perlu mereproduksi ulang apa pun.
+
+Rangkaian Module 18-22 secara keseluruhan mengangkat NALA dari sistem RAG dasar (Module 7-17, retrieval vector murni, tidak terukur) jadi sistem yang lebih akurat retrieval-nya (hybrid search + reranking), bisa didiagnosis per-request (observability), dan terukur kualitasnya (framework evaluasi). Yang **belum** disentuh: NALA masih hanya bisa menjawab dari dokumen SOP — belum bisa menjawab pertanyaan yang jawabannya ada di data operasional terstruktur (status pengajuan kredit tertentu, riwayat klaim seorang nasabah). Module 23 mulai menyiapkan itu: PostgreSQL untuk data operasional, sebelum Module 24-28 mengajari NALA memilih sendiri kapan menjawab dari dokumen dan kapan menjalankan query SQL — dengan Langfuse yang sudah terpasang siap merekam trace kedua jalur itu sekaligus.
 

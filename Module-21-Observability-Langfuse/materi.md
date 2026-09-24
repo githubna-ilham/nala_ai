@@ -1,8 +1,8 @@
-# Module 22: Observability & Tracing dengan Langfuse
+# Module 21: Observability & Tracing dengan Langfuse
 
 ## Tujuan
 
-Menambahkan Langfuse self-hosted untuk mencatat setiap request `/chat/stream` (satu-satunya endpoint chat NALA sejak Module 8) sebagai satu trace terstruktur (retrieval, rerank, generation), supaya jawaban NALA yang terlihat buruk bisa ditelusuri persis di tahap mana masalahnya muncul — melengkapi evaluasi batch Module 21 dengan visibilitas per-request.
+Menambahkan Langfuse self-hosted untuk mencatat setiap request `/chat/stream` (satu-satunya endpoint chat NALA sejak Module 8) sebagai satu trace terstruktur (retrieval, rerank, generation), supaya jawaban NALA yang terlihat buruk bisa ditelusuri persis di tahap mana masalahnya muncul — visibilitas per-request yang nanti dilengkapi evaluasi batch di Module 22.
 
 ## Definisi
 
@@ -43,7 +43,7 @@ flowchart LR
 
 Kalau seorang staff komplain "NALA jawab salah untuk pertanyaan X", pertanyaan diagnostiknya sekarang bercabang: apakah `search_hybrid()` gagal menemukan chunk yang benar? Apakah chunk yang benar ditemukan tapi `reranker.rerank()` malah menurunkan peringkatnya? Apakah konteks yang dikirim ke LLM sudah benar, tapi `llama3.2:3b` sendiri yang berhalusinasi mengabaikannya? Log teks biasa di `docker compose logs` tidak terstruktur untuk menjawab ini per-request — perlu menelusuri banyak baris log manual untuk merekonstruksi satu alur request.
 
-**Observability** menyelesaikan ini dengan mencatat setiap tahap sebagai satu **trace** terstruktur per request — bukan menggantikan Module 21 (evaluasi batch, mengukur kualitas rata-rata di banyak pertanyaan), tapi melengkapinya untuk kasus "satu jawaban tertentu ini kenapa salah, tepatnya di mana".
+**Observability** menyelesaikan ini dengan mencatat setiap tahap sebagai satu **trace** terstruktur per request — menjawab kasus "satu jawaban tertentu ini kenapa salah, tepatnya di mana". Ini berbeda dari (dan nanti dilengkapi oleh) evaluasi batch di Module 22, yang mengukur kualitas rata-rata di banyak pertanyaan sekaligus: observability melihat **satu request secara mendalam**, evaluasi melihat **banyak request secara agregat**.
 
 ## 2. Langfuse: Self-Hosted, Bukan SaaS
 
@@ -72,7 +72,7 @@ Penting untuk tidak tertukar: Postgres yang ditambahkan module ini (`langfuse-db
 Dua Tahap: **Tahap A** menambah service `langfuse-db` + `langfuse` di `docker-compose.yml` dan setup akun. **Tahap B** instrumentasi `/chat/stream` (satu-satunya endpoint chat NALA) — span `retrieval`/`rerank` dibuka/ditutup langsung di badan endpoint, tapi `generation` untuk pemanggilan LLM harus ditutup **di dalam generator**, setelah token terakhir, bukan di badan fungsi endpoint, karena endpoint ini streaming.
 
 **Prasyarat sebelum mulai:**
-- Sudah menyelesaikan **Module 21** — `Nala/` sudah punya framework evaluasi bekerja.
+- Sudah menyelesaikan **Module 20** — `Nala/` sudah punya hybrid search (Module 18-19) dan reranking cross-encoder bekerja di `/chat/stream`.
 - Docker Desktop dinaikkan lagi alokasi RAM-nya untuk menampung dua service baru:
 
 | Setting | Minimal | Direkomendasikan | Alasan |
@@ -229,7 +229,7 @@ curl http://localhost:3000/api/public/health
 
 ```
 Tambah environment variable Langfuse (placeholder) ke service api di
-docker-compose.yml (Module 22, Tahap A, Langkah 2) — nilai key asli
+docker-compose.yml (Module 21, Tahap A, Langkah 2) — nilai key asli
 didapat manual dari UI Langfuse setelah Project & API key dibuat.
 
 GOAL:
@@ -287,7 +287,7 @@ langfuse_client = Langfuse(
 
 ```
 Tambah dependency Langfuse dan setup client Langfuse SDK di
-app/main.py (Module 22, Tahap B, Langkah 3) — belum instrumentasi
+app/main.py (Module 21, Tahap B, Langkah 3) — belum instrumentasi
 endpoint /chat/stream.
 
 GOAL:
@@ -475,7 +475,7 @@ docker compose start opensearch
 ```
 Instrumentasi /chat/stream dengan Langfuse trace/span/generation —
 trace ditutup DI DALAM generator, bukan di badan fungsi endpoint
-(Module 22, Tahap B, Langkah 4).
+(Module 21, Tahap B, Langkah 4).
 
 GOAL:
 - Di Nala/app/main.py:
@@ -526,7 +526,7 @@ GUARDRAIL:
 
 </details>
 
-**📄 Kode lengkap** (bagian relevan `app/main.py` setelah Module 22 — lihat Bagian 4 Tahap B untuk fungsi `traced_chat_stream()` dan `chat_stream()` secara utuh; setup `langfuse_client` di Bagian 4 Tahap B Langkah 3).
+**📄 Kode lengkap** (bagian relevan `app/main.py` setelah Module 21 — lihat Bagian 4 Tahap B untuk fungsi `traced_chat_stream()` dan `chat_stream()` secara utuh; setup `langfuse_client` di Bagian 4 Tahap B Langkah 3).
 
 ### Troubleshooting
 
@@ -574,16 +574,16 @@ Trace dengan `level="ERROR"` (hasil `trace.update(output={"error": ...}, level="
 
 ### e. Catatan: Kolom "Scores" Masih Kosong
 
-Tiap trace juga punya field `scores` (terlihat kosong `[]` kalau dicek lewat API `GET /api/public/traces`, atau tab **Scores** di UI) — ini **normal** untuk module ini, bukan bug. "Scores" di Langfuse adalah fitur terpisah untuk melekatkan penilaian kualitas ke sebuah trace (dari manusia lewat UI, atau dari kode). Module 22 ini cuma fokus mencatat **apa yang terjadi** (trace/span/generation), belum menilai **seberapa bagus** hasilnya.
+Tiap trace juga punya field `scores` (terlihat kosong `[]` kalau dicek lewat API `GET /api/public/traces`, atau tab **Scores** di UI) — ini **normal** untuk module ini, bukan bug. "Scores" di Langfuse adalah fitur terpisah untuk melekatkan penilaian kualitas ke sebuah trace (dari manusia lewat UI, atau dari kode). Module 21 ini cuma fokus mencatat **apa yang terjadi** (trace/span/generation), belum menilai **seberapa bagus** hasilnya.
 
-Koneksi yang belum dimanfaatkan di sini: `judge_answer()` dari Module 21 (`app/llm_judge.py`) menghasilkan skor `faithfulness`/`relevance` — secara konsep persis jenis data yang cocok dikirim lewat `trace.score(name=..., value=..., comment=...)`, supaya skor itu langsung terlihat melekat di tiap trace UI, bukan cuma di output terpisah `run_evaluation.py`. Ini di luar cakupan Module 22 yang sudah ditentukan (fokus instrumentasi dasar dulu), tapi dicatat di sini sebagai perluasan alami yang masuk akal untuk pengembangan lebih lanjut.
+Koneksi yang belum bisa dimanfaatkan di sini: Module 22 nanti membangun `judge_answer()` (`app/llm_judge.py`) yang menghasilkan skor `faithfulness`/`relevance` — secara konsep persis jenis data yang cocok dikirim lewat `trace.score(name=..., value=..., comment=...)`, supaya skor itu langsung terlihat melekat di tiap trace UI, bukan cuma di output terpisah `run_evaluation.py`. Di titik ini fungsinya memang belum ada; dicatat di sini sebagai perluasan alami yang masuk akal begitu Module 22 selesai.
 
 ## 6. Trade-off Observability: Overhead yang Tidak Gratis
 
 **Yang didapat:**
 - Debugging jawaban buruk jadi jauh lebih cepat — tidak perlu mereproduksi ulang masalah sambil membaca log manual, cukup buka trace yang sudah tersimpan.
 - Visibilitas latensi per tahap (retrieval vs rerank vs generation) — data konkret untuk memutuskan optimisasi mana yang paling berdampak, bukan tebakan.
-- Riwayat trace historis berguna sebagai bahan tambahan untuk memperluas test set Module 21 — pertanyaan nyata dari staff yang jawabannya buruk bisa dijadikan entri baru di `QA_TESTSET`.
+- Riwayat trace historis jadi bahan mentah untuk test set evaluasi yang dibangun Module 22 — pertanyaan nyata dari staff yang jawabannya buruk bisa langsung dijadikan entri di `QA_TESTSET`, bukan mengarang pertanyaan uji dari nol.
 
 **Yang dibayar:**
 - **Latensi tambahan per request** — setiap `trace.span()`/`.generation()` dan `flush()` adalah kerja tambahan (walau SDK Langfuse mem-buffer dan mengirim secara batch di background, `flush()` eksplisit di akhir `traced_chat_stream()` menunggu pengiriman selesai). Untuk `/chat/stream`, ini terjadi **setelah** token terakhir dikirim ke user, jadi user tidak merasakan langsung — tapi tetap menahan koneksi/proses sedikit lebih lama di sisi server.
@@ -611,7 +611,9 @@ Langkah eksekusi lengkap ada di Bagian 4 (Struktur Kode yang Ditambahkan) di ata
 
 ## Kesimpulan
 
-Module ini menutup rangkaian Module 18-22 dengan lapisan yang membungkus **seluruh** yang sudah dibangun — hybrid search (Module 19), reranking (Module 20), dan evaluasi batch (Module 21) — dengan visibilitas per-request. Sebelumnya, kalau ada satu jawaban NALA yang terlihat buruk, jalan satu-satunya adalah menduga-duga atau membaca log mentah; sekarang, tiap trace menunjukkan persis apa yang terjadi di tiap tahap (kandidat yang ditemukan, urutan setelah rerank, prompt lengkap yang dikirim ke LLM, jawaban akhir), lengkap dengan waktu eksekusinya.
+Module ini membungkus **seluruh** yang sudah dibangun sepanjang Module 18-20 — hybrid search (Module 18-19) dan reranking (Module 20) — dengan visibilitas per-request. Sebelumnya, kalau ada satu jawaban NALA yang terlihat buruk, jalan satu-satunya adalah menduga-duga atau membaca log mentah; sekarang, tiap trace menunjukkan persis apa yang terjadi di tiap tahap (kandidat yang ditemukan, urutan setelah rerank, prompt lengkap yang dikirim ke LLM, jawaban akhir), lengkap dengan waktu eksekusinya.
 
-**Module 18-22 secara keseluruhan** mengangkat NALA dari sistem RAG dasar (Module 7-17, retrieval vector murni, tidak terukur) menjadi sistem yang lebih akurat retrievalnya (hybrid search + reranking), terukur kualitasnya (framework evaluasi), dan bisa didiagnosis per-request (observability). Yang **belum** disentuh sejauh ini: NALA masih hanya bisa menjawab dari dokumen SOP — belum bisa menjawab pertanyaan yang jawabannya ada di data operasional terstruktur (status pengajuan kredit tertentu, riwayat klaim seorang nasabah, dst). Module 23-27 menambah agentic tools: NALA belajar memilih kapan menjawab dari RAG dokumen (yang baru saja disempurnakan sepanjang Module 18-22 ini) dan kapan menjalankan query SQL langsung ke database operasional — dengan Langfuse yang sudah terpasang di module ini siap merekam trace kedua jalur itu sekaligus.
+Tapi trace cuma menjawab pertanyaan **per kasus**: "jawaban yang ini kenapa buruk?" Ia tidak menjawab pertanyaan yang sama pentingnya: **"secara keseluruhan, apakah retrieval NALA benar-benar membaik setelah hybrid search dan reranking — atau cuma kebetulan bagus di contoh yang kita coba?"** Untuk itu butuh pengukuran agregat di banyak pertanyaan sekaligus, dengan metrik yang sama setiap kali. Module 22 membangun itu: test set berlabel, Precision@k/Hit Rate@k/MRR, dan LLM-as-judge — memakai trace yang baru saja mulai terkumpul di module ini sebagai salah satu sumber pertanyaan ujinya.
+
+Satu keuntungan urutan ini: begitu Module 22 menjalankan evaluasi batch, setiap pemanggilan retrieval di dalamnya **sudah otomatis ter-trace** — jadi kalau ada pertanyaan di test set yang skornya jeblok, Anda bisa langsung membuka trace-nya di Langfuse untuk melihat kenapa, tanpa menjalankan ulang apa pun.
 

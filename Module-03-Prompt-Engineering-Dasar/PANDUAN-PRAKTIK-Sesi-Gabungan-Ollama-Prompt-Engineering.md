@@ -70,7 +70,7 @@ Sama seperti di atas, biarkan berjalan di terminal terpisah.
 ollama pull llama3.2:3b
 ```
 
-Model ini berukuran ~1.87GB — proses download akan menampilkan progress bar. Sambil menunggu, baca sekilas kenapa model ini yang dipilih: model 3B parameter, sudah mendukung tool-calling (dipakai nanti di Module 22), cukup kecil untuk berjalan nyaman di laptop 16GB RAM sekaligus menjalankan service lain (OpenSearch, PostgreSQL, dst di modul-modul berikutnya).
+Model ini berukuran ~1.87GB — proses download akan menampilkan progress bar. Sambil menunggu, baca sekilas kenapa model ini yang dipilih: model 3B parameter, sudah mendukung tool-calling (dipakai nanti di Module 24), cukup kecil untuk berjalan nyaman di laptop 16GB RAM sekaligus menjalankan service lain (OpenSearch, PostgreSQL, dst di modul-modul berikutnya).
 
 **Checkpoint:**
 ```bash
