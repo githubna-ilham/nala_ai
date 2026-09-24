@@ -541,6 +541,46 @@ else if (vectorOn && !bm25On) searchMethod = "vector";
 
 `searchMethod` lalu dikirim apa adanya di body `fetch` seperti Module 18 (`search_method: searchMethod`) — nilainya kini bisa `"hybrid"`, `"vector"`, atau `"bm25"`.
 
+<details>
+<summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi bagian checkbox chat.html</strong></summary>
+
+```
+Perluas mapping dua checkbox metode pencarian di chat.html (Module 18
+Bagian 5) supaya centang keduanya berarti "hybrid" (Module 19, bagian
+opsional setelah Langkah 3).
+
+GOAL:
+- Di Nala/app/templates/chat.html:
+  - Ubah default checkbox id="bm25Toggle" dan id="vectorToggle" jadi
+    SAMA-SAMA checked (sebelumnya dari Module 18 cuma vectorToggle
+    yang checked).
+  - Ubah teks <legend> fieldset search-method-select jadi "Metode
+    pencarian (centang keduanya = Hybrid):".
+  - Di handler submit (JavaScript), ganti logika penentuan
+    searchMethod dari Module 18 (yang cuma punya default "vector" dan
+    cabang "bm25") jadi: default searchMethod = "hybrid" (berlaku
+    kalau KEDUA checkbox dicentang ATAU keduanya kosong); kalau
+    bm25On true dan vectorOn false, searchMethod = "bm25"; kalau
+    vectorOn true dan bm25On false, searchMethod = "vector".
+
+CONTEXT:
+- Field search_method di ChatStreamRequest sudah diperluas jadi
+  Literal["vector", "bm25", "hybrid"] dengan default "hybrid" di
+  Langkah 3 module ini — bagian ini cuma menyesuaikan UI, tidak ada
+  perubahan backend.
+- Kedua checkbox dan logika mapping dasarnya sudah ada dari Module 18
+  Bagian 5 — perluas mapping yang ada, jangan tulis ulang dari nol.
+
+GUARDRAIL:
+- JANGAN ubah app/main.py atau app/vector_store.py di langkah ini —
+  murni edit chat.html.
+- JANGAN hapus toggle useRagToggle (Module 14) yang sudah ada.
+- JANGAN ubah dua checkbox ini jadi dropdown/select — bentuknya tetap
+  dua checkbox sesuai desain Module 18.
+```
+
+</details>
+
 **📄 Kode lengkap** (`app/main.py`, bagian relevan setelah Module 19 — kumulatif dari Module 14 `use_rag` + Module 18 `search_method` + Module 19 `"hybrid"`):
 
 ```python

@@ -597,6 +597,47 @@ const response = await fetch("/chat/stream", {
 
 Dengan checkbox metode pencarian (BM25 + Vector, centang keduanya = hybrid) dan checkbox `useRerankingToggle` (independen) berdampingan, user bisa memilih ke-6 kombinasi langsung dari browser: `vector` saja, `vector` + rerank, `bm25` saja, `bm25` + rerank, `hybrid` saja, atau `hybrid` + rerank (default).
 
+<details>
+<summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi bagian checkbox chat.html</strong></summary>
+
+```
+Tambah checkbox useRerankingToggle ke chat.html, independen dari
+checkbox metode pencarian (Module 18-19), lalu kirim field
+use_reranking di request /chat/stream (Module 20, bagian opsional
+setelah Langkah 5).
+
+GOAL:
+- Di Nala/app/templates/chat.html:
+  - Tambah <label class="rerank-toggle"> berisi checkbox
+    id="useRerankingToggle" (checked default) dengan teks "Rerank
+    hasil (cross-encoder)" — taruh di dekat fieldset metode pencarian
+    (checkbox bm25Toggle/vectorToggle dari Module 18-19).
+  - Di handler submit (JavaScript): baca useReranking dari
+    useRerankingToggle.checked (di samping useRag, bm25On, vectorOn,
+    searchMethod yang sudah ada dari Module 18-19). Tambah field
+    use_reranking: useReranking ke body JSON fetch ke /chat/stream
+    (bersama messages, use_rag, search_method yang sudah ada).
+
+CONTEXT:
+- Field use_reranking (bool, default True) sudah ada di
+  ChatStreamRequest (app/main.py) dari Langkah 5 module ini — bagian
+  ini cuma UI, tidak ada perubahan backend.
+- Checkbox metode pencarian (bm25Toggle, vectorToggle) dan logika
+  mapping searchMethod sudah ada dari Module 18-19 — JANGAN diubah,
+  cuma tambah checkbox baru yang independen di sampingnya.
+
+GUARDRAIL:
+- JANGAN ubah app/main.py atau app/reranker.py di langkah ini — murni
+  edit chat.html.
+- JANGAN hapus atau ubah checkbox useRagToggle/bm25Toggle/
+  vectorToggle yang sudah ada.
+- JANGAN gabungkan useRerankingToggle ke dalam fieldset metode
+  pencarian — checkbox ini independen, bukan bagian dari pilihan
+  vector/bm25/hybrid.
+```
+
+</details>
+
 ### Troubleshooting
 
 - **`ModuleNotFoundError: No module named 'sentence_transformers'`**: `requirements.txt` belum ditambah (Langkah 1) atau image belum di-*rebuild* setelah ditambah — jalankan `docker compose up --build api` (bukan cuma `docker compose up`, perubahan dependency butuh rebuild image).

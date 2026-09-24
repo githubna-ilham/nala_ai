@@ -552,6 +552,47 @@ const response = await fetch("/chat/stream", {
 
 ⚠️ **Catatan forward-looking**: Module 19 nanti memperluas `Literal["vector", "bm25"]` menjadi `Literal["vector", "bm25", "hybrid"]` dan mengganti default-nya jadi `"hybrid"` — di sana logika checkbox tinggal diperluas: mencentang **kedua** checkbox (BM25 + Vector) berarti `"hybrid"`, satu saja tetap metode itu. Bentuk dua-checkbox ini sengaja dipilih supaya perluasan itu cukup mengubah aturan pemetaannya, bukan mengganti kontrolnya.
 
+<details>
+<summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi bagian opsional chat.html</strong></summary>
+
+```
+Tambah dua checkbox metode pencarian (BM25/Vector) ke chat.html,
+menggantikan pemanggilan /chat/stream yang cuma kirim use_rag
+(Module 18, bagian opsional setelah Langkah 2).
+
+GOAL:
+- Di Nala/app/templates/chat.html:
+  - Tambah <fieldset class="search-method-select"> berisi <legend>
+    "Metode pencarian:", checkbox id="bm25Toggle" (label "BM25 (kata
+    kunci)", tidak dicentang default) dan checkbox id="vectorToggle"
+    (label "Vector (makna)", dicentang/checked default) — taruh di
+    dekat toggle useRagToggle yang sudah ada dari Module 14.
+  - Di handler submit (JavaScript): baca useRag dari useRagToggle
+    seperti biasa, tambah pembacaan bm25On dari bm25Toggle.checked dan
+    vectorOn dari vectorToggle.checked. Tentukan searchMethod: default
+    "vector"; kalau bm25On true dan vectorOn false, searchMethod jadi
+    "bm25". Kirim searchMethod sebagai field search_method di body
+    JSON fetch ke /chat/stream (bersama messages dan use_rag yang
+    sudah ada).
+
+CONTEXT:
+- Field search_method (Literal["vector", "bm25"], default "vector")
+  sudah ada di ChatStreamRequest (app/main.py) dari Langkah 2 module
+  ini — bagian ini cuma UI, tidak ada perubahan backend.
+- Module 19 nanti akan memperluas mapping ini: kedua checkbox
+  dicentang sekaligus akan berarti "hybrid" — jangan tulis logika itu
+  sekarang, cukup dua kasus ("bm25" saja, atau default "vector").
+
+GUARDRAIL:
+- JANGAN ubah app/main.py atau app/vector_store.py di langkah ini —
+  murni edit chat.html.
+- JANGAN hapus toggle useRagToggle (Module 14) yang sudah ada.
+- JANGAN buat dropdown <select> — pakai dua checkbox terpisah, sesuai
+  desain yang akan diperluas Module 19.
+```
+
+</details>
+
 ## 6. Checkpoint Praktik
 
 Yang perlu dipastikan sebelum lanjut ke Module 19:
