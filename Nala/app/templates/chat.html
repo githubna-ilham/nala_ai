@@ -28,6 +28,10 @@
             <input type="checkbox" id="useRerankingToggle" checked>
             Rerank hasil (cross-encoder)
         </label>
+        <label class="agent-toggle">
+            <input type="checkbox" id="agentModeToggle">
+            Pakai Agent (RAG + SQL tool)
+        </label>
         <form id="chat-form">
             <input type="text" id="message" placeholder="Tanya NALA seputar SOP..." required>
             <button type="submit">Kirim</button>
@@ -69,6 +73,7 @@
             submitBtn.disabled = true;
             input.disabled = true;
 
+            const agentMode = document.getElementById("agentModeToggle").checked;
             const useRag = document.getElementById("useRagToggle").checked;
             const bm25On = document.getElementById("bm25Toggle").checked;
             const vectorOn = document.getElementById("vectorToggle").checked;
@@ -78,23 +83,37 @@
             const useReranking = document.getElementById("useRerankingToggle").checked;
 
             try {
-                const response = await fetch("/chat/stream", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ messages: conversation, use_rag: useRag, search_method: searchMethod, use_reranking: useReranking }),
-                });
-
-                const reader = response.body.getReader();
-                const decoder = new TextDecoder();
                 let fullReply = "";
-
-                while (true) {
-                    const { done, value } = await reader.read();
-                    if (done) break;
-                    // Token pertama otomatis menimpa indikator "sedang mengetik".
-                    fullReply += decoder.decode(value, { stream: true });
+                if (agentMode) {
+                    // Mode Agent: POST /chat (non-stream), agent memutuskan tool sendiri.
+                    const agentHistory = conversation.slice(0, -1);
+                    const response = await fetch("/chat", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ message, history: agentHistory }),
+                    });
+                    const data = await response.json();
+                    fullReply = data.reply;
                     replyEl.innerHTML = `<b>NALA:</b> ${escapeHtml(fullReply)}`;
                     history.scrollTop = history.scrollHeight;
+                } else {
+                    const response = await fetch("/chat/stream", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ messages: conversation, use_rag: useRag, search_method: searchMethod, use_reranking: useReranking }),
+                    });
+
+                    const reader = response.body.getReader();
+                    const decoder = new TextDecoder();
+
+                    while (true) {
+                        const { done, value } = await reader.read();
+                        if (done) break;
+                        // Token pertama otomatis menimpa indikator "sedang mengetik".
+                        fullReply += decoder.decode(value, { stream: true });
+                        replyEl.innerHTML = `<b>NALA:</b> ${escapeHtml(fullReply)}`;
+                        history.scrollTop = history.scrollHeight;
+                    }
                 }
 
                 conversation.push({ role: "assistant", content: fullReply });
@@ -113,6 +132,14 @@
             conversation = [];
             history.innerHTML = "";
             updateMeta();
+        });
+
+        // Mode Agent memutuskan retrieval sendiri — nonaktifkan kontrol retrieval lama saat aktif.
+        const RETRIEVAL_TOGGLES = ["useRagToggle", "bm25Toggle", "vectorToggle", "useRerankingToggle"];
+        document.getElementById("agentModeToggle").addEventListener("change", (e) => {
+            RETRIEVAL_TOGGLES.forEach((id) => {
+                document.getElementById(id).disabled = e.target.checked;
+            });
         });
     </script>
 </body>

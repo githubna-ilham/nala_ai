@@ -10,6 +10,7 @@ from langfuse import Langfuse
 from psycopg.rows import dict_row
 from pydantic import BaseModel
 
+from app.agent import build_agent
 from app.db import get_connection, get_write_connection
 from app.embeddings import embed_text
 from app.ingest import ingest_document
@@ -17,6 +18,7 @@ from app.ollama_client import OllamaClient
 from app.reranker import Reranker
 from app.system_prompt import (
     NALA_SYSTEM_PROMPT,
+    NALA_SYSTEM_PROMPT_AGENT,
     NALA_SYSTEM_PROMPT_NO_CONTEXT,
     NALA_SYSTEM_PROMPT_RAG_OFF,
 )
@@ -67,6 +69,15 @@ class ChatStreamRequest(BaseModel):
     use_rag: bool = True
     search_method: Literal["vector", "bm25", "hybrid"] = "hybrid"
     use_reranking: bool = True
+
+
+class ChatRequest(BaseModel):
+    message: str
+    history: list[ChatMessage] = []
+
+
+class ChatResponse(BaseModel):
+    reply: str
 
 
 HISTORY_WINDOW = 10
@@ -162,6 +173,36 @@ def chat_stream(request: ChatStreamRequest) -> StreamingResponse:
     return StreamingResponse(
         traced_chat_stream(trace, ollama_messages), media_type="text/plain"
     )
+
+
+@app.post("/chat", response_model=ChatResponse)
+def chat(request: ChatRequest) -> ChatResponse:
+    trace = langfuse_client.trace(name="chat_agent", input={"message": request.message})
+
+    agent = build_agent(
+        ollama_client=ollama_client,
+        vector_store=vector_store,
+        ollama_base_url=OLLAMA_BASE_URL,
+        reranker=reranker,
+        trace=trace,
+        model_name=os.environ.get("OLLAMA_MODEL", "llama3.2:3b"),
+    )
+
+    history_messages = [{"role": m.role, "content": m.content} for m in request.history]
+    recent_history = (history_messages + [{"role": "user", "content": request.message}])[-HISTORY_WINDOW:]
+
+    initial_state = {
+        "messages": [
+            {"role": "system", "content": NALA_SYSTEM_PROMPT_AGENT},
+            *recent_history,
+        ]
+    }
+    final_state = agent.invoke(initial_state)
+    reply = final_state["messages"][-1]["content"]
+
+    trace.update(output={"reply": reply, "message_count": len(final_state["messages"])})
+    langfuse_client.flush()
+    return ChatResponse(reply=reply)
 
 
 @app.get("/", response_class=HTMLResponse)

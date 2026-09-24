@@ -23,6 +23,20 @@ class OllamaClient:
             response.raise_for_status()
             return response.json()["response"]
 
+    def chat(self, messages: list[dict], tools: list[dict] | None = None) -> dict:
+        payload = {"model": self.model, "messages": messages, "stream": False}
+        if tools:
+            payload["tools"] = tools
+
+        with httpx.Client() as client:
+            response = client.post(
+                f"{self.base_url}/api/chat",
+                json=payload,
+                timeout=60.0,
+            )
+            response.raise_for_status()
+            return response.json()["message"]
+
     def chat_stream(self, messages: list[dict]):
         with httpx.Client() as client:
             with client.stream(
