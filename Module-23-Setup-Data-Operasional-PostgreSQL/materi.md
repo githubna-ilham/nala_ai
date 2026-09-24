@@ -114,7 +114,7 @@ curl -N -X POST http://localhost:8000/chat/stream \
 
 Tambah `postgres_data:` ke `volumes:` top-level, dan `postgres: {condition: service_healthy}` ke `depends_on` service `api` (bersama `ollama`/`opensearch` yang sudah ada dari module-module sebelumnya — kalau `depends_on` versi Anda masih bentuk list sederhana, ubah jadi bentuk mapping supaya bisa memakai `condition`).
 
-`POSTGRES_PASSWORD` sengaja pakai env var dengan default eksplisit `changeme_dev_only` — cukup untuk laptop training, **bukan** pola aman untuk deployment sungguhan (dibahas lagi soal secret management di Module 29 (deployment `.env`) dan Module 30 Bagian 3.a). Image resmi `postgres` otomatis menjalankan file apa pun di `/docker-entrypoint-initdb.d/` **satu kali saat volume database masih kosong** — itu cara `db/seed.sql` (Langkah 2) ter-load otomatis tanpa langkah manual tambahan.
+`POSTGRES_PASSWORD` sengaja pakai env var dengan default eksplisit `changeme_dev_only` — cukup untuk laptop training, **bukan** pola aman untuk deployment sungguhan (di produksi, password database mestinya datang dari secret manager atau `.env` yang tidak pernah masuk repo, bukan default yang tertulis di `docker-compose.yml`). Image resmi `postgres` otomatis menjalankan file apa pun di `/docker-entrypoint-initdb.d/` **satu kali saat volume database masih kosong** — itu cara `db/seed.sql` (Langkah 2) ter-load otomatis tanpa langkah manual tambahan.
 
 <details>
 <summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 1</strong></summary>
