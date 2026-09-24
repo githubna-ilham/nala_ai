@@ -550,7 +550,7 @@ Anda telah belajar:
 
 - Angka bits/weight per tipe quantization (section 5.1) — [llama.cpp Quantization README, ggml-org/llama.cpp](https://github.com/ggml-org/llama.cpp/blob/master/tools/quantize/README.md). Ollama memakai llama.cpp sebagai inference engine di balik layar, sehingga skema quantization GGUF ini berlaku sama.
 - Data model params, file size, dan KV cache size (section 4.4 & 4.1) — diambil langsung dari log real `ollama serve` menjalankan `llama3.2:3b` (Ollama v0.33.2) pada sesi praktik modul ini, bukan dari dokumentasi eksternal.
-- Penjelasan GUI vs Terminal dan screenshot (section 4.5) — diadaptasi dari materi `AI_LLM_OFFLINE/Day 1/Module-02-Ollama-Setup/materi.md` (program pelatihan terkait, repo terpisah); gambar disalin ke `resources/images/ollama-setup/` milik AI_NALA_ENTERPRISE agar repo ini tetap mandiri.
+- Penjelasan GUI vs Terminal dan screenshot (section 4.5) — diadaptasi dari materi `AI_LLM_OFFLINE/Day 1/Module-02-Setup-Ollama-Evaluasi-Model/materi.md` (program pelatihan terkait, repo terpisah); gambar disalin ke `resources/images/ollama-setup/` milik AI_NALA_ENTERPRISE agar repo ini tetap mandiri.
 - Rekomendasi model vision & ukuran download (catatan section 4.5) — [ollama.com/library/qwen3-vl](https://ollama.com/library/qwen3-vl), [ollama.com/library/llama3.2-vision](https://ollama.com/library/llama3.2-vision).
 
 ---

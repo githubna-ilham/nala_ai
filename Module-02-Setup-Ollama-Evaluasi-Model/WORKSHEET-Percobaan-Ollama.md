@@ -179,4 +179,4 @@ Pakai rule of thumb `(ukuran file × 2) + 1 GB` di section 5.1:
 
 ---
 
-**Next:** Lanjut ke `Module-08-Konsep-RAG/materi.md` untuk pembahasan RAG secara penuh.
+**Next:** Lanjut ke `Module-09-Konsep-RAG/materi.md` untuk pembahasan RAG secara penuh.

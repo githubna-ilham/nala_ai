@@ -84,7 +84,7 @@ Pelatihan menggunakan stack teknologi modern yang seimbang antara kemudahan pemb
 Evaluasi peserta dilakukan melalui tiga tahap:
 
 1. **Pretest (sebelum Module 1)** — Kuis pilihan ganda 10 soal untuk mengukur pengetahuan awal peserta tentang LLM, private vs cloud inference, RAG basics, agentic tools, dan Docker
-2. **Posttest (setelah Module 30, sebelum capstone)** — Kuis serupa dengan pretest untuk mengukur improvement knowledge
+2. **Posttest (setelah Module 31, sebelum capstone)** — Kuis serupa dengan pretest untuk mengukur improvement knowledge
 3. **Capstone Presentation** — Setiap peserta atau kelompok mempresentasikan hasil praktik mereka dengan rubrik penilaian: (1) fungsionalitas sistem, (2) quality of retrieved answers, (3) pemahaman teknis tentang trade-off yang dilakukan, (4) presentasi dan komunikasi hasil
 
 ## Prasyarat Komputer
@@ -102,12 +102,12 @@ Peserta akan menerima checklist setup environment sebelum pelatihan dimulai untu
 
 Model default yang dipakai konsisten sepanjang seluruh 31 modul adalah **`llama3.2:3b`** (lihat perhitungan RAM/VRAM di `Module-02-Setup-Ollama-Evaluasi-Model/materi.md` section 5.1). Alasan memakai satu model yang sama sepanjang training:
 
-- **Constraint RAM total stack, bukan cuma LLM** — prasyarat di atas hanya mensyaratkan minimal 16GB RAM untuk menjalankan Ollama **bersamaan** dengan OpenSearch, PostgreSQL, Airflow, FastAPI, LangGraph, dan Langfuse via Docker Compose. Model 7B (butuh ~8GB RAM+overhead) berisiko membuat laptop peserta kehabisan memory begitu semua service Module 27+ aktif bersamaan.
+- **Constraint RAM total stack, bukan cuma LLM** — prasyarat di atas hanya mensyaratkan minimal 16GB RAM untuk menjalankan Ollama **bersamaan** dengan OpenSearch, PostgreSQL, Airflow, FastAPI, LangGraph, dan Langfuse via Docker Compose. Model 7B (butuh ~8GB RAM+overhead) berisiko membuat laptop peserta kehabisan memory begitu semua service Module 28+ aktif bersamaan.
 - **Llama 3.2 sudah mendukung tool-calling** — Module 23 butuh agentic tool-calling (LangGraph routing ke RAG vs SQL tool); model family Llama 3.2 (termasuk varian 3B) sudah punya dukungan tool-calling di Ollama, jadi tidak perlu model lebih besar hanya demi fitur ini.
-- **Konsistensi kurikulum** — project `nala` tumbuh progresif dari Module 1 ke Module 30; mengganti model di tengah jalan berisiko membuat system prompt/prompt engineering yang sudah dibuat di Module 3 perlu di-tuning ulang.
+- **Konsistensi kurikulum** — project `nala` tumbuh progresif dari Module 1 ke Module 31; mengganti model di tengah jalan berisiko membuat system prompt/prompt engineering yang sudah dibuat di Module 3 perlu di-tuning ulang.
 
 **Opsi upgrade (khusus peserta dengan RAM 32GB+):** Jika di Module 25 akurasi routing RAG-vs-SQL kurang memadai dengan model 3B, `qwen2.5:7b` bisa dijadikan alternatif opsional. Ini sebaiknya diperkenalkan sebagai catatan tambahan di materi Module 25, bukan sebagai default, mengingat prasyarat komputer di atas hanya menjamin 16GB RAM untuk seluruh peserta.
 
 ---
 
-**Informasi Lebih Lanjut:** Lihat folder `Module-01-*` sampai `Module-30-*` — tiap folder berisi satu `materi.md` yang mencakup materi konsep sekaligus panduan praktik hands-on (bagian "Panduan Praktik" di akhir file) — dan `Capstone/` untuk paket evaluasi akhir (rubrik penilaian, template presentasi, studi kasus capstone).
+**Informasi Lebih Lanjut:** Lihat folder `Module-01-*` sampai `Module-31-*` — tiap folder berisi satu `materi.md` yang mencakup materi konsep sekaligus panduan praktik hands-on (bagian "Panduan Praktik" di akhir file) — dan `Capstone/` untuk paket evaluasi akhir (rubrik penilaian, template presentasi, studi kasus capstone).
