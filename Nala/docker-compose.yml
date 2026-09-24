@@ -15,8 +15,10 @@ services:
       - OLLAMA_MODEL=llama3.2:3b
       - KNOWLEDGE_BASE_PATH=/app/knowledge-base
       - OPENSEARCH_BASE_URL=http://opensearch:9200
+      - HF_HOME=/app/.cache/huggingface
     volumes:
       - ./knowledge-base:/app/knowledge-base
+      - hf_cache:/app/.cache/huggingface
     depends_on:
       - ollama
       - opensearch
@@ -65,3 +67,4 @@ services:
 volumes:
   ollama_data:
   opensearch_data:
+  hf_cache:

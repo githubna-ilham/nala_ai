@@ -65,9 +65,60 @@ class VectorStore:
             hits = response.json()["hits"]["hits"]
             return [
                 {
+                    "_id": hit["_id"],
                     "text": hit["_source"]["text"],
                     "score": hit["_score"],
                     "metadata": hit["_source"]["metadata"],
                 }
                 for hit in hits
             ]
+
+    def search_bm25(self, query_text: str, top_k: int = 10) -> list[dict]:
+        with httpx.Client() as client:
+            response = client.post(
+                f"{self.base_url}/{self.index_name}/_search",
+                json={
+                    "size": top_k,
+                    "query": {"match": {"text": query_text}},
+                },
+                timeout=30.0,
+            )
+            response.raise_for_status()
+            hits = response.json()["hits"]["hits"]
+            return [
+                {
+                    "_id": hit["_id"],
+                    "text": hit["_source"]["text"],
+                    "score": hit["_score"],
+                    "metadata": hit["_source"]["metadata"],
+                }
+                for hit in hits
+            ]
+
+    def search_hybrid(
+        self,
+        query_text: str,
+        query_embedding: list[float],
+        top_k: int = 3,
+        candidate_pool: int = 20,
+        rrf_k: int = 60,
+    ) -> list[dict]:
+        bm25_results = self.search_bm25(query_text, top_k=candidate_pool)
+        vector_results = self.search(query_embedding, top_k=candidate_pool)
+
+        fused_scores: dict[str, float] = {}
+        doc_lookup: dict[str, dict] = {}
+
+        for rank, hit in enumerate(bm25_results):
+            fused_scores[hit["_id"]] = fused_scores.get(hit["_id"], 0.0) + 1.0 / (rrf_k + rank + 1)
+            doc_lookup[hit["_id"]] = hit
+
+        for rank, hit in enumerate(vector_results):
+            fused_scores[hit["_id"]] = fused_scores.get(hit["_id"], 0.0) + 1.0 / (rrf_k + rank + 1)
+            doc_lookup.setdefault(hit["_id"], hit)
+
+        ranked_ids = sorted(fused_scores, key=fused_scores.get, reverse=True)[:top_k]
+        return [
+            {**doc_lookup[doc_id], "rrf_score": fused_scores[doc_id]}
+            for doc_id in ranked_ids
+        ]
