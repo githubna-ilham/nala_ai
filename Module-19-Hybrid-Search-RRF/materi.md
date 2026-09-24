@@ -517,21 +517,29 @@ GUARDRAIL:
 
 </details>
 
-**Perbarui juga dropdown `chat.html`** (dibuat Module 18 Bagian 5) supaya opsi `"hybrid"` bisa dicoba dari browser:
+**Perbarui juga checkbox `chat.html`** (dibuat Module 18 Bagian 5) supaya `"hybrid"` bisa dipilih dari browser — cukup **centang kedua checkbox**. Ubah kedua checkbox jadi tercentang secara default (both = Hybrid) dan perbarui legend-nya:
 
 ```html
-<!-- app/templates/chat.html — tambah satu <option>, ubah default "selected" -->
-<label class="search-method-select">
-  Metode pencarian:
-  <select id="searchMethodSelect">
-    <option value="hybrid" selected>Hybrid (BM25 + Vector, direkomendasikan)</option>
-    <option value="vector">Vector (makna)</option>
-    <option value="bm25">BM25 (kata kunci)</option>
-  </select>
-</label>
+<!-- app/templates/chat.html — centang keduanya secara default (both = Hybrid) -->
+<fieldset class="search-method-select">
+  <legend>Metode pencarian (centang keduanya = Hybrid):</legend>
+  <label><input type="checkbox" id="bm25Toggle" checked> BM25 (kata kunci)</label>
+  <label><input type="checkbox" id="vectorToggle" checked> Vector (makna)</label>
+</fieldset>
 ```
 
-JavaScript pengiriman request (Module 18) tidak perlu diubah — `searchMethod` sudah dikirim apa adanya dari `<select>`, nilainya otomatis jadi `"hybrid"`, `"vector"`, atau `"bm25"` tergantung pilihan user.
+Perluas juga logika pemetaan di handler submit (dari Module 18): sekarang mencentang **keduanya (atau keduanya kosong)** berarti `"hybrid"`, satu saja tetap metode itu:
+
+```javascript
+// app/templates/chat.html, di dalam handler submit — perluas logika Module 18
+const bm25On = document.getElementById("bm25Toggle").checked;
+const vectorOn = document.getElementById("vectorToggle").checked;
+let searchMethod = "hybrid";  // keduanya dicentang ATAU keduanya kosong
+if (bm25On && !vectorOn) searchMethod = "bm25";
+else if (vectorOn && !bm25On) searchMethod = "vector";
+```
+
+`searchMethod` lalu dikirim apa adanya di body `fetch` seperti Module 18 (`search_method: searchMethod`) — nilainya kini bisa `"hybrid"`, `"vector"`, atau `"bm25"`.
 
 **📄 Kode lengkap** (`app/main.py`, bagian relevan setelah Module 19 — kumulatif dari Module 14 `use_rag` + Module 18 `search_method` + Module 19 `"hybrid"`):
 

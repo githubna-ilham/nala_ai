@@ -523,23 +523,25 @@ GUARDRAIL:
 
 </details>
 
-**Opsional — tambah dropdown di `chat.html`** supaya bisa dicoba dari browser, bukan cuma curl:
+**Opsional — tambah checkbox di `chat.html`** supaya bisa dicoba dari browser, bukan cuma curl. Pakai **dua checkbox** (BM25 + Vector), bukan dropdown — di Module 19 nanti mencentang **keduanya** akan berarti Hybrid, jadi bentuk dua-checkbox ini sudah disiapkan untuk perluasan itu. Di Module 18 ini `"hybrid"` belum ada, jadi defaultnya **Vector**:
 
 ```html
 <!-- app/templates/chat.html, di dekat toggle useRagToggle (Module 14) -->
-<label class="search-method-select">
-  Metode pencarian:
-  <select id="searchMethodSelect">
-    <option value="vector" selected>Vector (makna)</option>
-    <option value="bm25">BM25 (kata kunci)</option>
-  </select>
-</label>
+<fieldset class="search-method-select">
+  <legend>Metode pencarian:</legend>
+  <label><input type="checkbox" id="bm25Toggle"> BM25 (kata kunci)</label>
+  <label><input type="checkbox" id="vectorToggle" checked> Vector (makna)</label>
+</fieldset>
 ```
 
 ```javascript
 // app/templates/chat.html, di dalam handler submit — menggantikan body Module 14
 const useRag = document.getElementById("useRagToggle").checked;
-const searchMethod = document.getElementById("searchMethodSelect").value;
+const bm25On = document.getElementById("bm25Toggle").checked;
+const vectorOn = document.getElementById("vectorToggle").checked;
+// Module 18 baru punya "vector"/"bm25" (belum ada "hybrid") — default "vector".
+let searchMethod = "vector";
+if (bm25On && !vectorOn) searchMethod = "bm25";
 
 const response = await fetch("/chat/stream", {
   method: "POST",
@@ -548,7 +550,7 @@ const response = await fetch("/chat/stream", {
 });
 ```
 
-⚠️ **Catatan forward-looking**: Module 19 nanti memperluas `Literal["vector", "bm25"]` menjadi `Literal["vector", "bm25", "hybrid"]` dan mengganti default-nya jadi `"hybrid"` — dropdown ini juga akan dapat opsi ketiga di sana. Switch ini sengaja dirancang supaya perluasan itu tinggal menambah satu opsi, bukan menulis ulang logikanya.
+⚠️ **Catatan forward-looking**: Module 19 nanti memperluas `Literal["vector", "bm25"]` menjadi `Literal["vector", "bm25", "hybrid"]` dan mengganti default-nya jadi `"hybrid"` — di sana logika checkbox tinggal diperluas: mencentang **kedua** checkbox (BM25 + Vector) berarti `"hybrid"`, satu saja tetap metode itu. Bentuk dua-checkbox ini sengaja dipilih supaya perluasan itu cukup mengubah aturan pemetaannya, bukan mengganti kontrolnya.
 
 ## 6. Checkpoint Praktik
 

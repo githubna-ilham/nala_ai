@@ -563,10 +563,10 @@ def chat_stream(request: ChatStreamRequest) -> StreamingResponse:
     )
 ```
 
-**Opsional — tambah checkbox di `chat.html`** (di dekat dropdown `searchMethodSelect` dari Module 18) supaya kombinasi ini bisa dicoba dari browser:
+**Opsional — tambah checkbox di `chat.html`** (di dekat fieldset checkbox metode pencarian BM25/Vector dari Module 18-19) supaya kombinasi ini bisa dicoba dari browser:
 
 ```html
-<!-- app/templates/chat.html, di dekat searchMethodSelect (Module 18) -->
+<!-- app/templates/chat.html, di dekat fieldset metode pencarian (Module 18-19) -->
 <label class="rerank-toggle">
   <input type="checkbox" id="useRerankingToggle" checked>
   Rerank hasil (cross-encoder)
@@ -576,7 +576,11 @@ def chat_stream(request: ChatStreamRequest) -> StreamingResponse:
 ```javascript
 // app/templates/chat.html, di dalam handler submit — menambah satu field ke body Module 19
 const useRag = document.getElementById("useRagToggle").checked;
-const searchMethod = document.getElementById("searchMethodSelect").value;
+const bm25On = document.getElementById("bm25Toggle").checked;
+const vectorOn = document.getElementById("vectorToggle").checked;
+let searchMethod = "hybrid";  // keduanya dicentang ATAU keduanya kosong
+if (bm25On && !vectorOn) searchMethod = "bm25";
+else if (vectorOn && !bm25On) searchMethod = "vector";
 const useReranking = document.getElementById("useRerankingToggle").checked;
 
 const response = await fetch("/chat/stream", {
@@ -591,7 +595,7 @@ const response = await fetch("/chat/stream", {
 });
 ```
 
-Dengan dropdown `searchMethodSelect` (3 opsi) dan checkbox `useRerankingToggle` (independen) berdampingan, user bisa memilih ke-6 kombinasi langsung dari browser: `vector` saja, `vector` + rerank, `bm25` saja, `bm25` + rerank, `hybrid` saja, atau `hybrid` + rerank (default).
+Dengan checkbox metode pencarian (BM25 + Vector, centang keduanya = hybrid) dan checkbox `useRerankingToggle` (independen) berdampingan, user bisa memilih ke-6 kombinasi langsung dari browser: `vector` saja, `vector` + rerank, `bm25` saja, `bm25` + rerank, `hybrid` saja, atau `hybrid` + rerank (default).
 
 ### Troubleshooting
 
