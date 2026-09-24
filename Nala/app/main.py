@@ -1,4 +1,5 @@
 import os
+from typing import Literal
 
 import httpx
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile
@@ -10,6 +11,7 @@ from pydantic import BaseModel
 from app.embeddings import embed_text
 from app.ingest import ingest_document
 from app.ollama_client import OllamaClient
+from app.reranker import Reranker
 from app.system_prompt import (
     NALA_SYSTEM_PROMPT,
     NALA_SYSTEM_PROMPT_NO_CONTEXT,
@@ -33,6 +35,9 @@ KNOWLEDGE_BASE_PATH = os.environ.get("KNOWLEDGE_BASE_PATH", "/app/knowledge-base
 OPENSEARCH_BASE_URL = os.environ.get("OPENSEARCH_BASE_URL", "http://localhost:9200")
 vector_store = VectorStore(base_url=OPENSEARCH_BASE_URL, index_name="nala-docs")
 
+RERANK_ENABLED = os.environ.get("RERANK_ENABLED", "true").lower() == "true"
+reranker = Reranker() if RERANK_ENABLED else None
+
 
 def list_knowledge_base_documents() -> list[str]:
     if not os.path.isdir(KNOWLEDGE_BASE_PATH):
@@ -51,6 +56,8 @@ class ChatMessage(BaseModel):
 class ChatStreamRequest(BaseModel):
     messages: list[ChatMessage]
     use_rag: bool = True
+    search_method: Literal["vector", "bm25", "hybrid"] = "hybrid"
+    use_reranking: bool = True
 
 
 HISTORY_WINDOW = 10
@@ -74,8 +81,23 @@ def chat_stream(request: ChatStreamRequest) -> StreamingResponse:
 
     if request.use_rag:
         try:
-            query_embedding = embed_text(last_user_message, base_url=OLLAMA_BASE_URL)
-            results = vector_store.search(query_embedding, top_k=6)
+            do_rerank = request.use_reranking and reranker is not None
+            pool_size = 20 if do_rerank else (3 if request.search_method == "hybrid" else 6)
+
+            if request.search_method == "bm25":
+                candidates = vector_store.search_bm25(last_user_message, top_k=pool_size)
+            elif request.search_method == "hybrid":
+                query_embedding = embed_text(last_user_message, base_url=OLLAMA_BASE_URL)
+                candidates = vector_store.search_hybrid(
+                    query_text=last_user_message,
+                    query_embedding=query_embedding,
+                    top_k=pool_size,
+                )
+            else:
+                query_embedding = embed_text(last_user_message, base_url=OLLAMA_BASE_URL)
+                candidates = vector_store.search(query_embedding, top_k=pool_size)
+
+            results = reranker.rerank(last_user_message, candidates, top_k=3) if do_rerank else candidates
         except httpx.HTTPError:
             results = []
     else:

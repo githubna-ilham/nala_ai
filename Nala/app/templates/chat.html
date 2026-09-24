@@ -19,6 +19,15 @@
             <input type="checkbox" id="useRagToggle" checked>
             Pakai RAG (cari dari dokumen)
         </label>
+        <fieldset class="search-method-select">
+            <legend>Metode pencarian (centang keduanya = Hybrid):</legend>
+            <label><input type="checkbox" id="bm25Toggle" checked> BM25 (kata kunci)</label>
+            <label><input type="checkbox" id="vectorToggle" checked> Vector (makna)</label>
+        </fieldset>
+        <label class="rerank-toggle">
+            <input type="checkbox" id="useRerankingToggle" checked>
+            Rerank hasil (cross-encoder)
+        </label>
         <form id="chat-form">
             <input type="text" id="message" placeholder="Tanya NALA seputar SOP..." required>
             <button type="submit">Kirim</button>
@@ -61,12 +70,18 @@
             input.disabled = true;
 
             const useRag = document.getElementById("useRagToggle").checked;
+            const bm25On = document.getElementById("bm25Toggle").checked;
+            const vectorOn = document.getElementById("vectorToggle").checked;
+            let searchMethod = "hybrid";  // keduanya dicentang ATAU keduanya kosong
+            if (bm25On && !vectorOn) searchMethod = "bm25";
+            else if (vectorOn && !bm25On) searchMethod = "vector";
+            const useReranking = document.getElementById("useRerankingToggle").checked;
 
             try {
                 const response = await fetch("/chat/stream", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ messages: conversation, use_rag: useRag }),
+                    body: JSON.stringify({ messages: conversation, use_rag: useRag, search_method: searchMethod, use_reranking: useReranking }),
                 });
 
                 const reader = response.body.getReader();
