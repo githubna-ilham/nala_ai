@@ -517,7 +517,7 @@ GUARDRAIL:
 
 </details>
 
-**Perbarui juga checkbox `chat.html`** (dibuat Module 18 Bagian 5) supaya `"hybrid"` bisa dipilih dari browser — cukup **centang kedua checkbox**. Ubah kedua checkbox jadi tercentang secara default (both = Hybrid) dan perbarui legend-nya:
+**Langkah 4 — Perbarui checkbox `chat.html`** (dibuat Module 18 Langkah 3) supaya `"hybrid"` bisa dipilih dari browser — cukup **centang kedua checkbox**. Ubah kedua checkbox jadi tercentang secara default (both = Hybrid) dan perbarui legend-nya:
 
 ```html
 <!-- app/templates/chat.html — centang keduanya secara default (both = Hybrid) -->
@@ -541,13 +541,23 @@ else if (vectorOn && !bm25On) searchMethod = "vector";
 
 `searchMethod` lalu dikirim apa adanya di body `fetch` seperti Module 18 (`search_method: searchMethod`) — nilainya kini bisa `"hybrid"`, `"vector"`, atau `"bm25"`.
 
+**▶️ Jalankan & lihat hasilnya**
+
+```bash
+docker compose up --build api
+```
+
+Buka `http://localhost:8000` — sekarang kedua checkbox (BM25 + Vector) tercentang default. Coba kirim pertanyaan dengan kondisi berbeda: keduanya tercentang (hybrid), cuma BM25, cuma Vector — bandingkan jawabannya satu sama lain.
+
+✅ **Indikator sukses**: kondisi "keduanya tercentang" menghasilkan jawaban yang sama kualitasnya dengan uji `curl` default di Langkah 3 (tanpa `search_method` eksplisit) — bukti mapping checkbox → `"hybrid"` sudah benar.
+
 <details>
-<summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi bagian checkbox chat.html</strong></summary>
+<summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 4</strong></summary>
 
 ```
 Perluas mapping dua checkbox metode pencarian di chat.html (Module 18
-Bagian 5) supaya centang keduanya berarti "hybrid" (Module 19, bagian
-opsional setelah Langkah 3).
+Langkah 3) supaya centang keduanya berarti "hybrid" (Module 19,
+Tahap B, Langkah 4).
 
 GOAL:
 - Di Nala/app/templates/chat.html:
@@ -725,10 +735,11 @@ Ini bukan bug, dan bukan berarti hybrid search di module ini gagal — dibanding
 
 ## 5. Checkpoint Praktik
 
-Langkah eksekusi lengkap ada di Bagian 3 di atas (Tahap A Langkah 1-2, Tahap B Langkah 3). Yang perlu dipastikan sebelum lanjut ke Module 20:
+Langkah eksekusi lengkap ada di Bagian 3 di atas (Tahap A Langkah 1-2, Tahap B Langkah 3-4). Yang perlu dipastikan sebelum lanjut ke Module 20:
 
 - [ ] `store.search_hybrid()` mengembalikan hasil yang berbeda urutannya dibanding `store.search()` murni, untuk query yang sama, dan skor `rrf_score` untuk chunk `### 2.1 Untuk Nasabah Perorangan` naik dibanding peringkatnya di `store.search()` murni (lihat Bagian 4 di atas — belum tentu masuk `top_k=3`, itu wajar di titik ini)
 - [ ] `search_method="hybrid"` (default baru) memanggil `search_hybrid()`, yang secara internal memanggil BM25 **dan** vector sekaligus — sementara `"vector"`/`"bm25"` (Module 18) tetap bisa dipilih manual dan cuma menjalankan satu metode
+- [ ] Checkbox BM25/Vector di `chat.html` (Langkah 4) — centang keduanya menghasilkan jawaban hybrid, satu saja tetap metode itu
 - [ ] `/chat/stream` tetap streaming bertahap dan menjawab dengan kualitas yang lebih baik dibanding sebelum hybrid search ditambahkan
 - [ ] Kita paham kenapa `bool` query naif (skor BM25 + skor `knn` dijumlah langsung) salah, dan kenapa RRF (berbasis rank) jadi solusinya
 
