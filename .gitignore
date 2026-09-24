@@ -2,6 +2,10 @@ __pycache__/
 *.pyc
 .DS_Store
 
+# Secret (Langfuse keys, dll) — jangan pernah commit
+.env
+**/.env
+
 # Panduan fasilitator — catatan pribadi pengajar, bukan materi peserta
 PANDUAN-FASILITATOR*.md
 **/PANDUAN-FASILITATOR*.md

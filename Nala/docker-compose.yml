@@ -12,14 +12,14 @@ services:
       - "8000:8000"
     environment:
       - OLLAMA_BASE_URL=http://ollama:11434
-      - OLLAMA_MODEL=llama3.2:3b
+      - OLLAMA_MODEL=qwen2.5:7b
       - KNOWLEDGE_BASE_PATH=/app/knowledge-base
       - OPENSEARCH_BASE_URL=http://opensearch:9200
       - HF_HOME=/app/.cache/huggingface
-      # GANTI dua key di bawah dengan key asli dari UI Langfuse (Settings > API Keys)
-      - LANGFUSE_PUBLIC_KEY=pk-lf-xxxxxxxx
-      - LANGFUSE_SECRET_KEY=sk-lf-xxxxxxxx
-      - LANGFUSE_HOST=http://langfuse:3000
+      # LANGFUSE keys dibaca dari Nala/.env (gitignored) — JANGAN commit nilai aslinya
+      - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY}
+      - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY}
+      - LANGFUSE_HOST=http://langfuse:3000  # nama service Docker, BUKAN localhost (api memanggil dari dalam jaringan Docker)
       - POSTGRES_READONLY_DSN=postgresql://nala_readonly:readonly_dev_only@postgres:5432/nala_operasional
       - POSTGRES_WRITER_DSN=postgresql://nala_writer:writer_dev_only@postgres:5432/nala_operasional
     volumes:
