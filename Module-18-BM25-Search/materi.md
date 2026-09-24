@@ -523,7 +523,9 @@ GUARDRAIL:
 
 </details>
 
-**Opsional — tambah checkbox di `chat.html`** supaya bisa dicoba dari browser, bukan cuma curl. Pakai **dua checkbox** (BM25 + Vector), bukan dropdown — di Module 19 nanti mencentang **keduanya** akan berarti Hybrid, jadi bentuk dua-checkbox ini sudah disiapkan untuk perluasan itu. Di Module 18 ini `"hybrid"` belum ada, jadi defaultnya **Vector**:
+**Langkah 3 — Tambah checkbox metode pencarian (BM25 + Vector) di `chat.html`**
+
+Supaya `search_method` bisa dicoba dari browser, bukan cuma `curl`. Pakai **dua checkbox** (BM25 + Vector), bukan dropdown — di Module 19 nanti mencentang **keduanya** akan berarti Hybrid, jadi bentuk dua-checkbox ini sudah disiapkan untuk perluasan itu. Di Module 18 ini `"hybrid"` belum ada, jadi defaultnya **Vector**:
 
 ```html
 <!-- app/templates/chat.html, di dekat toggle useRagToggle (Module 14) -->
@@ -552,13 +554,23 @@ const response = await fetch("/chat/stream", {
 
 ⚠️ **Catatan forward-looking**: Module 19 nanti memperluas `Literal["vector", "bm25"]` menjadi `Literal["vector", "bm25", "hybrid"]` dan mengganti default-nya jadi `"hybrid"` — di sana logika checkbox tinggal diperluas: mencentang **kedua** checkbox (BM25 + Vector) berarti `"hybrid"`, satu saja tetap metode itu. Bentuk dua-checkbox ini sengaja dipilih supaya perluasan itu cukup mengubah aturan pemetaannya, bukan mengganti kontrolnya.
 
+**▶️ Jalankan & lihat hasilnya**
+
+```bash
+docker compose up --build api
+```
+
+Buka `http://localhost:8000` di browser — centang **BM25** saja (kosongkan Vector), kirim pertanyaan yang sama dengan uji Langkah 2 di atas, bandingkan dengan kondisi default (Vector tercentang, BM25 kosong).
+
+✅ **Indikator sukses**: jawaban berubah sesuai checkbox yang dicentang — persis seperti hasil `curl` di Langkah 2, tapi sekarang bisa dicoba tanpa terminal. Coba juga kosongkan **kedua** checkbox — behavior-nya sama dengan `vectorOn`/`bm25On` keduanya `false` di JS (`searchMethod` tetap `"vector"`, default aman).
+
 <details>
-<summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi bagian opsional chat.html</strong></summary>
+<summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 3</strong></summary>
 
 ```
 Tambah dua checkbox metode pencarian (BM25/Vector) ke chat.html,
 menggantikan pemanggilan /chat/stream yang cuma kirim use_rag
-(Module 18, bagian opsional setelah Langkah 2).
+(Module 18, Bagian 5, Langkah 3).
 
 GOAL:
 - Di Nala/app/templates/chat.html:
@@ -602,5 +614,6 @@ Yang perlu dipastikan sebelum lanjut ke Module 19:
 - [ ] Kita paham komponen skor BM25 (TF, IDF, length normalization) dan kenapa itu berbeda mekanisme dari vector search
 - [ ] `/chat/stream` menerima field `search_method` (`"vector"`/`"bm25"`), request dengan nilai lain ditolak `422`, dan `search_method="bm25"` terbukti tidak memanggil `embed_text()`
 - [ ] `use_rag=False` tetap melewati retrieval sepenuhnya, tidak peduli nilai `search_method` apa pun (Module 14 tidak berubah)
+- [ ] Checkbox BM25/Vector di `chat.html` (Langkah 3) berhasil mengubah jawaban sesuai pilihan, tanpa perlu `curl`
 
-Begitu kelima hal ini terverifikasi, lanjut ke Module 19 — menggabungkan `search_bm25()` dengan `search()` lewat Reciprocal Rank Fusion (RRF), lalu memperluas switch `search_method` ini dengan opsi `"hybrid"`.
+Begitu keenam hal ini terverifikasi, lanjut ke Module 19 — menggabungkan `search_bm25()` dengan `search()` lewat Reciprocal Rank Fusion (RRF), lalu memperluas switch `search_method` ini dengan opsi `"hybrid"`.
