@@ -147,9 +147,26 @@ flowchart LR
     REQ -->|"kode aplikasi<br/>yang menjalankan"| EXEC["rag_search(query=...)"]
 ```
 
+### Contoh Tool Lain yang Umum Dipakai Agent AI (Bukan yang Dipakai NALA)
+
+`cari_dokumen_sop` di atas cuma **satu** contoh — pada agent AI secara umum (bukan spesifik NALA), tool bisa membungkus hampir semua kemampuan yang bisa ditulis jadi fungsi dengan input/output jelas. Beberapa kategori yang umum dipakai di luar NALA, supaya gambaran "apa saja yang mungkin" lebih luas dari sekadar RAG search:
+
+| Kategori tool | Contoh nyata | Dipakai untuk |
+|---|---|---|
+| **Pencarian dokumen internal** | `cari_dokumen_sop` (module ini) | Menjawab dari knowledge base sendiri — sudah dibangun Module 9-23 |
+| **Query database** | `query_data_operasional` (Module 25) | Angka/status transaksi spesifik yang tidak ada di dokumen SOP, terlalu dinamis untuk di-embed |
+| **Web search** | Tavily, SerpAPI, Bing Search API | Pertanyaan yang butuh informasi terkini di luar dokumen internal (kurs hari ini, berita terbaru) |
+| **Kalkulator/eksekusi kode** | Python REPL, code interpreter | Perhitungan matematis presisi tinggi yang LLM sering salah kalau dihitung "dalam kepala" (mis. bunga majemuk berbulan-bulan) |
+| **Kirim email/notifikasi** | SMTP tool, Slack/Teams webhook | Agent memicu aksi nyata ke sistem lain, misalnya notifikasi staff |
+| **Baca/tulis file** | File read/write tool | Agent yang perlu memproses atau menghasilkan dokumen di luar chat |
+| **Panggil API eksternal lain** | Cuaca, nilai tukar, CRM pihak ketiga | Data real-time yang bukan tanggung jawab NALA menyimpannya sendiri |
+| **Kalender/penjadwalan** | Google Calendar API tool | Agent yang perlu membuat/mengecek jadwal atas nama user |
+
+⚠️ **Kenapa NALA sengaja TIDAK memakai sebagian besar daftar ini**: NALA beroperasi di sektor finansial dengan data sensitif (Module 1) — setiap tool baru adalah **permukaan risiko baru** yang harus diaudit (bisakah tool ini bocorkan data? bisakah disalahgunakan lewat prompt injection dari dokumen yang di-ingest?). Tool eksekusi kode atau akses file bebas, misalnya, membuka risiko jauh lebih besar dibanding tool query yang dibatasi ketat seperti `cari_dokumen_sop` (cuma baca, parameter tunggal `query: string`) atau tool SQL Module 25 (dibatasi, bukan raw SQL bebas dari LLM — lihat Module 25 Bagian 2). **Total tool NALA di akhir kurikulum cuma dua**: RAG search (module ini) dan SQL query terbatas (Module 25) — desain yang sengaja sempit, bukan keterbatasan teknis, supaya RBAC dan audit logging (Module 27) tetap bisa mengontrol **persis** apa saja yang bisa dilakukan agent atas nama user tertentu. Menambah tool generik seperti web search atau eksekusi kode akan langsung memperluas cakupan audit itu secara signifikan — keputusan yang di luar cakupan training ini.
+
 ## 3. Tool-Calling Native di Ollama untuk Llama 3.2
 
-Agar LLM bisa "meminta" sebuah tool dipanggil, Ollama menyediakan parameter `tools` di endpoint `/api/chat` (bukan `/api/generate` yang dipakai `OllamaClient.generate()` sejak Module 24 — `/api/generate` tidak mendukung tools). Model family Llama 3.2 (termasuk `llama3.2:3b` yang dipakai default sepanjang training ini — lihat README utama bagian "Rekomendasi Model LLM") sudah mendukung fitur ini, itulah salah satu alasan model ini dipilih sebagai default sejak Module 24.
+Agar LLM bisa "meminta" sebuah tool dipanggil, Ollama menyediakan parameter `tools` di endpoint `/api/chat` (bukan `/api/generate` yang dipakai `OllamaClient.generate()` sejak Module 6 — `/api/generate` tidak mendukung tools). Model family Llama 3.2 (termasuk `llama3.2:3b` yang dipakai default sepanjang training ini — lihat README utama bagian "Rekomendasi Model LLM") sudah mendukung fitur ini, itulah salah satu alasan model ini dipilih sebagai default sejak Module 2.
 
 Pola kerjanya:
 
@@ -206,7 +223,7 @@ GUARDRAIL:
 
 **Langkah 2 — Tambah method `chat()` di `app/ollama_client.py`**
 
-`OllamaClient` sejak Module 24 sudah punya `generate()` (non-streaming, lewat `/api/generate`) dan `chat_stream()` (streaming, lewat `/api/chat`, dipakai `/chat/stream` sejak Module 8). Tambahkan method ketiga — non-streaming, lewat `/api/chat`, dengan dukungan `tools`:
+`OllamaClient` sejak Module 6 sudah punya `generate()` (non-streaming, lewat `/api/generate`) dan `chat_stream()` (streaming, lewat `/api/chat`, dipakai `/chat/stream` sejak Module 8). Tambahkan method ketiga — non-streaming, lewat `/api/chat`, dengan dukungan `tools`:
 
 ```python
 # app/ollama_client.py — tambahkan di dalam class OllamaClient, di bawah generate()
