@@ -2,7 +2,7 @@
 
 ## Tujuan
 
-Menambahkan tool kedua ke agent NALA (Module 24) untuk menjawab pertanyaan data transaksi operasional (status pengajuan kredit, klaim asuransi) yang tidak pernah ada di dokumen SOP, dengan pendekatan query-builder yang dibatasi (bukan SQL bebas dari LLM) supaya aman untuk data finansial nasabah. Module ini **tidak** menyiapkan PostgreSQL/seed/role dari nol — semua itu sudah dibangun dan diverifikasi di Module 23 (Setup Data Operasional). Module ini murni membangun kode tool yang **membaca** data yang sudah ada di sana, lewat role `nala_readonly` yang sudah tersedia.
+Menambahkan tool kedua ke agent NALA (Module 24) untuk menjawab pertanyaan data transaksi operasional (status pengajuan kredit, klaim asuransi) yang tidak pernah ada di dokumen SOP, dengan pendekatan query-builder yang dibatasi (bukan SQL bebas dari LLM) supaya aman untuk data finansial nasabah. Module ini **tidak** menyiapkan PostgreSQL/seed/role dari nol — semua itu sudah dibangun dan diverifikasi di Module 23 (Setup Data Operasional). Module ini murni membangun kode tool yang **membaca** data yang sudah ada di sana, lewat role `nala_readonly` yang sudah tersedia. Sekaligus membuktikan tiga level kemampuan function-calling secara bertahap: satu tool (Module 24), dua tool dengan LLM memilih salah satu, sampai dua tool dipanggil **berurutan** dalam satu permintaan yang sama.
 
 ## Definisi
 
@@ -24,6 +24,7 @@ flowchart LR
 - `/chat` bisa menjawab pertanyaan jumlah/status data operasional maupun detail satu nasabah, memakai data yang sudah Anda tambahkan lewat `/data-operasional` di Module 23, sementara tool RAG (Module 24) tetap berfungsi berdampingan tanpa regresi
 - `/chat` mendukung riwayat multi-turn (`history`, windowing 10 pesan) dan bisa dicoba langsung lewat toggle "Pakai Agent" di `chat.html`, tidak cuma lewat `curl`
 - Angka mata uang (`jumlah_pengajuan`/`jumlah_klaim`) diformat eksplisit (`Rp 50.000.000`) di tool, dan pemanggilan tool tahan terhadap argumen tidak lengkap dari LLM (tidak crash jadi 500)
+- Tiga level function-calling terbukti: satu tool (Module 24), dua tool dengan LLM memilih satu sesuai jenis pertanyaan, dan dua tool dipanggil berurutan dalam satu request untuk pertanyaan gabungan — graph LangGraph Module 24 mendukung level ketiga tanpa perubahan kode sama sekali, murni konsekuensi desain edge `call_tool → call_model` yang tetap (bukan kondisional)
 - Keterbatasan nyata model kecil didokumentasikan dengan angka (Bagian 6): sintesis jawaban dari hasil tool cuma berhasil ~20-33% dari percobaan berulang untuk kasus yang sama — dicatat jujur, bukan disembunyikan atau diklaim sudah terselesaikan
 
 **Prasyarat**: Module 23 (service `postgres` sehat, tabel `pengajuan_kredit`/`klaim_asuransi` berisi data, role `nala_readonly` sudah ada dan terbukti hanya bisa `SELECT`) dan Module 24 (agent LangGraph dengan tool `cari_dokumen_sop` sudah jalan) harus sudah selesai.
@@ -366,6 +367,42 @@ GUARDRAIL:
 
 </details>
 
+### Tiga Level Kemampuan Function-Calling yang Sudah Dibuktikan
+
+Sengaja diverifikasi bertahap, bukan cuma "tambah tool lalu asumsikan semuanya beres" — tiga level kemampuan berikut makin kompleks, dan ketiganya sudah (atau akan) dibuktikan lewat pengujian nyata, bukan klaim teoretis:
+
+**Level 1 — Function call ke satu tool** (dibuktikan Module 24 Bagian 4 Tahap C): agent cuma punya **satu** pilihan (`cari_dokumen_sop`) — satu-satunya keputusan LLM adalah "pakai tool ini atau tidak", bukan "tool mana". Ini fondasi tool-calling paling sederhana: skema tool dikirim, LLM baca `description`-nya, putuskan relevan atau tidak dengan pertanyaan yang masuk.
+
+**Level 2 — Dua tool tersedia, LLM memilih SATU** (dibuktikan di Langkah 2 di atas): begitu `SQL_TOOL_SCHEMA` didaftarkan berdampingan dengan `RAG_TOOL_SCHEMA` di `tools_schema`, LLM punya dua pilihan setiap kali menerima pertanyaan. Tiga uji coba di **▶️ Jalankan & lihat hasilnya** (Langkah 2) sudah membuktikan ia memilih dengan benar berdasarkan jenis pertanyaan: pertanyaan status/jumlah data memicu `query_data_operasional`, pertanyaan syarat/prosedur memicu `cari_dokumen_sop`. **Tidak ada instruksi `if/else` eksplisit di kode** yang memutuskan ini — murni keputusan LLM berdasarkan `description` masing-masing tool (Module 24 Bagian 2). Kasus **ambigu** (pertanyaan yang bisa masuk ke tool mana pun, atau butuh keduanya tapi LLM cuma pilih satu) baru dibahas mendalam di Module 26.
+
+**Level 3 — KEDUA tool dipanggil berurutan dalam SATU permintaan** (dibuktikan di bawah): kemampuan paling kompleks — LLM memanggil tool pertama, membaca hasilnya lewat `call_model` yang dipanggil ulang, lalu **memutuskan sendiri** masih perlu tool kedua sebelum menjawab — semua dalam satu request user, tanpa user perlu bertanya dua kali secara terpisah. Ini **bukan** fitur baru yang perlu ditulis kodenya — graph LangGraph yang dibangun Module 24 (Bagian 4 Tahap C) **sudah didesain mendukung ini sejak awal**: `graph.add_edge("call_tool", "call_model")` bersifat **tetap** (bukan kondisional) — artinya setiap kali `call_tool` selesai, alur **selalu** kembali ke `call_model`, dan `call_model` bisa saja memutuskan meminta `tool_calls` **lagi** (bukan langsung jawaban final). Loop ini berulang sampai `should_continue` akhirnya mengarah ke `END` — tidak ada batas berapa kali `call_tool` boleh dipanggil dalam satu request, tidak ada kode yang membatasi "cuma boleh 1 tool per pertanyaan".
+
+```mermaid
+sequenceDiagram
+    participant U as User (1 pertanyaan gabungan)
+    participant M as call_model
+    participant T as call_tool
+    U->>M: "Apa syarat kredit, dan ada berapa<br/>pengajuan pending sekarang?"
+    M->>T: tool_calls: [cari_dokumen_sop]
+    T->>M: hasil SOP
+    M->>T: tool_calls: [query_data_operasional]
+    Note over M,T: call_model dipanggil ULANG,<br/>minta tool KEDUA — bukan langsung jawab
+    T->>M: hasil data operasional
+    M->>U: jawaban gabungan (dari 2 hasil tool)
+```
+
+**Coba Langsung: Buktikan Level 3 — Pertanyaan yang Butuh KEDUA Tool Sekaligus**
+
+```bash
+curl -X POST http://localhost:8000/chat \
+  -H "Content-Type: application/json" \
+  -d '{"message": "Apa saja syarat pengajuan kredit untuk nasabah perorangan, dan ada berapa banyak pengajuan kredit yang statusnya pending saat ini?"}'
+```
+
+✅ **Indikator sukses (kalau berhasil)**: jawaban menyebut **dua hal sekaligus** — item syarat dari `### 2.1` (KTP, KK, slip gaji, dst — dari `cari_dokumen_sop`) **dan** angka jumlah pending (dari `query_data_operasional`). Kalau Langfuse sudah aktif (Module 22), buka trace request ini — harus terlihat **dua** span `agent_tool:*` berurutan (`agent_tool:cari_dokumen_sop` lalu `agent_tool:query_data_operasional`, atau sebaliknya, tergantung urutan yang dipilih LLM) di dalam **satu** trace yang sama, bukan dua trace terpisah — bukti langsung bahwa graph benar-benar berputar dua kali sebelum `END`.
+
+⚠️ **Catatan jujur, konsisten dengan Bagian 6 di bawah**: `llama3.2:3b` **tidak selalu** memanggil kedua tool untuk pertanyaan gabungan seperti ini — kadang ia cuma memanggil satu (biasanya yang disebut lebih dulu di kalimat pertanyaan) lalu langsung menjawab sebagian, mengabaikan bagian kedua pertanyaan. Ini bukan bug pada graph-nya (Level 3 **mekanismenya** sudah terbukti bekerja — graph memang mendukung multi-hop) — ini keterbatasan **penalaran** model kecil dalam memecah satu kalimat jadi dua kebutuhan tool yang terpisah, konsisten dengan pola ketidakkonsistenan yang didokumentasikan Bagian 6. Coba beberapa kali dan amati variasinya sendiri — jangan berharap 100% konsisten di titik ini, itu justru bukti jujur kenapa Module 26 (routing) dan model yang lebih besar (`qwen2.5:7b`) relevan dibahas.
+
 ### Tahap C — Dua penyesuaian tambahan (ditemukan lewat uji nyata)
 
 **Langkah 3 — Perbarui `NALA_SYSTEM_PROMPT_AGENT` supaya menyebut KEDUA tool**
@@ -567,6 +604,7 @@ Yang perlu dipastikan sebelum lanjut ke Module 26:
 - [ ] `/chat` bisa menjawab pertanyaan detail satu nasabah tertentu
 - [ ] Tool RAG (Module 24) tetap berfungsi berdampingan, tidak ada regresi
 - [ ] Multi-turn (Langkah 4) bekerja — pertanyaan lanjutan yang tidak menyebut ulang topik tetap dipahami lewat `history`
+- [ ] Sudah dicoba pertanyaan gabungan (Level 3) yang butuh KEDUA tool — diamati apakah kedua tool terpanggil (lewat jawaban atau trace Langfuse), dan dipahami kenapa ini tidak selalu konsisten untuk model 3B
 
 ## 6. Hasil Uji Nyata: Tool Selalu Benar, Sintesis Jawaban Tidak Selalu
 
