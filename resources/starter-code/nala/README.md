@@ -1,6 +1,6 @@
 # NALA — Starter Code
 
-Ini adalah satu-satunya folder kerja kode NALA untuk seluruh kurikulum **AI_NALA** (31 modul). Tidak ada lagi pembagian per-hari atau snapshot terpisah — kode di sini tumbuh **di tempat yang sama**, bertahap dari Module 1 sampai Module 31, mengikuti instruksi "Panduan Praktik" di tiap `materi.md`.
+Ini adalah satu-satunya folder kerja kode NALA untuk seluruh kurikulum **AI_NALA** (32 modul). Tidak ada lagi pembagian per-hari atau snapshot terpisah — kode di sini tumbuh **di tempat yang sama**, bertahap dari Module 1 sampai Module 32, mengikuti instruksi "Panduan Praktik" di tiap `materi.md`.
 
 Isi folder ini saat ini mencerminkan state **akhir** (setelah seluruh 27 modul selesai dibangun) — dipakai sebagai referensi/jawaban kalau kode Anda sendiri (dibangun mengikuti materi tahap demi tahap) perlu dicocokkan.
 

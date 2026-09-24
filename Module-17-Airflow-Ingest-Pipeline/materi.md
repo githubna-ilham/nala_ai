@@ -91,7 +91,7 @@ flowchart TD
 
 ### 3.3 Trade-Off: Kenapa Mode `standalone` untuk Training Ini
 
-**Constraint:** Prasyarat training adalah minimum 16GB RAM **untuk semua services Module 7-30** (Ollama, FastAPI, OpenSearch, PostgreSQL operational data, Langfuse, LangGraph, **plus Airflow**). Dengan prasyarat ini, tidak cukup ruang untuk Airflow production setup.
+**Constraint:** Prasyarat training adalah minimum 16GB RAM **untuk semua services Module 7-31** (Ollama, FastAPI, OpenSearch, PostgreSQL operational data, Langfuse, LangGraph, **plus Airflow**). Dengan prasyarat ini, tidak cukup ruang untuk Airflow production setup.
 
 **Keputusan:** Gunakan Airflow `standalone` mode untuk training — database metadata SQLite built-in, scheduler+webserver dalam satu process, executor LocalExecutor, monitoring basic logs via Airflow UI.
 

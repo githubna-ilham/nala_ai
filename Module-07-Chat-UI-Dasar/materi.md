@@ -33,7 +33,7 @@ sequenceDiagram
 
 ## 1. Kenapa Mulai dari UI, Bukan Dokumen
 
-Module 1-6 sudah membuktikan bahwa NALA bisa menjawab lewat `curl` — tapi `curl` bukan sesuatu yang akan dipakai staff PT Nusantara Finance sehari-hari. Sebelum Module 7-17 menumpuk kompleksitas baru (chunking, embedding, vector store, Airflow), langkah pertama adalah memastikan NALA bisa diakses lewat **antarmuka web** yang sama, yang nantinya dipakai sepanjang Module 7-30 — tanpa RAG dulu sama sekali.
+Module 1-6 sudah membuktikan bahwa NALA bisa menjawab lewat `curl` — tapi `curl` bukan sesuatu yang akan dipakai staff PT Nusantara Finance sehari-hari. Sebelum Module 7-17 menumpuk kompleksitas baru (chunking, embedding, vector store, Airflow), langkah pertama adalah memastikan NALA bisa diakses lewat **antarmuka web** yang sama, yang nantinya dipakai sepanjang Module 7-31 — tanpa RAG dulu sama sekali.
 
 Ini bukan langkah kosmetik. Ada dua hal konkret yang divalidasi di sini:
 
@@ -73,7 +73,7 @@ Dibanding starter code Module 1-6, ada tiga penambahan di `Nala/`. Daripada lang
 **Langkah 0 — Prasyarat sebelum mulai**
 
 - Sudah menyelesaikan **Module 1-6** (Docker Desktop terinstall, `llama3.2:3b` pernah dipakai, familiar dengan `docker compose up --build`).
-- **`Nala/`** adalah satu-satunya folder kerja Anda, dipakai sejak Module 1-6 dan terus sama sepanjang Module 7-30 — panduan Module 7-17 membangunnya **bertahap, module demi module, langsung di tempat**, bukan disalin ke folder baru. `ollama_client.py`, `system_prompt.py`, `main.py`, `docker-compose.yml`, dan seterusnya sudah ada di sana dari Module 1-6. Konsekuensinya: **tidak ada folder lain untuk dipindahkan, dan tidak ada container yang perlu dimatikan** — container Ollama yang sudah jalan sejak Module 1-6 terus dipakai apa adanya (project Docker Compose-nya sama, karena foldernya sama), dan model yang sudah di-pull otomatis ikut terbawa, tidak perlu di-pull ulang.
+- **`Nala/`** adalah satu-satunya folder kerja Anda, dipakai sejak Module 1-6 dan terus sama sepanjang Module 7-31 — panduan Module 7-17 membangunnya **bertahap, module demi module, langsung di tempat**, bukan disalin ke folder baru. `ollama_client.py`, `system_prompt.py`, `main.py`, `docker-compose.yml`, dan seterusnya sudah ada di sana dari Module 1-6. Konsekuensinya: **tidak ada folder lain untuk dipindahkan, dan tidak ada container yang perlu dimatikan** — container Ollama yang sudah jalan sejak Module 1-6 terus dipakai apa adanya (project Docker Compose-nya sama, karena foldernya sama), dan model yang sudah di-pull otomatis ikut terbawa, tidak perlu di-pull ulang.
 
 ⚠️ **Naikkan alokasi RAM Docker Desktop sebelum Module 17.** Module 7-17 menambahkan dua service baru di atas stack Module 1-6: **OpenSearch** (vector store, mulai Module 12) dan **Airflow** (orchestrator, mode `standalone`, mulai Module 17) — keduanya jauh lebih berat dibanding FastAPI/Ollama saja: OpenSearch adalah JVM yang butuh heap tersendiri, dan Airflow standalone menjalankan webserver + scheduler + database sekaligus dalam satu container. Kalau di Module 1-6 Anda mengalokasikan Docker Desktop di batas minimal (8–12GB), **naikkan ke 16GB+**. Ikuti langkah yang sama seperti **Langkah 0 di `Module-04-Setup-Infra-Docker-Compose/materi.md`, section 3.4** (Docker Desktop → ⚙️ Settings → tab Resources):
 

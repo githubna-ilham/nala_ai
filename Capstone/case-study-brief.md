@@ -9,7 +9,7 @@ PT Nusantara Finance baru saja meluncurkan lini bisnis baru: **leasing kendaraan
 
 ## Tugas Capstone
 
-Gunakan NALA (hasil Module 1-31 Anda) untuk menjawab kebutuhan Divisi Leasing di atas. Secara konkret:
+Gunakan NALA (hasil Module 1-32 Anda) untuk menjawab kebutuhan Divisi Leasing di atas. Secara konkret:
 
 ### 1. Tambahkan dokumen SOP baru ke knowledge base
 
@@ -34,7 +34,7 @@ Pastikan agent NALA bisa membedakan dengan benar:
 
 ### 4. Review keamanan untuk kasus baru ini
 
-Terapkan checklist Module 29 Bagian 3 khusus untuk data leasing baru ini — misalnya: apakah data kontrak korporat butuh pembatasan akses berbeda dari data kredit perorangan (RBAC)? Apakah ada risiko prompt injection baru kalau dokumen SOP leasing berasal dari draft yang belum direview penuh?
+Terapkan checklist Module 30 Bagian 3 khusus untuk data leasing baru ini — misalnya: apakah data kontrak korporat butuh pembatasan akses berbeda dari data kredit perorangan (RBAC)? Apakah ada risiko prompt injection baru kalau dokumen SOP leasing berasal dari draft yang belum direview penuh?
 
 ## Yang Dinilai Saat Demo Capstone
 
