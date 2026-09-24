@@ -1,8 +1,8 @@
-# Module 27: RBAC & Audit Logging
+# Module 28: RBAC & Audit Logging
 
 ## Tujuan
 
-Membatasi akses tool SQL (Module 25) berdasarkan role staff (RBAC) dan mencatat setiap percobaan akses — baik yang diizinkan maupun ditolak — ke audit trail permanen, sebagai penutup rangkaian Module 23-27 yang relevan untuk konteks kepatuhan institusi finansial.
+Membatasi akses tool SQL (Module 25) berdasarkan role staff (RBAC) dan mencatat setiap percobaan akses — baik yang diizinkan maupun ditolak — ke audit trail permanen, sebagai penutup rangkaian Module 23-28 yang relevan untuk konteks kepatuhan institusi finansial.
 
 ## Definisi
 
@@ -30,7 +30,7 @@ flowchart LR
 
 ## 1. Kenapa Ini Bukan "Fitur Tambahan", Tapi Syarat untuk Data Finansial
 
-Sampai akhir Module 26, tool `query_data_operasional` (Module 25) bisa dipicu **siapa pun** yang mengirim request ke `/chat` — tidak ada pengecekan sama sekali siapa yang bertanya, atau apakah orang itu berhak melihat data pengajuan kredit/klaim asuransi nasabah. Untuk demo dan latihan sejauh ini itu cukup, tapi PT Nusantara Finance adalah institusi finansial — di dunia nyata, sektor ini diatur ketat (OJK, dan prinsip umum tata kelola data finansial): siapa yang mengakses data nasabah, kapan, dan untuk keperluan apa **harus bisa dijawab** kalau sewaktu-waktu diaudit, baik oleh auditor internal maupun regulator eksternal.
+Sampai akhir Module 27, tool `query_data_operasional` (Module 25) bisa dipicu **siapa pun** yang mengirim request ke `/chat` — tidak ada pengecekan sama sekali siapa yang bertanya, atau apakah orang itu berhak melihat data pengajuan kredit/klaim asuransi nasabah. Untuk demo dan latihan sejauh ini itu cukup, tapi PT Nusantara Finance adalah institusi finansial — di dunia nyata, sektor ini diatur ketat (OJK, dan prinsip umum tata kelola data finansial): siapa yang mengakses data nasabah, kapan, dan untuk keperluan apa **harus bisa dijawab** kalau sewaktu-waktu diaudit, baik oleh auditor internal maupun regulator eksternal.
 
 Dua kebutuhan berbeda tapi saling melengkapi:
 
@@ -69,7 +69,7 @@ sequenceDiagram
 |---|---|---|---|
 | `staff_umum` | ✅ Diizinkan | ❌ Ditolak | Staff customer service umum, hanya perlu jawab pertanyaan prosedur |
 | `staff_finance` | ✅ Diizinkan | ✅ Diizinkan | Staff yang menangani pengajuan kredit/klaim, perlu lihat status transaksi |
-| `supervisor` | ✅ Diizinkan | ✅ Diizinkan | Sama seperti `staff_finance` untuk cakupan Module 23-27 — di produksi biasanya juga punya akses laporan agregat lebih luas, di luar cakupan latihan ini |
+| `supervisor` | ✅ Diizinkan | ✅ Diizinkan | Sama seperti `staff_finance` untuk cakupan Module 23-28 — di produksi biasanya juga punya akses laporan agregat lebih luas, di luar cakupan latihan ini |
 
 Semua role tetap bisa memakai tool RAG — dokumen SOP bukan data sensitif per-nasabah, wajar diakses siapa pun yang bekerja di perusahaan. Yang dibatasi murni akses ke `query_data_operasional`, karena tool itu menyentuh data transaksi nasabah.
 
@@ -79,7 +79,7 @@ Empat tahap: **Tahap A** menambah tabel `audit_log` dan role database khusus unt
 
 ### Tahap A — Tabel `audit_log` dan role database khusus untuk menulis log
 
-**Prasyarat sebelum mulai:** Module 26 selesai — agent dengan routing dua-tool dan pengaman `MAX_TOOL_ROUNDS`/`force_answer` harus sudah jalan sebelum mulai di sini.
+**Prasyarat sebelum mulai:** Module 27 selesai — agent dengan routing dua-tool dan pengaman `MAX_TOOL_ROUNDS`/`force_answer` harus sudah jalan sebelum mulai di sini.
 
 **Langkah 1 — Tambah tabel dan role baru di `db/seed.sql`**
 
@@ -129,7 +129,7 @@ docker compose exec postgres psql -U nala_app -d nala_operasional -c "DELETE FRO
 
 ```
 Tambah tabel audit_log dan role database khusus untuk menulis log
-(Module 27, Tahap A) — role INSERT+SELECT saja, tanpa UPDATE/
+(Module 28, Tahap A) — role INSERT+SELECT saja, tanpa UPDATE/
 DELETE.
 
 GOAL:
@@ -239,7 +239,7 @@ docker compose exec postgres psql -U nala_admin -d nala_operasional -c "SELECT *
 
 ```
 Buat fungsi pencatatan audit log yang memakai role database read-write
-terbatas (Module 27, Tahap B) — belum disambungkan ke endpoint
+terbatas (Module 28, Tahap B) — belum disambungkan ke endpoint
 mana pun.
 
 GOAL:
@@ -328,7 +328,7 @@ def build_agent(ollama_client, vector_store, ollama_base_url: str):
 
         return {"messages": tool_messages, "called_tools": called}
 
-    # should_continue, force_answer, dan struktur graph TIDAK berubah dari Module 26
+    # should_continue, force_answer, dan struktur graph TIDAK berubah dari Module 27
     ...
 ```
 
@@ -350,7 +350,7 @@ docker compose up --build api
 ```
 Tambah RBAC ke agent — role membatasi tool mana yang ditawarkan ke
 LLM, DAN diverifikasi ulang saat eksekusi tool (pertahanan berlapis)
-(Module 27, Tahap C).
+(Module 28, Tahap C).
 
 GOAL:
 - Di Nala/app/agent.py:
@@ -376,7 +376,7 @@ GOAL:
      called}.
 
 CONTEXT:
-- should_continue, force_answer (Module 26), dan struktur graph
+- should_continue, force_answer (Module 27), dan struktur graph
   (add_node/add_conditional_edges/add_edge) TIDAK berubah di langkah
   ini.
 - called_tools akan dipakai app/main.py di Tahap D untuk audit log —
@@ -443,7 +443,7 @@ def chat(request: ChatRequest) -> ChatResponse:
 ```
 
 - **`ChatRequest` bertambah dua field opsional** (`user_id`, `role`, keduanya dengan default) — bukan perubahan yang merusak (*breaking change*): request lama tanpa kedua field ini (mis. dari `chat.html` yang belum diperbarui, atau script lama) tetap valid, otomatis diperlakukan sebagai `role: "staff_umum"` (paling terbatas — **fail-safe**, bukan fail-open, prinsip keamanan penting: kalau role tidak disebutkan, asumsikan yang paling rendah hak aksesnya, bukan yang paling tinggi).
-- **Satu baris audit per tool yang dicoba** (termasuk yang ditolak), bukan satu baris per pertanyaan — kalau user memicu dua tool dalam satu pertanyaan (skenario "kenapa ditolak" di Module 26 Bagian 3), keduanya tercatat terpisah, masing-masing dengan status izin sendiri.
+- **Satu baris audit per tool yang dicoba** (termasuk yang ditolak), bukan satu baris per pertanyaan — kalau user memicu dua tool dalam satu pertanyaan (skenario "kenapa ditolak" di Module 27 Bagian 3), keduanya tercatat terpisah, masing-masing dengan status izin sendiri.
 - **Pertanyaan tanpa tool sama sekali** (mis. sapaan) tetap dicatat satu baris dengan `tool_dipanggil=None` — audit trail NALA mencakup **semua** interaksi, bukan cuma yang menyentuh data sensitif, supaya pola pemakaian keseluruhan juga bisa dianalisis kalau diperlukan.
 
 **▶️ Jalankan & lihat hasilnya**
@@ -495,7 +495,7 @@ docker compose exec postgres psql -U nala_admin -d nala_operasional -c \
 
 ```
 Sambungkan role ke request /chat dan panggil audit logging setelah
-agent selesai memproses (Module 27, Tahap D).
+agent selesai memproses (Module 28, Tahap D).
 
 GOAL:
 - Di Nala/app/main.py:
@@ -540,14 +540,14 @@ GUARDRAIL:
 
 - **`message.tool_calls` selalu kosong padahal pertanyaannya jelas butuh tool**: cek versi Ollama (`docker compose exec ollama ollama --version`) — dukungan tool-calling butuh versi yang cukup baru. Cek juga `RAG_TOOL_SCHEMA`/`SQL_TOOL_SCHEMA` terkirim dengan benar sebagai parameter `tools` di `OllamaClient.chat()` (Module 24 Bagian 3, ⚠️ catatan kejujuran teknis).
 - **`psycopg.OperationalError: connection to server ... failed`**: kemungkinan besar DSN masih memakai `localhost` padahal dipanggil dari dalam container `api` — harus memakai nama service Docker Compose (`postgres`), lihat catatan di Module 23 Langkah 3 dan Langkah 2 di atas. Cek juga `postgres` sudah `healthy` (`docker compose ps`).
-- **`permission denied for table ...` padahal seharusnya diizinkan**: cek role/DSN yang dipakai — tool SQL (Module 25) harus memakai `nala_readonly`, form `/data-operasional` (Module 23) harus memakai `nala_writer`, audit logging (Module 27) harus memakai `nala_app`; tertukar salah satunya akan memicu `permission denied` untuk operasi yang seharusnya sah (mis. `nala_readonly` dipakai untuk `INSERT` ke `audit_log` akan gagal, karena `nala_readonly` tidak pernah diberi `GRANT` ke tabel itu).
+- **`permission denied for table ...` padahal seharusnya diizinkan**: cek role/DSN yang dipakai — tool SQL (Module 25) harus memakai `nala_readonly`, form `/data-operasional` (Module 23) harus memakai `nala_writer`, audit logging (Module 28) harus memakai `nala_app`; tertukar salah satunya akan memicu `permission denied` untuk operasi yang seharusnya sah (mis. `nala_readonly` dipakai untuk `INSERT` ke `audit_log` akan gagal, karena `nala_readonly` tidak pernah diberi `GRANT` ke tabel itu).
 - **Seed data tidak berubah setelah mengedit `db/seed.sql`**: script init PostgreSQL cuma jalan sekali saat volume database masih kosong — kalau volume `postgres_data` sudah ada dari percobaan sebelumnya, `docker compose up` **tidak** menjalankan ulang seed. Hapus volume dulu (`docker compose down && docker volume rm nala_postgres_data`) lalu `docker compose up -d --build postgres` lagi. Ini juga penyebab paling umum kalau tabel/role baru "tidak muncul" setelah mengikuti Langkah 1 — ingat, reset volume juga menghapus data hasil form (lihat catatan di Langkah 1).
-- **Agent tampak "menggantung" lama (timeout) untuk pertanyaan yang butuh dua tool**: wajar sampai batas tertentu — setiap putaran tool berarti minimal satu panggilan tambahan ke `llama3.2:3b` (Module 26 Bagian 1), jadi pertanyaan yang butuh dua tool berurutan otomatis lebih lambat dari pertanyaan satu-tool. Kalau benar-benar tidak pernah selesai (bukan cuma lambat), pastikan `MAX_TOOL_ROUNDS`/`force_answer` (Module 26 Bagian 5) sudah terpasang dengan benar.
+- **Agent tampak "menggantung" lama (timeout) untuk pertanyaan yang butuh dua tool**: wajar sampai batas tertentu — setiap putaran tool berarti minimal satu panggilan tambahan ke `llama3.2:3b` (Module 27 Bagian 1), jadi pertanyaan yang butuh dua tool berurutan otomatis lebih lambat dari pertanyaan satu-tool. Kalau benar-benar tidak pernah selesai (bukan cuma lambat), pastikan `MAX_TOOL_ROUNDS`/`force_answer` (Module 27 Bagian 5) sudah terpasang dengan benar.
 - **`docker compose exec postgres psql -U nala_admin ...` minta password / gagal autentikasi**: pastikan env var `POSTGRES_ADMIN_PASSWORD` (kalau di-override di `.env` atau shell) konsisten dengan yang dipakai saat container `postgres` dibuat — kalau volume sudah lama ada dengan password lama, password baru di env var tidak otomatis berlaku sampai volume direset (sama seperti poin seed data di atas).
-- **Routing tool terasa buruk terus-menerus meski sudah memperbaiki `description` (Module 26 Bagian 4.b)**: pertimbangkan opsi `qwen2.5:7b` (Module 26 Bagian 4.b Langkah 3) **hanya** kalau laptop punya RAM 32GB+ — jangan dipaksakan di laptop 16GB yang sudah menjalankan Ollama + OpenSearch + Airflow + PostgreSQL bersamaan, risiko container ter-*kill* karena kehabisan memory jauh lebih mengganggu daripada akurasi routing yang belum sempurna.
-- **Error umum lain** (`no configuration file provided`, `failed to read dockerfile`, port sudah dipakai, dsb.): lihat Troubleshooting di bagian praktik materi.md module-module sebelumnya (Module 7-17) — penyebab dan solusinya sama, tidak spesifik rangkaian Module 23-27.
+- **Routing tool terasa buruk terus-menerus meski sudah memperbaiki `description` (Module 27 Bagian 4.b)**: pertimbangkan opsi `qwen2.5:7b` (Module 27 Bagian 4.b Langkah 3) **hanya** kalau laptop punya RAM 32GB+ — jangan dipaksakan di laptop 16GB yang sudah menjalankan Ollama + OpenSearch + Airflow + PostgreSQL bersamaan, risiko container ter-*kill* karena kehabisan memory jauh lebih mengganggu daripada akurasi routing yang belum sempurna.
+- **Error umum lain** (`no configuration file provided`, `failed to read dockerfile`, port sudah dipakai, dsb.): lihat Troubleshooting di bagian praktik materi.md module-module sebelumnya (Module 7-17) — penyebab dan solusinya sama, tidak spesifik rangkaian Module 23-28.
 
-**📄 Kode lengkap Module 27** (`app/audit.py`, potongan relevan `app/agent.py` dan `app/main.py`, `db/seed.sql` tambahan — sudah ditampilkan utuh di Langkah 1-4 di atas).
+**📄 Kode lengkap Module 28** (`app/audit.py`, potongan relevan `app/agent.py` dan `app/main.py`, `db/seed.sql` tambahan — sudah ditampilkan utuh di Langkah 1-4 di atas).
 
 ## 4. Hasil Uji Nyata: Barrier Data Aman, Tapi Audit Trail Punya Celah
 
@@ -577,28 +577,28 @@ Bandingkan dengan ekspektasi awal Bagian 3 Tahap D Langkah 4 yang menulis `tool_
 
 **Kenapa ini penting untuk konteks kepatuhan (bukan cuma detail teknis)**: dari sudut pandang audit compliance, "staff yang tidak berwenang mencoba mengakses data nasabah" adalah salah satu kejadian yang **paling** perlu terlihat di jejak audit — justru lebih penting daripada mencatat akses yang berhasil. Implementasi saat ini punya gap di titik itu: filter tool di level `call_model` (lapis pertama, Bagian 3 Tahap C) efektif mencegah kebocoran data, tapi **efek sampingnya** justru menyembunyikan percobaan itu dari audit trail, karena `call_tool` (tempat logging keputusan izin ditulis) tidak pernah kebagian giliran.
 
-### c. Mitigasi yang belum diimplementasikan (dicatat untuk Module 28-31/pengembangan lanjutan)
+### c. Mitigasi yang belum diimplementasikan (dicatat untuk Module 30-32/pengembangan lanjutan)
 
-Perbaikan paling langsung: bandingkan `state["role"]` dengan permintaan aktual di `call_model` **sebelum** memanggil `ollama_client.chat()` — kalau isi pesan user mengandung sinyal kuat butuh data operasional (sulit dideteksi robust tanpa NLU tambahan), atau lebih sederhana: selalu sertakan `SQL_TOOL_SCHEMA` ke **semua** role saat memanggil model, tapi tetap blokir eksekusinya di `call_tool` (lapis kedua) seperti sudah dirancang — pendekatan ini mengorbankan sedikit "kebersihan" filter tapi memastikan `call_tool` (dan pencatatan audit-nya) selalu kebagian giliran untuk tool SQL, apa pun rolenya. Trade-off-nya: model tetap "tahu" tool itu ada meski tidak boleh dipakai role tertentu, sedikit menambah panjang prompt tool yang dikirim ke Ollama. Ini **belum diimplementasikan** di rangkaian Module 23-27 — dicatat di sini sebagai temuan jujur untuk didiskusikan, bukan diperbaiki diam-diam supaya materi terlihat sempurna.
+Perbaikan paling langsung: bandingkan `state["role"]` dengan permintaan aktual di `call_model` **sebelum** memanggil `ollama_client.chat()` — kalau isi pesan user mengandung sinyal kuat butuh data operasional (sulit dideteksi robust tanpa NLU tambahan), atau lebih sederhana: selalu sertakan `SQL_TOOL_SCHEMA` ke **semua** role saat memanggil model, tapi tetap blokir eksekusinya di `call_tool` (lapis kedua) seperti sudah dirancang — pendekatan ini mengorbankan sedikit "kebersihan" filter tapi memastikan `call_tool` (dan pencatatan audit-nya) selalu kebagian giliran untuk tool SQL, apa pun rolenya. Trade-off-nya: model tetap "tahu" tool itu ada meski tidak boleh dipakai role tertentu, sedikit menambah panjang prompt tool yang dikirim ke Ollama. Ini **belum diimplementasikan** di rangkaian Module 23-28 — dicatat di sini sebagai temuan jujur untuk didiskusikan, bukan diperbaiki diam-diam supaya materi terlihat sempurna.
 
 ## 5. Trade-off yang Diambil (dan yang Sengaja Ditinggalkan)
 
 Sesuai prinsip kurikulum ini untuk jujur soal keterbatasan (lihat catatan retrieval Module 9-22), berikut yang **tidak** diselesaikan module ini:
 
-- **Autentikasi sungguhan tidak dibangun** (Bagian 1) — `role`/`user_id` dari body request adalah simulasi, bukan mekanisme aman. Ini catatan paling penting untuk dibawa ke Module 28-31/produksi: RBAC di atas fondasi yang tidak terautentikasi cuma berguna untuk demo, bukan untuk deployment nyata.
-- **Audit log bisa "kebanjiran" kalau trafik tinggi** — setiap tool yang dicoba (termasuk yang ditolak) menulis satu baris `INSERT` sinkron sebelum response dikirim ke user, menambah latency kecil ke tiap request yang memicu tool. Untuk skala training ini dampaknya tidak terasa; untuk produksi dengan trafik tinggi, pola yang lebih matang biasanya menulis audit log secara asinkron/lewat queue supaya tidak memperlambat response ke user — di luar cakupan rangkaian Module 23-27.
+- **Autentikasi sungguhan tidak dibangun** (Bagian 1) — `role`/`user_id` dari body request adalah simulasi, bukan mekanisme aman. Ini catatan paling penting untuk dibawa ke Module 30-32/produksi: RBAC di atas fondasi yang tidak terautentikasi cuma berguna untuk demo, bukan untuk deployment nyata.
+- **Audit log bisa "kebanjiran" kalau trafik tinggi** — setiap tool yang dicoba (termasuk yang ditolak) menulis satu baris `INSERT` sinkron sebelum response dikirim ke user, menambah latency kecil ke tiap request yang memicu tool. Untuk skala training ini dampaknya tidak terasa; untuk produksi dengan trafik tinggi, pola yang lebih matang biasanya menulis audit log secara asinkron/lewat queue supaya tidak memperlambat response ke user — di luar cakupan rangkaian Module 23-28.
 - **Role di module ini hardcoded jadi tiga pilihan tetap** (`staff_umum`, `staff_finance`, `supervisor`) — sistem RBAC produksi biasanya menyimpan role di tabel terpisah yang bisa dikelola admin tanpa deploy ulang kode. Untuk kurikulum ini, tiga role cukup untuk mendemonstrasikan mekanismenya.
-- **`ringkasan_data_diakses` di `audit_log` belum diisi** (masih `None` di semua pemanggilan `log_audit()`, lihat Tahap D) — kolom ini sengaja disiapkan skemanya untuk pengembangan lanjutan (mis. mencatat `nasabah_id` spesifik yang diakses per query), tapi mengisinya butuh mem-parsing argumen tool lebih detail per jenis tool, di luar cakupan waktu rangkaian Module 23-27. Disebutkan di sini supaya kita tahu ini keterbatasan yang disengaja, bukan kolom yang terlupa.
+- **`ringkasan_data_diakses` di `audit_log` belum diisi** (masih `None` di semua pemanggilan `log_audit()`, lihat Tahap D) — kolom ini sengaja disiapkan skemanya untuk pengembangan lanjutan (mis. mencatat `nasabah_id` spesifik yang diakses per query), tapi mengisinya butuh mem-parsing argumen tool lebih detail per jenis tool, di luar cakupan waktu rangkaian Module 23-28. Disebutkan di sini supaya kita tahu ini keterbatasan yang disengaja, bukan kolom yang terlupa.
 - **Gap audit untuk role tidak berwenang** (Bagian 4.b, ditemukan lewat pengujian, bukan disengaja) — percobaan akses SQL oleh role yang tidak berwenang tidak tercatat sebagai percobaan tool di `audit_log` (`tool_dipanggil` tetap `NULL`), karena filter tool di `call_model` mencegah `tool_calls` asli terbentuk sebelum `call_tool` (tempat logging keputusan izin) sempat berjalan. Data tetap aman (tidak ada query yang benar-benar dieksekusi), tapi jejak auditnya tidak selengkap yang diasumsikan rencana awal — mitigasi belum diimplementasikan, lihat Bagian 4.c.
 
 ## 6. Apa yang TIDAK Ada di Module Ini
 
 - Login/session/JWT sungguhan — lihat Bagian 1 dan Bagian 5.
 - Audit logging asinkron/queue — lihat Bagian 5.
-- Mitigasi gap audit untuk percobaan akses role tidak berwenang (Bagian 4.b-c) — teridentifikasi lewat pengujian, belum diperbaiki di rangkaian Module 23-27.
-- UI khusus NALA untuk melihat audit trail (mis. halaman `/audit-log` custom seperti `/data-operasional`) — bisa jadi bahan capstone (Module 28-31) kalau kelompok tertentu ingin menambahkannya. Untuk kebutuhan langsung, **Module 28** menambahkan **Adminer** (`http://localhost:8081`, image generik `adminer:latest`, bukan dibuat khusus untuk NALA) ke `docker-compose.yml` sebagai GUI database ringan — jauh lebih hemat RAM dibanding pgAdmin, penting karena laptop kita sudah menjalankan banyak service sekaligus (Ollama, OpenSearch, PostgreSQL, Airflow, Langfuse). Belum tersedia di module ini — kredensial di bawah baru relevan begitu Anda sampai di Module 28.
+- Mitigasi gap audit untuk percobaan akses role tidak berwenang (Bagian 4.b-c) — teridentifikasi lewat pengujian, belum diperbaiki di rangkaian Module 23-28.
+- UI khusus NALA untuk melihat audit trail (mis. halaman `/audit-log` custom seperti `/data-operasional`) — bisa jadi bahan capstone (Module 30-32) kalau kelompok tertentu ingin menambahkannya. Untuk kebutuhan langsung, **Module 29** menambahkan **Adminer** (`http://localhost:8081`, image generik `adminer:latest`, bukan dibuat khusus untuk NALA) ke `docker-compose.yml` sebagai GUI database ringan — jauh lebih hemat RAM dibanding pgAdmin, penting karena laptop kita sudah menjalankan banyak service sekaligus (Ollama, OpenSearch, PostgreSQL, Airflow, Langfuse). Belum tersedia di module ini — kredensial di bawah baru relevan begitu Anda sampai di Module 29.
 
-  Login Adminer (`http://localhost:8081`, mulai Module 28) pakai salah satu kredensial berikut (default, kecuali `POSTGRES_ADMIN_PASSWORD` di-override lewat `.env`):
+  Login Adminer (`http://localhost:8081`, mulai Module 29) pakai salah satu kredensial berikut (default, kecuali `POSTGRES_ADMIN_PASSWORD` di-override lewat `.env`):
 
   | Field | Akses penuh (`nala_admin`) | Akses terbatas ke `audit_log` saja (`nala_app`) |
   |---|---|---|
@@ -612,7 +612,7 @@ Sesuai prinsip kurikulum ini untuk jujur soal keterbatasan (lihat catatan retrie
 
 ## 7. Checkpoint Praktik
 
-Langkah eksekusi lengkap ada di Bagian 3 (Tahap A-D, Langkah 1-4) di atas. Yang perlu dipastikan sebelum rangkaian Module 23-27 dianggap selesai:
+Langkah eksekusi lengkap ada di Bagian 3 (Tahap A-D, Langkah 1-4) di atas. Yang perlu dipastikan sebelum rangkaian Module 23-28 dianggap selesai:
 
 - [ ] Role `staff_umum` **tidak berhasil** mendapatkan data operasional (jawaban JSON mentah atau pesan lain — bukan angka data sungguhan); pahami dari Bagian 4.a-b bahwa ini **tidak** otomatis tercatat di `audit_log` sebagai percobaan yang ditolak (`tool_dipanggil` tetap kosong) — ini gap nyata, bukan yang seharusnya diverifikasi "berhasil ditolak dengan rapi"
 - [ ] Role `staff_finance`/`supervisor` berhasil memicu tool SQL, tercatat di `audit_log` dengan `tool_dipanggil='query_data_operasional'`, `akses_diizinkan=true`
@@ -620,11 +620,11 @@ Langkah eksekusi lengkap ada di Bagian 3 (Tahap A-D, Langkah 1-4) di atas. Yang 
 - [ ] `audit_log` tidak bisa di-`DELETE`/`UPDATE` lewat role `nala_app` (diverifikasi lewat `psql -U nala_app`)
 - [ ] Tool RAG (Module 24) tetap bisa diakses semua role tanpa pengecualian, termasuk `staff_umum`
 
-## Kesimpulan Module 23-27: NALA Jadi Agentic
+## Kesimpulan Module 23-28: NALA Jadi Agentic
 
-Module 23-27 mengubah NALA dari sistem yang selalu menjalankan urutan langkah tetap (RAG chain Module 9-22) menjadi agent yang **memutuskan sendiri** kapan mencari dokumen, kapan mengambil data operasional, kapan menolak karena tidak berwenang — dengan jejak audit atas setiap keputusan itu. Empat module saling membangun: Module 24 memberi fondasi graph + tool pertama (refactor RAG lama), Module 25 menambah tool kedua dengan disiplin keamanan berlapis (whitelist, parameterized query, role database read-only), Module 26 membuktikan graph yang sama menangani dua tool (termasuk kasus butuh keduanya) tanpa perubahan struktural, dan Module 27 menutup dengan RBAC + audit yang relevan langsung untuk konteks kepatuhan PT Nusantara Finance sebagai institusi finansial — **dengan catatan jujur (Bagian 4) bahwa barrier data terbukti aman lewat pengujian nyata, tapi audit trail-nya sendiri punya gap yang belum diperbaiki untuk kasus role tidak berwenang**.
+Module 23-28 mengubah NALA dari sistem yang selalu menjalankan urutan langkah tetap (RAG chain Module 9-22) menjadi agent yang **memutuskan sendiri** kapan mencari dokumen, kapan mengambil data operasional, kapan menolak karena tidak berwenang — dengan jejak audit atas setiap keputusan itu. Empat module saling membangun: Module 24 memberi fondasi graph + tool pertama (refactor RAG lama), Module 25 menambah tool kedua dengan disiplin keamanan berlapis (whitelist, parameterized query, role database read-only), Module 27 membuktikan graph yang sama menangani dua tool (termasuk kasus butuh keduanya) tanpa perubahan struktural, dan Module 28 menutup dengan RBAC + audit yang relevan langsung untuk konteks kepatuhan PT Nusantara Finance sebagai institusi finansial — **dengan catatan jujur (Bagian 4) bahwa barrier data terbukti aman lewat pengujian nyata, tapi audit trail-nya sendiri punya gap yang belum diperbaiki untuk kasus role tidak berwenang**.
 
-Yang **belum** selesai secara jujur: autentikasi sungguhan (Bagian 1, Bagian 5), skala produksi untuk audit logging (Bagian 5), gap audit trail untuk percobaan akses ditolak (Bagian 4), dan kualitas routing yang bergantung pada model kecil (Module 26 Bagian 4) — semuanya bahan diskusi terbuka menuju Module 28-31, yang akan men-deploy seluruh stack ini (termasuk PostgreSQL dan service baru dari rangkaian Module 23-27 lainnya) sebagai satu sistem produksi dan mempersiapkan capstone.
+Yang **belum** selesai secara jujur: autentikasi sungguhan (Bagian 1, Bagian 5), skala produksi untuk audit logging (Bagian 5), gap audit trail untuk percobaan akses ditolak (Bagian 4), dan kualitas routing yang bergantung pada model kecil (Module 27 Bagian 4) — semuanya bahan diskusi terbuka menuju Module 30-32, yang akan men-deploy seluruh stack ini (termasuk PostgreSQL dan service baru dari rangkaian Module 23-28 lainnya) sebagai satu sistem produksi dan mempersiapkan capstone.
 
 ---
 
