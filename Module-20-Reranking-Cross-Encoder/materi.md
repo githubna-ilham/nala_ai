@@ -563,7 +563,7 @@ def chat_stream(request: ChatStreamRequest) -> StreamingResponse:
     )
 ```
 
-**Opsional — tambah checkbox di `chat.html`** (di dekat fieldset checkbox metode pencarian BM25/Vector dari Module 18-19) supaya kombinasi ini bisa dicoba dari browser:
+**Langkah 6 — Tambah checkbox `useRerankingToggle` di `chat.html`** (di dekat fieldset checkbox metode pencarian BM25/Vector dari Module 18-19) supaya kombinasi ini bisa dicoba dari browser:
 
 ```html
 <!-- app/templates/chat.html, di dekat fieldset metode pencarian (Module 18-19) -->
@@ -597,14 +597,23 @@ const response = await fetch("/chat/stream", {
 
 Dengan checkbox metode pencarian (BM25 + Vector, centang keduanya = hybrid) dan checkbox `useRerankingToggle` (independen) berdampingan, user bisa memilih ke-6 kombinasi langsung dari browser: `vector` saja, `vector` + rerank, `bm25` saja, `bm25` + rerank, `hybrid` saja, atau `hybrid` + rerank (default).
 
+**▶️ Jalankan & lihat hasilnya**
+
+```bash
+docker compose up --build api
+```
+
+Buka `http://localhost:8000` — coba beberapa kombinasi checkbox langsung dari browser: hybrid+rerank (default, semua tercentang), lalu coba matikan `useRerankingToggle` dengan kombinasi metode pencarian yang sama, bandingkan kecepatan dan kualitas jawabannya.
+
+✅ **Indikator sukses**: mematikan `useRerankingToggle` membuat jawaban muncul lebih cepat (tanpa cross-encoder) dibanding saat dicentang, konsisten dengan uji `curl` di Langkah 5 — bukti UI dan backend sinkron.
+
 <details>
-<summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi bagian checkbox chat.html</strong></summary>
+<summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Langkah 6</strong></summary>
 
 ```
 Tambah checkbox useRerankingToggle ke chat.html, independen dari
 checkbox metode pencarian (Module 18-19), lalu kirim field
-use_reranking di request /chat/stream (Module 20, bagian opsional
-setelah Langkah 5).
+use_reranking di request /chat/stream (Module 20, Langkah 6).
 
 GOAL:
 - Di Nala/app/templates/chat.html:
@@ -663,13 +672,14 @@ Untuk NALA, trade-off ini diterima dengan kondisi: reranking aktif secara defaul
 
 ## 7. Checkpoint Praktik
 
-Langkah eksekusi lengkap (termasuk pre-pull model) ada di Bagian 5, Langkah 1-5. Yang perlu dipastikan sebelum lanjut ke Module 21:
+Langkah eksekusi lengkap (termasuk pre-pull model) ada di Bagian 5, Langkah 1-6. Yang perlu dipastikan sebelum lanjut ke Module 21:
 
 - [ ] Model `cross-encoder/ms-marco-MiniLM-L-6-v2` sudah ter-*pre-pull* dan tersimpan di volume `hf_cache` (tidak diunduh ulang setiap `docker compose up --build`)
 - [ ] `reranker.rerank()` menghasilkan urutan yang bisa berbeda dari urutan RRF `search_hybrid()` untuk query yang sama
 - [ ] `/chat/stream` punya field `use_reranking` yang independen dari `search_method` — keenam kombinasi (`vector`/`bm25`/`hybrid` × rerank on/off) berhasil dijalankan tanpa error
 - [ ] Kombinasi manapun dengan `use_reranking: true` response time-nya lebih lama dibanding `use_reranking: false` untuk `search_method` yang sama (diharapkan, bukan bug)
 - [ ] `RERANK_ENABLED=false` (env var server-wide) membuat sistem tetap berjalan tanpa reranking walau `use_reranking: true` diminta di request — kill-switch operasional menang di atas preferensi user
+- [ ] Checkbox `useRerankingToggle` di `chat.html` (Langkah 6) berhasil mengubah kecepatan/kualitas jawaban sesuai kondisi centang, tanpa perlu `curl`
 
 ## 8. Hasil Uji Nyata: Kasus Keras Module 19 Bagian 4 Terselesaikan
 
