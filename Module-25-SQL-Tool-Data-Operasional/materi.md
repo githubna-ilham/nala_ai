@@ -2,13 +2,13 @@
 
 ## Tujuan
 
-Menambahkan tool kedua ke agent NALA (Module 24) untuk menjawab pertanyaan data transaksi operasional (status pengajuan kredit, klaim asuransi) yang tidak pernah ada di dokumen SOP, dengan pendekatan query-builder yang dibatasi (bukan SQL bebas dari LLM) supaya aman untuk data finansial nasabah. Module ini **tidak** menyiapkan PostgreSQL/seed/role dari nol — semua itu sudah dibangun dan diverifikasi di Module 23 (Setup Data Operasional). Module ini murni membangun kode tool yang **membaca** data yang sudah ada di sana, lewat role `nala_readonly` yang sudah tersedia. Sekaligus membuktikan tiga level kemampuan function-calling secara bertahap: satu tool (Module 24), dua tool dengan LLM memilih salah satu, sampai dua tool dipanggil **berurutan** dalam satu permintaan yang sama.
+Menambahkan tool kedua ke agent NALA (Module 24) untuk menjawab pertanyaan data transaksi operasional (status pengajuan kredit, klaim asuransi) yang tidak pernah ada di dokumen SOP, dengan pendekatan query-builder yang dibatasi (bukan SQL bebas dari LLM) supaya aman untuk data finansial nasabah. Module ini **tidak** menyiapkan PostgreSQL/seed/role dari nol — semua itu sudah dibangun dan diverifikasi di Module 23 (Setup Data Operasional). Module ini murni membangun kode tool yang **membaca** data yang sudah ada di sana, lewat role `nala_readonly` yang sudah tersedia. Sekaligus membuktikan dua level kemampuan function-calling secara bertahap: satu tool (Module 24) dan dua tool dengan LLM memilih salah satu — memakai keduanya sekaligus untuk satu pertanyaan gabungan baru dibahas Module 26.
 
 ## Definisi
 
 Pendekatan umum untuk menjawab pertanyaan data lewat bahasa natural disebut **text-to-SQL**: LLM menerima skema tabel, lalu menulis query SQL lengkap sendiri. Tool SQL NALA **sengaja tidak** memakai pendekatan itu — sebagai gantinya dipakai **query-builder yang dibatasi (whitelisted)**: LLM cuma memilih parameter terstruktur (nama tabel, mode, filter) dari daftar tetap lewat `enum` skema tool, sementara kode Python sendiri yang menyusun query SQL final. Ini variasi dari pola **tool-use** yang sudah dikenal sejak Module 24 (tool RAG) — bedanya, tool ini menyentuh data transaksi finansial nasabah, sehingga risikonya jauh lebih tinggi kalau LLM diberi kebebasan penuh menulis SQL.
 
-Keamanannya bertumpu pada **parameterized query** — nilai (status, `nasabah_id`) dikirim lewat placeholder `%s` terpisah dari struktur query, bukan digabung langsung ke string SQL (yang rentan **SQL injection**) — dipasang berlapis bersama validasi ulang di kode Python dan koneksi yang memakai role database `nala_readonly` (Module 23) yang secara struktural cuma bisa `SELECT`. Pola **defense in depth** ini (beberapa lapisan pertahanan independen, bukan mengandalkan satu titik saja) akan dipakai lagi dengan bentuk berbeda di Module 27 untuk RBAC.
+Keamanannya bertumpu pada **parameterized query** — nilai (status, `nasabah_id`) dikirim lewat placeholder `%s` terpisah dari struktur query, bukan digabung langsung ke string SQL (yang rentan **SQL injection**) — dipasang berlapis bersama validasi ulang di kode Python dan koneksi yang memakai role database `nala_readonly` (Module 23) yang secara struktural cuma bisa `SELECT`. Pola **defense in depth** ini (beberapa lapisan pertahanan independen, bukan mengandalkan satu titik saja) akan dipakai lagi dengan bentuk berbeda di Module 28 untuk RBAC.
 
 ```mermaid
 flowchart LR
@@ -24,7 +24,7 @@ flowchart LR
 - `/chat` bisa menjawab pertanyaan jumlah/status data operasional maupun detail satu nasabah, memakai data yang sudah Anda tambahkan lewat `/data-operasional` di Module 23, sementara tool RAG (Module 24) tetap berfungsi berdampingan tanpa regresi
 - `/chat` mendukung riwayat multi-turn (`history`, windowing 10 pesan) dan bisa dicoba langsung lewat toggle "Pakai Agent" di `chat.html`, tidak cuma lewat `curl`
 - Angka mata uang (`jumlah_pengajuan`/`jumlah_klaim`) diformat eksplisit (`Rp 50.000.000`) di tool, dan pemanggilan tool tahan terhadap argumen tidak lengkap dari LLM (tidak crash jadi 500)
-- Tiga level function-calling terbukti: satu tool (Module 24), dua tool dengan LLM memilih satu sesuai jenis pertanyaan, dan dua tool dipanggil berurutan dalam satu request untuk pertanyaan gabungan — graph LangGraph Module 24 mendukung level ketiga tanpa perubahan kode sama sekali, murni konsekuensi desain edge `call_tool → call_model` yang tetap (bukan kondisional)
+- Dua level function-calling terbukti: satu tool (Module 24), dua tool dengan LLM memilih satu sesuai jenis pertanyaan — memanggil keduanya sekaligus untuk satu pertanyaan gabungan (multi-hop) dibahas terpisah di Module 26
 - Keterbatasan nyata model kecil didokumentasikan dengan angka (Bagian 6): sintesis jawaban dari hasil tool cuma berhasil ~20-33% dari percobaan berulang untuk kasus yang sama — dicatat jujur, bukan disembunyikan atau diklaim sudah terselesaikan
 
 **Prasyarat**: Module 23 (service `postgres` sehat, tabel `pengajuan_kredit`/`klaim_asuransi` berisi data, role `nala_readonly` sudah ada dan terbukti hanya bisa `SELECT`) dan Module 24 (agent LangGraph dengan tool `cari_dokumen_sop` sudah jalan) harus sudah selesai.
@@ -43,7 +43,7 @@ Tidak ada jumlah chunking atau reranking (Module 18-22) yang bisa membuat RAG me
 Pendekatan paling gampang dibayangkan — dan **sengaja tidak dipakai di sini** — adalah: kirim skema tabel ke LLM, minta ia menulis query SQL lengkap sebagai argumen tool, lalu jalankan langsung ke database. Ini terdengar fleksibel, tapi punya dua masalah serius untuk sistem yang menyentuh data finansial nasabah sungguhan:
 
 1. **SQL injection dari arah yang tidak biasa.** Bukan user jahat yang menyisipkan `; DROP TABLE` lewat form input (itu sudah lama diatasi lewat parameterized query di banyak sistem) — di sini risikonya adalah **LLM itu sendiri** yang bisa menghasilkan query destruktif atau bocor-data, baik karena salah paham konteks, halusinasi, maupun (skenario lebih serius untuk sistem produksi) prompt injection lewat konten yang di-retrieve (mis. dokumen yang sengaja diracuni berisi instruksi tersembunyi). LLM yang menulis SQL bebas berarti **string yang tidak sepenuhnya bisa diverifikasi aman, dieksekusi langsung** ke database produksi.
-2. **Tidak ada batas query yang bisa dijalankan.** SQL bebas berarti LLM secara teori bisa menulis `SELECT *` tanpa `WHERE`, join ke tabel yang tidak seharusnya diakses role tertentu (lihat Module 27), atau query yang mahal secara performa (full table scan berulang).
+2. **Tidak ada batas query yang bisa dijalankan.** SQL bebas berarti LLM secara teori bisa menulis `SELECT *` tanpa `WHERE`, join ke tabel yang tidak seharusnya diakses role tertentu (lihat Module 28), atau query yang mahal secara performa (full table scan berulang).
 
 ### Pendekatan yang dipakai NALA: query-builder yang dibatasi (whitelisted), bukan SQL bebas
 
@@ -367,41 +367,15 @@ GUARDRAIL:
 
 </details>
 
-### Tiga Level Kemampuan Function-Calling yang Sudah Dibuktikan
+### Dua Level Kemampuan Function-Calling yang Sudah Dibuktikan
 
-Sengaja diverifikasi bertahap, bukan cuma "tambah tool lalu asumsikan semuanya beres" — tiga level kemampuan berikut makin kompleks, dan ketiganya sudah (atau akan) dibuktikan lewat pengujian nyata, bukan klaim teoretis:
+Sengaja diverifikasi bertahap, bukan cuma "tambah tool lalu asumsikan semuanya beres":
 
 **Level 1 — Function call ke satu tool** (dibuktikan Module 24 Bagian 4 Tahap C): agent cuma punya **satu** pilihan (`cari_dokumen_sop`) — satu-satunya keputusan LLM adalah "pakai tool ini atau tidak", bukan "tool mana". Ini fondasi tool-calling paling sederhana: skema tool dikirim, LLM baca `description`-nya, putuskan relevan atau tidak dengan pertanyaan yang masuk.
 
-**Level 2 — Dua tool tersedia, LLM memilih SATU** (dibuktikan di Langkah 2 di atas): begitu `SQL_TOOL_SCHEMA` didaftarkan berdampingan dengan `RAG_TOOL_SCHEMA` di `tools_schema`, LLM punya dua pilihan setiap kali menerima pertanyaan. Tiga uji coba di **▶️ Jalankan & lihat hasilnya** (Langkah 2) sudah membuktikan ia memilih dengan benar berdasarkan jenis pertanyaan: pertanyaan status/jumlah data memicu `query_data_operasional`, pertanyaan syarat/prosedur memicu `cari_dokumen_sop`. **Tidak ada instruksi `if/else` eksplisit di kode** yang memutuskan ini — murni keputusan LLM berdasarkan `description` masing-masing tool (Module 24 Bagian 2). Kasus **ambigu** (pertanyaan yang bisa masuk ke tool mana pun, atau butuh keduanya tapi LLM cuma pilih satu) baru dibahas mendalam di Module 26.
+**Level 2 — Dua tool tersedia, LLM memilih SATU** (dibuktikan di Langkah 2 di atas): begitu `SQL_TOOL_SCHEMA` didaftarkan berdampingan dengan `RAG_TOOL_SCHEMA` di `tools_schema`, LLM punya dua pilihan setiap kali menerima pertanyaan. Tiga uji coba di **▶️ Jalankan & lihat hasilnya** (Langkah 2) sudah membuktikan ia memilih dengan benar berdasarkan jenis pertanyaan: pertanyaan status/jumlah data memicu `query_data_operasional`, pertanyaan syarat/prosedur memicu `cari_dokumen_sop`. **Tidak ada instruksi `if/else` eksplisit di kode** yang memutuskan ini — murni keputusan LLM berdasarkan `description` masing-masing tool (Module 24 Bagian 2).
 
-**Level 3 — KEDUA tool dipanggil berurutan dalam SATU permintaan** (dibuktikan di bawah): kemampuan paling kompleks — LLM memanggil tool pertama, membaca hasilnya lewat `call_model` yang dipanggil ulang, lalu **memutuskan sendiri** masih perlu tool kedua sebelum menjawab — semua dalam satu request user, tanpa user perlu bertanya dua kali secara terpisah. Ini **bukan** fitur baru yang perlu ditulis kodenya — graph LangGraph yang dibangun Module 24 (Bagian 4 Tahap C) **sudah didesain mendukung ini sejak awal**: `graph.add_edge("call_tool", "call_model")` bersifat **tetap** (bukan kondisional) — artinya setiap kali `call_tool` selesai, alur **selalu** kembali ke `call_model`, dan `call_model` bisa saja memutuskan meminta `tool_calls` **lagi** (bukan langsung jawaban final). Loop ini berulang sampai `should_continue` akhirnya mengarah ke `END` — tidak ada batas berapa kali `call_tool` boleh dipanggil dalam satu request, tidak ada kode yang membatasi "cuma boleh 1 tool per pertanyaan".
-
-```mermaid
-sequenceDiagram
-    participant U as User (1 pertanyaan gabungan)
-    participant M as call_model
-    participant T as call_tool
-    U->>M: "Apa syarat kredit, dan ada berapa<br/>pengajuan pending sekarang?"
-    M->>T: tool_calls: [cari_dokumen_sop]
-    T->>M: hasil SOP
-    M->>T: tool_calls: [query_data_operasional]
-    Note over M,T: call_model dipanggil ULANG,<br/>minta tool KEDUA — bukan langsung jawab
-    T->>M: hasil data operasional
-    M->>U: jawaban gabungan (dari 2 hasil tool)
-```
-
-**Coba Langsung: Buktikan Level 3 — Pertanyaan yang Butuh KEDUA Tool Sekaligus**
-
-```bash
-curl -X POST http://localhost:8000/chat \
-  -H "Content-Type: application/json" \
-  -d '{"message": "Apa saja syarat pengajuan kredit untuk nasabah perorangan, dan ada berapa banyak pengajuan kredit yang statusnya pending saat ini?"}'
-```
-
-✅ **Indikator sukses (kalau berhasil)**: jawaban menyebut **dua hal sekaligus** — item syarat dari `### 2.1` (KTP, KK, slip gaji, dst — dari `cari_dokumen_sop`) **dan** angka jumlah pending (dari `query_data_operasional`). Kalau Langfuse sudah aktif (Module 22), buka trace request ini — harus terlihat **dua** span `agent_tool:*` berurutan (`agent_tool:cari_dokumen_sop` lalu `agent_tool:query_data_operasional`, atau sebaliknya, tergantung urutan yang dipilih LLM) di dalam **satu** trace yang sama, bukan dua trace terpisah — bukti langsung bahwa graph benar-benar berputar dua kali sebelum `END`.
-
-⚠️ **Catatan jujur, konsisten dengan Bagian 6 di bawah**: `llama3.2:3b` **tidak selalu** memanggil kedua tool untuk pertanyaan gabungan seperti ini — kadang ia cuma memanggil satu (biasanya yang disebut lebih dulu di kalimat pertanyaan) lalu langsung menjawab sebagian, mengabaikan bagian kedua pertanyaan. Ini bukan bug pada graph-nya (Level 3 **mekanismenya** sudah terbukti bekerja — graph memang mendukung multi-hop) — ini keterbatasan **penalaran** model kecil dalam memecah satu kalimat jadi dua kebutuhan tool yang terpisah, konsisten dengan pola ketidakkonsistenan yang didokumentasikan Bagian 6. Coba beberapa kali dan amati variasinya sendiri — jangan berharap 100% konsisten di titik ini, itu justru bukti jujur kenapa Module 26 (routing) dan model yang lebih besar (`qwen2.5:7b`) relevan dibahas.
+Dua level ini baru soal **memilih** tool — belum soal **memakai keduanya sekaligus** untuk satu pertanyaan gabungan (Level 3: dua tool dipanggil berurutan dalam satu request), dan belum soal kasus **ambigu** di mana LLM salah pilih. Keduanya dibahas terpisah: Level 3 di Module 26 (Multi-Hop Tool Calling), kasus ambigu/salah pilih di Module 27 (Routing).
 
 ### Tahap C — Dua penyesuaian tambahan (ditemukan lewat uji nyata)
 
@@ -591,9 +565,10 @@ GUARDRAIL:
 
 ## 4. Apa yang TIDAK Ada di Module Ini
 
-- Routing eksplisit yang dijelaskan/didiagnosis mendalam antara dua tool — module ini baru **membuktikan** kedua tool bekerja lewat contoh pertanyaan yang jelas-jelas satu arah; kasus ambigu dan salah pilih tool baru dibahas Module 26.
-- Pembatasan akses tool SQL berdasarkan role user — saat ini **siapa pun** yang memanggil `/chat` bisa memicu tool SQL. Ini **secara sengaja belum aman untuk production** dan diperbaiki di Module 27 (RBAC).
-- Audit trail siapa mengakses data siapa — Module 27.
+- Dua tool dipanggil berurutan untuk satu pertanyaan gabungan (multi-hop tool calling) — module ini baru **membuktikan** kedua tool bekerja lewat contoh pertanyaan yang jelas-jelas satu arah, LLM memilih satu tool per pertanyaan; memakai keduanya sekaligus baru dibahas Module 26.
+- Routing eksplisit yang dijelaskan/didiagnosis mendalam antara dua tool, termasuk kasus ambigu dan salah pilih — Module 27.
+- Pembatasan akses tool SQL berdasarkan role user — saat ini **siapa pun** yang memanggil `/chat` bisa memicu tool SQL. Ini **secara sengaja belum aman untuk production** dan diperbaiki di Module 28 (RBAC).
+- Audit trail siapa mengakses data siapa — Module 28.
 
 ## 5. Checkpoint Praktik
 
@@ -604,7 +579,6 @@ Yang perlu dipastikan sebelum lanjut ke Module 26:
 - [ ] `/chat` bisa menjawab pertanyaan detail satu nasabah tertentu
 - [ ] Tool RAG (Module 24) tetap berfungsi berdampingan, tidak ada regresi
 - [ ] Multi-turn (Langkah 4) bekerja — pertanyaan lanjutan yang tidak menyebut ulang topik tetap dipahami lewat `history`
-- [ ] Sudah dicoba pertanyaan gabungan (Level 3) yang butuh KEDUA tool — diamati apakah kedua tool terpanggil (lewat jawaban atau trace Langfuse), dan dipahami kenapa ini tidak selalu konsisten untuk model 3B
 
 ## 6. Hasil Uji Nyata: Tool Selalu Benar, Sintesis Jawaban Tidak Selalu
 
