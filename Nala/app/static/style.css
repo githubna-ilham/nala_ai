@@ -120,3 +120,36 @@ button:disabled {
 .doc-list li {
     margin-bottom: 4px;
 }
+
+/* Module 23 — form di-scope :not(#chat-form) agar tidak menimpa layout baris #chat-form */
+form:not(#chat-form) {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 24px;
+    max-width: 480px;
+}
+
+form:not(#chat-form) input,
+form:not(#chat-form) select,
+form:not(#chat-form) button {
+    padding: 8px;
+    font-size: 14px;
+}
+
+.data-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 24px;
+}
+
+.data-table th,
+.data-table td {
+    border: 1px solid #ddd;
+    padding: 6px 10px;
+    text-align: left;
+}
+
+.data-table th {
+    background: #f4f4f4;
+}

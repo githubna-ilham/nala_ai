@@ -104,7 +104,7 @@ curl -N -X POST http://localhost:8000/chat/stream \
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./db/seed.sql:/docker-entrypoint-initdb.d/01-seed.sql
+      - ./db:/docker-entrypoint-initdb.d
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U nala_admin -d nala_operasional"]
       interval: 5s
@@ -128,8 +128,8 @@ service baru "postgres" (image postgres:16, POSTGRES_DB=
 nala_operasional, POSTGRES_USER=nala_admin, POSTGRES_PASSWORD dari
 env var POSTGRES_ADMIN_PASSWORD default changeme_dev_only, port
 5432:5432, volume postgres_data:/var/lib/postgresql/data DAN
-./db/seed.sql:/docker-entrypoint-initdb.d/01-seed.sql, healthcheck
-pg_isready). Tambah postgres_data ke volumes: top-level. Tambah
+./db:/docker-entrypoint-initdb.d (mount FOLDER db, bukan file tunggal —
+lebih robust di Docker Desktop), healthcheck pg_isready). Tambah postgres_data ke volumes: top-level. Tambah
 depends_on postgres (condition service_healthy) ke service api
 (ubah depends_on api ke bentuk mapping kalau masih list).
 

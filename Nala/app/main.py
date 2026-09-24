@@ -2,13 +2,15 @@ import os
 from typing import Literal
 
 import httpx
-from fastapi import FastAPI, File, HTTPException, Request, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from langfuse import Langfuse
+from psycopg.rows import dict_row
 from pydantic import BaseModel
 
+from app.db import get_connection, get_write_connection
 from app.embeddings import embed_text
 from app.ingest import ingest_document
 from app.ollama_client import OllamaClient
@@ -195,4 +197,99 @@ def upload_document(request: Request, file: UploadFile = File(...)):
         request,
         "upload.html",
         {"message": message, "documents": list_knowledge_base_documents()},
+    )
+
+
+def fetch_pengajuan_kredit() -> list[dict]:
+    with get_connection() as conn:
+        with conn.cursor(row_factory=dict_row) as cur:
+            cur.execute(
+                "SELECT nasabah_id, nama_nasabah, jumlah_pengajuan, status, tanggal_pengajuan "
+                "FROM pengajuan_kredit ORDER BY id DESC"
+            )
+            return cur.fetchall()
+
+
+def fetch_klaim_asuransi() -> list[dict]:
+    with get_connection() as conn:
+        with conn.cursor(row_factory=dict_row) as cur:
+            cur.execute(
+                "SELECT nasabah_id, nama_nasabah, jenis_klaim, jumlah_klaim, status, tanggal_klaim "
+                "FROM klaim_asuransi ORDER BY id DESC"
+            )
+            return cur.fetchall()
+
+
+@app.get("/data-operasional", response_class=HTMLResponse)
+def data_operasional_page(request: Request):
+    return templates.TemplateResponse(
+        request,
+        "data_operasional.html",
+        {
+            "message": None,
+            "pengajuan_kredit": fetch_pengajuan_kredit(),
+            "klaim_asuransi": fetch_klaim_asuransi(),
+        },
+    )
+
+
+@app.post("/data-operasional/pengajuan-kredit", response_class=HTMLResponse)
+def add_pengajuan_kredit(
+    request: Request,
+    nasabah_id: str = Form(...),
+    nama_nasabah: str = Form(...),
+    jumlah_pengajuan: float = Form(...),
+    status: str = Form(...),
+    tanggal_pengajuan: str = Form(...),
+    alasan_penolakan: str = Form(""),
+):
+    with get_write_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO pengajuan_kredit "
+                "(nasabah_id, nama_nasabah, jumlah_pengajuan, status, tanggal_pengajuan, alasan_penolakan) "
+                "VALUES (%s, %s, %s, %s, %s, %s)",
+                (nasabah_id, nama_nasabah, jumlah_pengajuan, status, tanggal_pengajuan, alasan_penolakan or None),
+            )
+        conn.commit()
+
+    return templates.TemplateResponse(
+        request,
+        "data_operasional.html",
+        {
+            "message": f"Pengajuan kredit untuk nasabah '{nasabah_id}' berhasil ditambahkan.",
+            "pengajuan_kredit": fetch_pengajuan_kredit(),
+            "klaim_asuransi": fetch_klaim_asuransi(),
+        },
+    )
+
+
+@app.post("/data-operasional/klaim-asuransi", response_class=HTMLResponse)
+def add_klaim_asuransi(
+    request: Request,
+    nasabah_id: str = Form(...),
+    nama_nasabah: str = Form(...),
+    jenis_klaim: str = Form(...),
+    jumlah_klaim: float = Form(...),
+    status: str = Form(...),
+    tanggal_klaim: str = Form(...),
+):
+    with get_write_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO klaim_asuransi "
+                "(nasabah_id, nama_nasabah, jenis_klaim, jumlah_klaim, status, tanggal_klaim) "
+                "VALUES (%s, %s, %s, %s, %s, %s)",
+                (nasabah_id, nama_nasabah, jenis_klaim, jumlah_klaim, status, tanggal_klaim),
+            )
+        conn.commit()
+
+    return templates.TemplateResponse(
+        request,
+        "data_operasional.html",
+        {
+            "message": f"Klaim asuransi untuk nasabah '{nasabah_id}' berhasil ditambahkan.",
+            "pengajuan_kredit": fetch_pengajuan_kredit(),
+            "klaim_asuransi": fetch_klaim_asuransi(),
+        },
     )

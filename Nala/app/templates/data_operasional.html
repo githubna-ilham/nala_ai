@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <title>NALA — Data Operasional</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Data Operasional</h1>
+        <nav><a href="/">Chat</a> | <a href="/upload">Knowledge Base</a> | <a href="/data-operasional">Data Operasional</a></nav>
+        {% if message %}<p class="success">{{ message }}</p>{% endif %}
+
+        <h2>Tambah Pengajuan Kredit</h2>
+        <form action="/data-operasional/pengajuan-kredit" method="post">
+            <input type="text" name="nasabah_id" placeholder="ID Nasabah (mis. N-00512)" required>
+            <input type="text" name="nama_nasabah" placeholder="Nama Nasabah" required>
+            <input type="number" name="jumlah_pengajuan" placeholder="Jumlah Pengajuan (Rp)" step="1" min="0" required>
+            <select name="status" required>
+                <option value="pending">pending</option>
+                <option value="disetujui">disetujui</option>
+                <option value="ditolak">ditolak</option>
+                <option value="pencairan">pencairan</option>
+            </select>
+            <input type="date" name="tanggal_pengajuan" required>
+            <input type="text" name="alasan_penolakan" placeholder="Alasan penolakan (opsional)">
+            <button type="submit">Tambah Pengajuan Kredit</button>
+        </form>
+
+        <h2>Daftar Pengajuan Kredit</h2>
+        {% if pengajuan_kredit %}
+        <table class="data-table">
+            <thead><tr><th>ID Nasabah</th><th>Nama</th><th>Jumlah</th><th>Status</th><th>Tanggal</th></tr></thead>
+            <tbody>
+                {% for row in pengajuan_kredit %}
+                <tr>
+                    <td>{{ row.nasabah_id }}</td>
+                    <td>{{ row.nama_nasabah }}</td>
+                    <td>{{ "{:,.0f}".format(row.jumlah_pengajuan) }}</td>
+                    <td>{{ row.status }}</td>
+                    <td>{{ row.tanggal_pengajuan }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}<p class="hint">Belum ada data pengajuan kredit.</p>{% endif %}
+
+        <hr>
+
+        <h2>Tambah Klaim Asuransi</h2>
+        <form action="/data-operasional/klaim-asuransi" method="post">
+            <input type="text" name="nasabah_id" placeholder="ID Nasabah (mis. N-00512)" required>
+            <input type="text" name="nama_nasabah" placeholder="Nama Nasabah" required>
+            <input type="text" name="jenis_klaim" placeholder="Jenis Klaim (mis. kesehatan, kendaraan)" required>
+            <input type="number" name="jumlah_klaim" placeholder="Jumlah Klaim (Rp)" step="1" min="0" required>
+            <select name="status" required>
+                <option value="pending">pending</option>
+                <option value="diproses">diproses</option>
+                <option value="disetujui">disetujui</option>
+                <option value="ditolak">ditolak</option>
+            </select>
+            <input type="date" name="tanggal_klaim" required>
+            <button type="submit">Tambah Klaim Asuransi</button>
+        </form>
+
+        <h2>Daftar Klaim Asuransi</h2>
+        {% if klaim_asuransi %}
+        <table class="data-table">
+            <thead><tr><th>ID Nasabah</th><th>Nama</th><th>Jenis</th><th>Jumlah</th><th>Status</th><th>Tanggal</th></tr></thead>
+            <tbody>
+                {% for row in klaim_asuransi %}
+                <tr>
+                    <td>{{ row.nasabah_id }}</td>
+                    <td>{{ row.nama_nasabah }}</td>
+                    <td>{{ row.jenis_klaim }}</td>
+                    <td>{{ "{:,.0f}".format(row.jumlah_klaim) }}</td>
+                    <td>{{ row.status }}</td>
+                    <td>{{ row.tanggal_klaim }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}<p class="hint">Belum ada data klaim asuransi.</p>{% endif %}
+    </div>
+</body>
+</html>
