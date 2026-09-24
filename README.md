@@ -2,7 +2,7 @@
 
 ## Deskripsi Pelatihan
 
-Pelatihan ini dirancang untuk membangun **NALA** (Nusantara Assistant), sebuah asisten AI enterprise privat yang menggunakan teknologi Large Language Model (LLM) lokal dengan Ollama. NALA dibangun khusus untuk PT Nusantara Finance dengan fokus pada privasi data dan keamanan informasi. Peserta akan belajar mengintegrasikan NALA dengan dua sumber data utama: dokumen prosedur operasional standar (SOP) perusahaan melalui teknologi Retrieval-Augmented Generation (RAG), serta data operasional real-time (pengajuan kredit, klaim, dll) menggunakan agentic tools dan query SQL. Materi disusun sebagai **32 modul berurutan** (Module 1 sampai Module 32) — tiap modul memperkenalkan satu lapisan fungsionalitas baru yang diintegrasikan ke dalam sistem `nala` yang sama, membangun dari fondasi sederhana menjadi sistem produksi lengkap.
+Pelatihan ini dirancang untuk membangun **NALA** (Nusantara Assistant), sebuah asisten AI enterprise privat yang menggunakan teknologi Large Language Model (LLM) lokal dengan Ollama. NALA dibangun khusus untuk PT Nusantara Finance dengan fokus pada privasi data dan keamanan informasi. Peserta akan belajar mengintegrasikan NALA dengan dua sumber data utama: dokumen prosedur operasional standar (SOP) perusahaan melalui teknologi Retrieval-Augmented Generation (RAG), serta data operasional real-time (pengajuan kredit, klaim, dll) menggunakan agentic tools dan query SQL. Materi disusun sebagai **31 modul berurutan** (Module 1 sampai Module 31) — tiap modul memperkenalkan satu lapisan fungsionalitas baru yang diintegrasikan ke dalam sistem `nala` yang sama, membangun dari fondasi sederhana menjadi sistem produksi lengkap.
 
 ## Target Peserta
 
@@ -14,17 +14,17 @@ Pelatihan ini dirancang untuk audiens campuran yang terdiri dari:
 
 ## Learning Objectives
 
-Setelah menyelesaikan seluruh 32 modul, peserta diharapkan dapat:
+Setelah menyelesaikan seluruh 31 modul, peserta diharapkan dapat:
 
 1. Memahami LLM lokal/privat, risiko privasi data LLM cloud, dan menulis prompt yang efektif untuk model berukuran kecil (Module 1-3)
 2. Menjalankan infrastruktur Docker Compose untuk NALA, membangun FastAPI lalu menyambungkannya ke Ollama (environment, model, system prompt), membangun chat berbasis streaming (`/chat/stream`, satu-satunya endpoint chat sejak Module 8) dan pipeline RAG langkah demi langkah — data seed, embedding, OpenSearch, semantic search & vector store, RAG chain pertama, chunking, upload dokumen, sampai pipeline ingest otomatis (Airflow) — supaya NALA bisa menjawab dari dokumen SOP internal (Module 4-17)
 3. Meningkatkan akurasi retrieval dokumen menggunakan BM25, hybrid search (kombinasi lexical + semantic via RRF), dan reranking, serta mengukur kualitas dengan metrik evaluasi dan observability (Module 18-22)
-4. Membangun agentic tools dengan LangGraph yang memungkinkan NALA memilih antara menjawab dari dokumen RAG atau menjalankan query data operasional via SQL — termasuk memanggil beberapa tool sekaligus (multi-hop) dan routing antar tool — lengkap dengan RBAC dan audit logging (Module 23-28)
-5. Men-deploy sistem lengkap ke lingkungan produksi, memahami prinsip umum etika & governance AI (bias, overreliance, akuntabilitas), dan mempresentasikan hasil capstone (Module 29-32)
+4. Membangun agentic tools dengan LangGraph yang memungkinkan NALA memilih antara menjawab dari dokumen RAG atau menjalankan query data operasional via SQL — termasuk memanggil beberapa tool sekaligus (multi-hop) dan routing antar tool — lengkap dengan RBAC dan audit logging (Module 23-27)
+5. Men-deploy sistem lengkap ke lingkungan produksi, memahami prinsip umum etika & governance AI (bias, overreliance, akuntabilitas), dan mempresentasikan hasil capstone (Module 28-31)
 
 ## Daftar Modul
 
-32 modul berurutan, dibangun secara progresif (modul belakangan bergantung pada kode dari modul sebelumnya):
+31 modul berurutan, dibangun secara progresif (modul belakangan bergantung pada kode dari modul sebelumnya):
 
 1. **[Module 1: Pengantar LLM & Privasi Data](Module-01-Pengantar-LLM-Privasi-Data/materi.md)** — Konsep dasar LLM, perbedaan cloud vs lokal, risiko privasi, pengenalan tools yang akan digunakan
 2. **[Module 2: Setup Ollama & Evaluasi Model](Module-02-Setup-Ollama-Evaluasi-Model/materi.md)** — Instalasi dan konfigurasi Ollama, loading model, basic inference, metrik evaluasi performa dasar (worksheet praktik: [WORKSHEET-Percobaan-Ollama.md](Module-02-Setup-Ollama-Evaluasi-Model/WORKSHEET-Percobaan-Ollama.md))
@@ -50,18 +50,17 @@ Setelah menyelesaikan seluruh 32 modul, peserta diharapkan dapat:
 22. **[Module 22: Framework Evaluasi RAG](Module-22-Evaluasi-RAG/materi.md)** — Test set berlabel kecil, metrik Precision@k/Hit Rate@k/MRR, perbandingan kuantitatif sebelum-sesudah reranking, dan LLM-as-judge lokal untuk faithfulness/relevance — pengukuran agregat yang melengkapi trace per-request Module 21
 23. **[Module 23: Setup Data Operasional — PostgreSQL & UI Form](Module-23-Setup-Data-Operasional-PostgreSQL/materi.md)** — Service PostgreSQL baru, skema `pengajuan_kredit` & `klaim_asuransi`, dua role terpisah (`nala_readonly`/`nala_writer`), halaman `/data-operasional` untuk staff menambah data operasional sendiri
 24. **[Module 24: Desain Agent dengan LangGraph — Tool-Calling](Module-24-LangGraph-Agent-Tool-Calling/materi.md)** — Konsep agent sebagai graph (node/edge/state) vs pipeline tetap, refactor RAG chain (Module 7-22) jadi tool pertama, tool-calling native Ollama untuk `llama3.2:3b`
-25. **[Module 25: Tool Baru — Query SQL ke Data Operasional (PostgreSQL)](Module-25-SQL-Tool-Data-Operasional/materi.md)** — Tool query SQL yang dibatasi (bukan raw SQL bebas dari LLM) untuk mencegah SQL injection, membaca data lewat role `nala_readonly` yang sudah disiapkan Module 23, lalu mendaftarkannya ke agent
-26. **[Module 26: Multi-Hop Tool Calling](Module-26-Multi-Hop-Tool-Calling/materi.md)** — Membuktikan agent memanggil KEDUA tool (RAG + SQL) secara berurutan dalam satu permintaan, konsekuensi langsung dari desain graph Module 24 (edge `call_tool → call_model` yang tetap) — bukan kode baru, murni pengujian dan pencatatan jujur seberapa konsisten model kecil melakukannya
-27. **[Module 27: Routing — Menggabungkan RAG + SQL Tool dalam Satu Agent](Module-27-Routing-RAG-vs-SQL/materi.md)** — Bagaimana LLM memutuskan tool mana yang dipakai, diagram keputusan, contoh pertanyaan per tool, kasus routing yang ambigu/salah, catatan trade-off model 3B vs `qwen2.5:7b`
-28. **[Module 28: RBAC & Audit Logging](Module-28-RBAC-Audit-Logging/materi.md)** — Role per user/session yang membatasi akses tool SQL, pencatatan audit trail (siapa, tanya apa, tool apa, data apa, kapan) ke tabel PostgreSQL, relevansi untuk compliance sektor keuangan
-29. **[Module 29: Full-Stack Deployment](Module-29-Full-Stack-Deployment/materi.md)** — Menyatukan seluruh service dari modul-modul sebelumnya (Ollama, OpenSearch, OpenSearch Dashboards, PostgreSQL data operasional, Airflow, API, Adminer) dengan Langfuse self-hosted **v2** (monolitik, cuma butuh 1 Postgres sendiri — keputusan sadar dibanding v4/ClickHouse+Redis+MinIO, lihat materi Bagian 4a) ke satu `docker-compose.yml`; externalize config ke `.env`; healthcheck & `depends_on: condition: service_healthy`; catatan resource, urutan startup, dan gotcha rotasi password pada volume yang sudah ada
-30. **[Module 30: Monitoring & Security Checklist](Module-30-Monitoring-Security-Checklist/materi.md)** — Memakai dashboard Langfuse untuk observability, membangun status page ringan lintas service via endpoint `GET /status` dan `/status/view`, dan checklist review keamanan untuk asisten AI finansial (secrets, RBAC end-to-end, prompt injection, rate limiting, retensi data)
-31. **[Module 31: Polish Frontend untuk Demo Capstone](Module-31-Polish-Frontend-Demo/materi.md)** — Polish `chat.html`/`upload.html`: badge tool yang dipakai agent (RAG vs SQL), loading/typing indicator, cek layout responsif — tetap server-rendered Jinja2 + vanilla CSS/JS, tanpa framework baru
-32. **[Module 32: Etika & Governance AI](Module-32-Ethics-Governance/materi.md)** — Sesi diskusi murni (tanpa kode): bias dari kurasi dokumen (bukan dari training model), overreliance staf pada jawaban AI, transparansi lewat tool-used badge, akuntabilitas dan human-in-the-loop untuk keputusan berdampak signifikan, plus peta risiko yang menyatukan temuan etika/governance/teknis — prinsip umum tata kelola AI, eksplisit **bukan** klaim kepatuhan regulasi spesifik
+25. **[Module 25: Tool Baru — Query SQL ke Data Operasional (PostgreSQL)](Module-25-SQL-Tool-Data-Operasional/materi.md)** — Tool query SQL yang dibatasi (bukan raw SQL bebas dari LLM) untuk mencegah SQL injection, membaca data lewat role `nala_readonly` yang sudah disiapkan Module 23, lalu mendaftarkannya ke agent — plus pembuktian **multi-hop** (Bagian 4): kedua tool dipanggil berurutan untuk satu pertanyaan gabungan, tanpa kode baru, murni konsekuensi desain graph Module 24
+26. **[Module 26: Routing — Menggabungkan RAG + SQL Tool dalam Satu Agent](Module-26-Routing-RAG-vs-SQL/materi.md)** — Bagaimana LLM memutuskan tool mana yang dipakai, diagram keputusan, contoh pertanyaan per tool, kasus routing yang ambigu/salah, catatan trade-off model 3B vs `qwen2.5:7b`
+27. **[Module 27: RBAC & Audit Logging](Module-27-RBAC-Audit-Logging/materi.md)** — Role per user/session yang membatasi akses tool SQL, pencatatan audit trail (siapa, tanya apa, tool apa, data apa, kapan) ke tabel PostgreSQL, relevansi untuk compliance sektor keuangan
+28. **[Module 28: Full-Stack Deployment](Module-28-Full-Stack-Deployment/materi.md)** — Menyatukan seluruh service dari modul-modul sebelumnya (Ollama, OpenSearch, OpenSearch Dashboards, PostgreSQL data operasional, Airflow, API, Adminer) dengan Langfuse self-hosted **v2** (monolitik, cuma butuh 1 Postgres sendiri — keputusan sadar dibanding v4/ClickHouse+Redis+MinIO, lihat materi Bagian 4a) ke satu `docker-compose.yml`; externalize config ke `.env`; healthcheck & `depends_on: condition: service_healthy`; catatan resource, urutan startup, dan gotcha rotasi password pada volume yang sudah ada
+29. **[Module 29: Monitoring & Security Checklist](Module-29-Monitoring-Security-Checklist/materi.md)** — Memakai dashboard Langfuse untuk observability, membangun status page ringan lintas service via endpoint `GET /status` dan `/status/view`, dan checklist review keamanan untuk asisten AI finansial (secrets, RBAC end-to-end, prompt injection, rate limiting, retensi data)
+30. **[Module 30: Polish Frontend untuk Demo Capstone](Module-30-Polish-Frontend-Demo/materi.md)** — Polish `chat.html`/`upload.html`: badge tool yang dipakai agent (RAG vs SQL), loading/typing indicator, cek layout responsif — tetap server-rendered Jinja2 + vanilla CSS/JS, tanpa framework baru
+31. **[Module 31: Etika & Governance AI](Module-31-Ethics-Governance/materi.md)** — Sesi diskusi murni (tanpa kode): bias dari kurasi dokumen (bukan dari training model), overreliance staf pada jawaban AI, transparansi lewat tool-used badge, akuntabilitas dan human-in-the-loop untuk keputusan berdampak signifikan, plus peta risiko yang menyatukan temuan etika/governance/teknis — prinsip umum tata kelola AI, eksplisit **bukan** klaim kepatuhan regulasi spesifik
 
 ## Capstone
 
-Paket capstone ada di **[`Capstone/`](Capstone/)**, terpisah dari ke-32 modul di atas karena bukan materi berurutan yang dibangun bertahap — ini paket evaluasi akhir:
+Paket capstone ada di **[`Capstone/`](Capstone/)**, terpisah dari ke-31 modul di atas karena bukan materi berurutan yang dibangun bertahap — ini paket evaluasi akhir:
 
 - **[`rubrik-penilaian.md`](Capstone/rubrik-penilaian.md)** — 4 kriteria penilaian (fungsionalitas sistem, quality of retrieved answers, pemahaman teknis trade-off, presentasi & komunikasi), masing-masing dengan level skor konkret
 - **[`template-presentasi.md`](Capstone/template-presentasi.md)** — Outline yang wajib dicakup peserta/kelompok saat presentasi: problem framing, architecture walkthrough, skrip demo, trade-off, rencana lanjutan
@@ -101,7 +100,7 @@ Peserta akan menerima checklist setup environment sebelum pelatihan dimulai untu
 
 ## Rekomendasi Model LLM
 
-Model default yang dipakai konsisten sepanjang seluruh 32 modul adalah **`llama3.2:3b`** (lihat perhitungan RAM/VRAM di `Module-02-Setup-Ollama-Evaluasi-Model/materi.md` section 5.1). Alasan memakai satu model yang sama sepanjang training:
+Model default yang dipakai konsisten sepanjang seluruh 31 modul adalah **`llama3.2:3b`** (lihat perhitungan RAM/VRAM di `Module-02-Setup-Ollama-Evaluasi-Model/materi.md` section 5.1). Alasan memakai satu model yang sama sepanjang training:
 
 - **Constraint RAM total stack, bukan cuma LLM** — prasyarat di atas hanya mensyaratkan minimal 16GB RAM untuk menjalankan Ollama **bersamaan** dengan OpenSearch, PostgreSQL, Airflow, FastAPI, LangGraph, dan Langfuse via Docker Compose. Model 7B (butuh ~8GB RAM+overhead) berisiko membuat laptop peserta kehabisan memory begitu semua service Module 27+ aktif bersamaan.
 - **Llama 3.2 sudah mendukung tool-calling** — Module 23 butuh agentic tool-calling (LangGraph routing ke RAG vs SQL tool); model family Llama 3.2 (termasuk varian 3B) sudah punya dukungan tool-calling di Ollama, jadi tidak perlu model lebih besar hanya demi fitur ini.
