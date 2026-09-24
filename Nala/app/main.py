@@ -6,6 +6,7 @@ from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from langfuse import Langfuse
 from pydantic import BaseModel
 
 from app.embeddings import embed_text
@@ -38,6 +39,12 @@ vector_store = VectorStore(base_url=OPENSEARCH_BASE_URL, index_name="nala-docs")
 RERANK_ENABLED = os.environ.get("RERANK_ENABLED", "true").lower() == "true"
 reranker = Reranker() if RERANK_ENABLED else None
 
+langfuse_client = Langfuse(
+    public_key=os.environ.get("LANGFUSE_PUBLIC_KEY"),
+    secret_key=os.environ.get("LANGFUSE_SECRET_KEY"),
+    host=os.environ.get("LANGFUSE_HOST", "http://localhost:3000"),
+)
+
 
 def list_knowledge_base_documents() -> list[str]:
     if not os.path.isdir(KNOWLEDGE_BASE_PATH):
@@ -68,6 +75,23 @@ def health_check():
     return {"status": "ok"}
 
 
+def traced_chat_stream(trace, ollama_messages: list[dict]):
+    generation = trace.generation(
+        name="llm_generate_stream",
+        model=os.environ.get("OLLAMA_MODEL", "llama3.2:3b"),
+        input=ollama_messages,
+    )
+    accumulated = ""
+    try:
+        for token in ollama_client.chat_stream(ollama_messages):
+            accumulated += token
+            yield token
+    finally:
+        generation.end(output=accumulated)
+        trace.update(output={"reply": accumulated})
+        langfuse_client.flush()
+
+
 @app.post("/chat/stream")
 def chat_stream(request: ChatStreamRequest) -> StreamingResponse:
     if not request.messages or request.messages[-1].role != "user":
@@ -79,11 +103,17 @@ def chat_stream(request: ChatStreamRequest) -> StreamingResponse:
     recent = request.messages[-HISTORY_WINDOW:]
     last_user_message = recent[-1].content
 
+    trace = langfuse_client.trace(name="chat_stream", input={"message": last_user_message})
+
     if request.use_rag:
         try:
             do_rerank = request.use_reranking and reranker is not None
             pool_size = 20 if do_rerank else (3 if request.search_method == "hybrid" else 6)
 
+            retrieval_span = trace.span(
+                name="retrieval",
+                input={"query": last_user_message, "method": request.search_method},
+            )
             if request.search_method == "bm25":
                 candidates = vector_store.search_bm25(last_user_message, top_k=pool_size)
             elif request.search_method == "hybrid":
@@ -96,10 +126,17 @@ def chat_stream(request: ChatStreamRequest) -> StreamingResponse:
             else:
                 query_embedding = embed_text(last_user_message, base_url=OLLAMA_BASE_URL)
                 candidates = vector_store.search(query_embedding, top_k=pool_size)
+            retrieval_span.end(output={"candidate_count": len(candidates)})
 
-            results = reranker.rerank(last_user_message, candidates, top_k=3) if do_rerank else candidates
-        except httpx.HTTPError:
+            if do_rerank:
+                rerank_span = trace.span(name="rerank", input={"candidate_count": len(candidates)})
+                results = reranker.rerank(last_user_message, candidates, top_k=3)
+                rerank_span.end(output={"top_chunks": [r["text"][:100] for r in results]})
+            else:
+                results = candidates
+        except httpx.HTTPError as exc:
             results = []
+            trace.update(output={"error": f"retrieval_failed: {exc}"}, level="ERROR")
     else:
         results = []
 
@@ -121,7 +158,7 @@ def chat_stream(request: ChatStreamRequest) -> StreamingResponse:
     ollama_messages.append({"role": "user", "content": grounded_content})
 
     return StreamingResponse(
-        ollama_client.chat_stream(ollama_messages), media_type="text/plain"
+        traced_chat_stream(trace, ollama_messages), media_type="text/plain"
     )
 
 

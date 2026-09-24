@@ -8,3 +8,4 @@ python-multipart==0.0.12
 --extra-index-url https://download.pytorch.org/whl/cpu
 torch==2.6.0+cpu
 sentence-transformers==3.2.1
+langfuse>=2.0,<3.0

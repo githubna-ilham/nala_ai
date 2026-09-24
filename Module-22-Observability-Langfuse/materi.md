@@ -8,14 +8,14 @@ Menambahkan Langfuse self-hosted untuk mencatat setiap request `/chat/stream` (s
 
 **Observability** adalah kemampuan memahami apa yang terjadi *di dalam* sistem hanya dari data yang direkam keluar darinya — bukan sekadar "apakah request berhasil", tapi "persis di tahap mana ia berhasil atau gagal". Begitu tiap request ke NALA melewati beberapa tahap berurutan (retrieval, rerank, generation), log teks biasa tidak lagi cukup: baris-barisnya tidak terstruktur per-request, jadi sulit direkonstruksi menjadi satu alur yang bisa dibaca ujung ke ujung. Di Langfuse, satu request itu dicatat sebagai satu **trace** — unit pencatatan paling luar yang menampung seluruh perjalanan satu pertanyaan user dari awal sampai jawaban jadi.
 
-Di dalam satu trace, tiap tahap kerja dicatat sebagai **span** — potongan waktu dengan `input`/`output`/durasi sendiri, mewakili satu langkah non-LLM seperti `hybrid_search` (pencarian BM25 + vector) atau `rerank` (penyusunan ulang peringkat hasil). Kalau tahapnya justru pemanggilan LLM, dipakai jenis catatan khusus yaitu **generation** — varian span yang selain `input`/`output` juga merekam jumlah *token* dan model yang dipakai, karena inilah tahap yang biayanya (latency, token) paling relevan untuk diaudit. Span dan generation ini bersarang (*nested*) di dalam trace-nya — persis meniru urutan pemanggilan asli di kode — sehingga saat dibuka di UI Langfuse, satu trace terbaca sebagai pohon: tahap mana yang lambat, tahap mana yang inputnya sudah salah sejak awal, dan tahap mana yang menghasilkan output yang berhalusinasi.
+Di dalam satu trace, tiap tahap kerja dicatat sebagai **span** — potongan waktu dengan `input`/`output`/durasi sendiri, mewakili satu langkah non-LLM seperti `retrieval` (pencarian BM25 + vector) atau `rerank` (penyusunan ulang peringkat hasil). Kalau tahapnya justru pemanggilan LLM, dipakai jenis catatan khusus yaitu **generation** — varian span yang selain `input`/`output` juga merekam jumlah *token* dan model yang dipakai, karena inilah tahap yang biayanya (latency, token) paling relevan untuk diaudit. Span dan generation ini bersarang (*nested*) di dalam trace-nya — persis meniru urutan pemanggilan asli di kode — sehingga saat dibuka di UI Langfuse, satu trace terbaca sebagai pohon: tahap mana yang lambat, tahap mana yang inputnya sudah salah sejak awal, dan tahap mana yang menghasilkan output yang berhalusinasi.
 
 Trace baru benar-benar lengkap kalau ditutup dengan **`flush()`** — memaksa data yang masih di buffer klien Langfuse terkirim ke server sebelum proses berakhir, supaya trace tidak hilang saat request selesai lebih cepat daripada background sender-nya sempat mengirim. Untuk endpoint streaming, penutupan ini tidak bisa dilakukan di badan fungsi endpoint (karena badan fungsi selesai duluan sebelum token terakhir terkirim ke user) — trace harus ditutup di dalam generator itu sendiri, setelah token terakhir benar-benar dikirim.
 
 ```mermaid
 flowchart TD
     T["Trace: satu request"]
-    T --> S1["Span: hybrid_search"]
+    T --> S1["Span: retrieval"]
     T --> S2["Span: rerank"]
     T --> G["Generation: llama3.2:3b<br/>(input/output/token)"]
 ```
@@ -23,7 +23,7 @@ flowchart TD
 ## Hasil Akhir yang Diharapkan
 
 - Service `langfuse-db` (Postgres khusus trace, terpisah dari Postgres data operasional Module 23) dan `langfuse` (v2, self-hosted) berjalan lewat Docker Compose, bisa diakses di `http://localhost:3000`
-- `/chat/stream` menghasilkan satu trace per request dengan span `hybrid_search` dan `rerank` (dibuka/ditutup langsung di badan endpoint) plus `generation` (dibuka/ditutup lewat generator `traced_chat_stream()` **setelah** token terakhir, bukan di badan fungsi endpoint), dengan `try/finally` supaya tetap tercatat walau koneksi terputus
+- `/chat/stream` menghasilkan satu trace per request dengan span `retrieval` dan `rerank` (dibuka/ditutup langsung di badan endpoint) plus `generation` (dibuka/ditutup lewat generator `traced_chat_stream()` **setelah** token terakhir, bukan di badan fungsi endpoint), dengan `try/finally` supaya tetap tercatat walau koneksi terputus
 - Kita bisa membuka sebuah trace di UI Langfuse dan membaca `input`/`output` tiap span untuk mendiagnosis apakah masalah ada di retrieval, reranking, atau generation
 - Trade-off dicatat jujur: overhead latensi tambahan, enam container berjalan bersamaan (beban RAM terbesar sepanjang Module 1-22), dan data trace berisi potongan dokumen internal (aman karena self-hosted, jadi perhatian kalau dipindah ke cloud)
 
@@ -69,7 +69,7 @@ Penting untuk tidak tertukar: Postgres yang ditambahkan module ini (`langfuse-db
 
 ## 4. Struktur Kode yang Ditambahkan
 
-Dua Tahap: **Tahap A** menambah service `langfuse-db` + `langfuse` di `docker-compose.yml` dan setup akun. **Tahap B** instrumentasi `/chat/stream` (satu-satunya endpoint chat NALA) — span `hybrid_search`/`rerank` dibuka/ditutup langsung di badan endpoint, tapi `generation` untuk pemanggilan LLM harus ditutup **di dalam generator**, setelah token terakhir, bukan di badan fungsi endpoint, karena endpoint ini streaming.
+Dua Tahap: **Tahap A** menambah service `langfuse-db` + `langfuse` di `docker-compose.yml` dan setup akun. **Tahap B** instrumentasi `/chat/stream` (satu-satunya endpoint chat NALA) — span `retrieval`/`rerank` dibuka/ditutup langsung di badan endpoint, tapi `generation` untuk pemanggilan LLM harus ditutup **di dalam generator**, setelah token terakhir, bukan di badan fungsi endpoint, karena endpoint ini streaming.
 
 **Prasyarat sebelum mulai:**
 - Sudah menyelesaikan **Module 21** — `Nala/` sudah punya framework evaluasi bekerja.
@@ -320,7 +320,7 @@ GUARDRAIL:
 
 `/chat/stream` (satu-satunya endpoint chat NALA sejak Module 8) mengembalikan `StreamingResponse(ollama_client.chat_stream(...), ...)` — **generator** yang dipasangkan sebagai body response. Ini penting dipahami dulu sebelum menulis instrumentasinya: begitu fungsi `chat_stream()` mengeksekusi baris `return StreamingResponse(...)`, fungsi itu **langsung selesai (return)** — isi generator (`ollama_client.chat_stream(...)`) baru benar-benar berjalan **setelah** itu, token demi token, saat FastAPI/Starlette menariknya untuk dikirim ke browser.
 
-**Konsekuensinya**: kode instrumentasi yang ditulis persis setelah `return StreamingResponse(...)` di badan fungsi `chat_stream()` **tidak akan pernah tereksekusi pada waktu yang tepat** — fungsi sudah `return` duluan. Trace tidak bisa ditutup (`trace.update(output=...)`, `langfuse_client.flush()`) di badan fungsi endpoint — ia harus ditutup **di dalam generator itu sendiri**, tepat setelah token terakhir selesai di-`yield`. Span untuk tahap yang bukan pemanggilan LLM (`hybrid_search`, `rerank`) tidak kena masalah ini — keduanya selesai penuh **sebelum** token pertama dikirim, jadi tetap bisa dibuka/ditutup langsung di badan `chat_stream()`; hanya `generation` (pemanggilan LLM) yang harus dibungkus generator terpisah.
+**Konsekuensinya**: kode instrumentasi yang ditulis persis setelah `return StreamingResponse(...)` di badan fungsi `chat_stream()` **tidak akan pernah tereksekusi pada waktu yang tepat** — fungsi sudah `return` duluan. Trace tidak bisa ditutup (`trace.update(output=...)`, `langfuse_client.flush()`) di badan fungsi endpoint — ia harus ditutup **di dalam generator itu sendiri**, tepat setelah token terakhir selesai di-`yield`. Span untuk tahap yang bukan pemanggilan LLM (`retrieval`, `rerank`) tidak kena masalah ini — keduanya selesai penuh **sebelum** token pertama dikirim, jadi tetap bisa dibuka/ditutup langsung di badan `chat_stream()`; hanya `generation` (pemanggilan LLM) yang harus dibungkus generator terpisah.
 
 ```mermaid
 sequenceDiagram
@@ -371,29 +371,52 @@ def chat_stream(request: ChatStreamRequest) -> StreamingResponse:
 
     trace = langfuse_client.trace(name="chat_stream", input={"message": last_user_message})
 
-    try:
-        retrieval_span = trace.span(name="hybrid_search", input={"query": last_user_message})
-        query_embedding = embed_text(last_user_message, base_url=OLLAMA_BASE_URL)
-        candidates = vector_store.search_hybrid(
-            query_text=last_user_message,
-            query_embedding=query_embedding,
-            top_k=20,
-        )
-        retrieval_span.end(output={"candidate_count": len(candidates)})
+    if request.use_rag:
+        try:
+            do_rerank = request.use_reranking and reranker is not None
+            pool_size = 20 if do_rerank else (3 if request.search_method == "hybrid" else 6)
 
-        rerank_span = trace.span(name="rerank", input={"candidate_count": len(candidates)})
-        results = reranker.rerank(last_user_message, candidates, top_k=3) if reranker else candidates[:3]
-        rerank_span.end(output={"top_chunks": [r["text"][:100] for r in results]})
-    except httpx.HTTPError as exc:
+            retrieval_span = trace.span(
+                name="retrieval",
+                input={"query": last_user_message, "method": request.search_method},
+            )
+            if request.search_method == "bm25":
+                candidates = vector_store.search_bm25(last_user_message, top_k=pool_size)
+            elif request.search_method == "hybrid":
+                query_embedding = embed_text(last_user_message, base_url=OLLAMA_BASE_URL)
+                candidates = vector_store.search_hybrid(
+                    query_text=last_user_message,
+                    query_embedding=query_embedding,
+                    top_k=pool_size,
+                )
+            else:
+                query_embedding = embed_text(last_user_message, base_url=OLLAMA_BASE_URL)
+                candidates = vector_store.search(query_embedding, top_k=pool_size)
+            retrieval_span.end(output={"candidate_count": len(candidates)})
+
+            if do_rerank:
+                rerank_span = trace.span(name="rerank", input={"candidate_count": len(candidates)})
+                results = reranker.rerank(last_user_message, candidates, top_k=3)
+                rerank_span.end(output={"top_chunks": [r["text"][:100] for r in results]})
+            else:
+                results = candidates
+        except httpx.HTTPError as exc:
+            results = []
+            trace.update(output={"error": f"retrieval_failed: {exc}"}, level="ERROR")
+    else:
         results = []
-        trace.update(output={"error": f"retrieval_failed: {exc}"}, level="ERROR")
 
-    if results:
-        context = "\n\n".join(r["text"] for r in results)
+    if request.use_rag and results:
+        context = "\n\n".join(
+            f"[{r['metadata']['source']}]\n{r['text']}" for r in results
+        )
         system_prompt = NALA_SYSTEM_PROMPT
         grounded_content = f"Konteks:\n{context}\n\nPertanyaan: {last_user_message}"
-    else:
+    elif request.use_rag:
         system_prompt = NALA_SYSTEM_PROMPT_NO_CONTEXT
+        grounded_content = last_user_message
+    else:
+        system_prompt = NALA_SYSTEM_PROMPT_RAG_OFF
         grounded_content = last_user_message
 
     ollama_messages = [{"role": "system", "content": system_prompt}]
@@ -406,7 +429,7 @@ def chat_stream(request: ChatStreamRequest) -> StreamingResponse:
 ```
 
 - **`trace = langfuse_client.trace(...)`**: dibuat di **awal** `chat_stream()` (setelah validasi 400) — satu trace mewakili **satu request** secara utuh.
-- **`trace.span(...)`**: dipakai untuk tahap yang bukan pemanggilan LLM langsung — `hybrid_search` dan `rerank` masing-masing jadi satu span bersarang di dalam trace, dengan `input`/`output` ringkas (bukan seluruh isi chunk, cukup jumlah dan cuplikan — trace yang terlalu besar memperlambat UI Langfuse saat dibuka).
+- **`trace.span(...)`**: dipakai untuk tahap yang bukan pemanggilan LLM langsung — `retrieval` dan `rerank` masing-masing jadi satu span bersarang di dalam trace, dengan `input`/`output` ringkas (bukan seluruh isi chunk, cukup jumlah dan cuplikan — trace yang terlalu besar memperlambat UI Langfuse saat dibuka).
 - **`trace.generation(...)`**: khusus untuk pemanggilan model bahasa — Langfuse membedakan `generation` dari `span` biasa karena `generation` punya field khusus terkait LLM (`model`, token usage kalau tersedia) yang ditampilkan berbeda di UI. Dibuat **di dalam** `traced_chat_stream()`, bukan di `chat_stream()`, karena alasan di atas.
 - **`traced_chat_stream()`** adalah generator **baru** yang membungkus `ollama_client.chat_stream()` yang sudah ada sejak Module 8 — bukan menggantikannya. Ia meneruskan (`yield token`) setiap token persis seperti aslinya, sambil diam-diam mengumpulkannya ke `accumulated`.
 - **`try/finally`**: memastikan `generation.end()`, `trace.update()`, dan `flush()` tetap terpanggil bahkan kalau streaming terputus di tengah jalan (misalnya koneksi browser terputus) — `finally` selalu jalan baik generator sampai habis normal maupun berhenti karena exception/`GeneratorExit`.
@@ -426,7 +449,7 @@ curl -N -X POST http://localhost:8000/chat/stream \
   -d '{"messages": [{"role": "user", "content": "Apa saja syarat pengajuan kredit untuk nasabah perorangan?"}]}'
 ```
 
-✅ **Indikator sukses**: streaming tetap berjalan token demi token seperti Module 8 (tidak ada perubahan perilaku dari sisi user), dan trace baru untuk `chat_stream` muncul di `http://localhost:3000` (halaman **Traces** project Anda) **setelah** curl selesai menerima seluruh stream (bukan langsung saat request dikirim) — bukti `flush()` di dalam generator benar-benar menunggu token terakhir, bukan terpanggil prematur. Klik trace tersebut untuk melihat span `hybrid_search`, `rerank`, dan generation `llm_generate_stream` tersusun bersarang dengan waktu eksekusi masing-masing.
+✅ **Indikator sukses**: streaming tetap berjalan token demi token seperti Module 8 (tidak ada perubahan perilaku dari sisi user), dan trace baru untuk `chat_stream` muncul di `http://localhost:3000` (halaman **Traces** project Anda) **setelah** curl selesai menerima seluruh stream (bukan langsung saat request dikirim) — bukti `flush()` di dalam generator benar-benar menunggu token terakhir, bukan terpanggil prematur. Klik trace tersebut untuk melihat span `retrieval`, `rerank`, dan generation `llm_generate_stream` tersusun bersarang dengan waktu eksekusi masing-masing.
 
 **Uji juga alur fallback tetap tercatat saat OpenSearch mati** (mensimulasikan kegagalan):
 
@@ -468,7 +491,7 @@ GOAL:
     trace = langfuse_client.trace(name="chat_stream",
     input={"message": last_user_message}) setelah validasi 400.
     Bungkus pemanggilan search_hybrid() dengan trace.span(
-    name="hybrid_search", ...) lalu .end(output=...), dan
+    name="retrieval", ...) lalu .end(output=...), dan
     reranker.rerank() dengan trace.span(name="rerank", ...) lalu
     .end(output=...) — keduanya dibuka/ditutup langsung di badan
     chat_stream(), karena selesai sebelum streaming dimulai. Ganti
@@ -529,7 +552,7 @@ Klik salah satu baris trace untuk membuka detail — strukturnya **bersarang (ne
 
 ```
 chat_stream (trace)
-├── hybrid_search (span)
+├── retrieval (span)
 ├── rerank (span)
 └── llm_generate_stream (generation)
 ```
@@ -537,9 +560,9 @@ chat_stream (trace)
 Alur debugging sebuah jawaban yang terasa buruk (misalnya staff komplain jawaban tidak akurat):
 
 1. Buka `http://localhost:3000`, masuk ke halaman **Tracing**, cari trace yang sesuai (bisa difilter berdasarkan waktu, atau cari `input` yang mengandung pertanyaan yang dikomplain).
-2. Buka trace tersebut — klik node trace paling atas, lihat `Input` (pertanyaan user) dan `Output` (jawaban final) di panel kanan. Perhatikan **urutan span**: `hybrid_search` → `rerank` → `llm_generate`/`llm_generate_stream`.
-3. Klik span `hybrid_search`: lihat `output.candidate_count` — kalau nol atau sangat kecil, kemungkinan besar masalahnya di retrieval (index kosong, atau dokumen yang relevan memang belum ter-*ingest*), bukan di LLM.
-4. Klik span `rerank`: lihat `output.top_chunks` — apakah cuplikan chunk yang dipilih **benar-benar** relevan dengan pertanyaan? Kalau kandidat di `hybrid_search` sudah benar tapi `rerank` menaruh chunk yang salah di posisi teratas, itu petunjuk model reranker perlu ditinjau (atau `RERANK_ENABLED=false` sementara sebagai pembanding).
+2. Buka trace tersebut — klik node trace paling atas, lihat `Input` (pertanyaan user) dan `Output` (jawaban final) di panel kanan. Perhatikan **urutan span**: `retrieval` → `rerank` → `llm_generate`/`llm_generate_stream`.
+3. Klik span `retrieval`: lihat `output.candidate_count` — kalau nol atau sangat kecil, kemungkinan besar masalahnya di retrieval (index kosong, atau dokumen yang relevan memang belum ter-*ingest*), bukan di LLM.
+4. Klik span `rerank`: lihat `output.top_chunks` — apakah cuplikan chunk yang dipilih **benar-benar** relevan dengan pertanyaan? Kalau kandidat di `retrieval` sudah benar tapi `rerank` menaruh chunk yang salah di posisi teratas, itu petunjuk model reranker perlu ditinjau (atau `RERANK_ENABLED=false` sementara sebagai pembanding).
 5. Klik span `llm_generate`/`llm_generate_stream`: baca `input` (prompt lengkap yang dikirim ke `llama3.2:3b`, termasuk konteks yang disusun) dan `output` (jawaban model). Kalau konteks di `input` sudah benar tapi `output` tetap salah/mengarang, itu petunjuk masalahnya ada di generation — grounding di system prompt (Module 14 Bagian 4) mungkin perlu diperkuat, atau modelnya memang mengabaikan instruksi untuk kasus tertentu.
 6. Perhatikan **durasi tiap span** (ditampilkan di UI sebagai badge kecil di samping tiap node, atau saat hover) — kalau `rerank` memakan waktu jauh lebih lama dari yang diharapkan, itu petunjuk nyata untuk pertimbangan trade-off di Module 20 Bagian 6 (`RERANK_ENABLED=false` sebagai katup pengaman). Di sistem ini, generation (LLM) biasanya paling dominan durasinya dibanding kedua span retrieval.
 
@@ -575,14 +598,14 @@ Koneksi yang belum dimanfaatkan di sini: `judge_answer()` dari Module 21 (`app/l
   ```bash
   docker compose up -d airflow
   ```
-- **Data trace berisi potongan dokumen internal** (chunk SOP yang di-retrieve, muncul di `output` span `hybrid_search`/`rerank`) — karena Langfuse dijalankan self-hosted (Bagian 2), ini tidak masalah untuk skenario pelatihan/privasi data. Kalau suatu saat Langfuse dipindah ke layanan cloud (bukan self-hosted), ini jadi pertimbangan privasi data yang serius dan tidak boleh dilakukan tanpa tinjauan keamanan — dicatat di sini sebagai pengingat prinsip, bukan skenario yang direncanakan.
+- **Data trace berisi potongan dokumen internal** (chunk SOP yang di-retrieve, muncul di `output` span `retrieval`/`rerank`) — karena Langfuse dijalankan self-hosted (Bagian 2), ini tidak masalah untuk skenario pelatihan/privasi data. Kalau suatu saat Langfuse dipindah ke layanan cloud (bukan self-hosted), ini jadi pertimbangan privasi data yang serius dan tidak boleh dilakukan tanpa tinjauan keamanan — dicatat di sini sebagai pengingat prinsip, bukan skenario yang direncanakan.
 
 ## 7. Checkpoint Praktik
 
 Langkah eksekusi lengkap ada di Bagian 4 (Struktur Kode yang Ditambahkan) di atas, Langkah 1-4. Yang perlu dipastikan sebelum Module 18-22 dianggap selesai:
 
 - [ ] `http://localhost:3000` bisa diakses, akun dan Project sudah dibuat, API key sudah tersambung ke service `api`
-- [ ] Trace baru muncul di Langfuse setiap kali `/chat/stream` dipanggil, dengan span `hybrid_search`, `rerank`, dan generation `llm_generate_stream` tersusun bersarang, muncul setelah stream selesai (bukan gagal/tidak muncul sama sekali)
+- [ ] Trace baru muncul di Langfuse setiap kali `/chat/stream` dipanggil, dengan span `retrieval`, `rerank`, dan generation `llm_generate_stream` tersusun bersarang, muncul setelah stream selesai (bukan gagal/tidak muncul sama sekali)
 - [ ] Minimal satu trace sudah dibuka manual dan ditelusuri lewat UI (Bagian 5) untuk memverifikasi input/output tiap span masuk akal
 - [ ] Kalau `opensearch` dimatikan paksa (mensimulasikan kegagalan), `/chat/stream` tetap fallback ke jawaban generik (bukan crash) **dan** trace tetap tercatat dengan `level="ERROR"` (lihat Bagian 4 Tahap B Langkah 4)
 

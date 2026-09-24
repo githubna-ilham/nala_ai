@@ -16,6 +16,10 @@ services:
       - KNOWLEDGE_BASE_PATH=/app/knowledge-base
       - OPENSEARCH_BASE_URL=http://opensearch:9200
       - HF_HOME=/app/.cache/huggingface
+      # GANTI dua key di bawah dengan key asli dari UI Langfuse (Settings > API Keys)
+      - LANGFUSE_PUBLIC_KEY=pk-lf-xxxxxxxx
+      - LANGFUSE_SECRET_KEY=sk-lf-xxxxxxxx
+      - LANGFUSE_HOST=http://langfuse:3000
     volumes:
       - ./knowledge-base:/app/knowledge-base
       - hf_cache:/app/.cache/huggingface
@@ -64,7 +68,30 @@ services:
       - opensearch
       - ollama
 
+  langfuse-db:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_USER=langfuse
+      - POSTGRES_PASSWORD=langfuse
+      - POSTGRES_DB=langfuse
+    volumes:
+      - langfuse_db_data:/var/lib/postgresql/data
+
+  langfuse:
+    image: langfuse/langfuse:2
+    environment:
+      - DATABASE_URL=postgresql://langfuse:langfuse@langfuse-db:5432/langfuse
+      - NEXTAUTH_URL=http://localhost:3000
+      # GANTI dua nilai di bawah dengan string acak panjang sebelum menjalankan
+      - NEXTAUTH_SECRET=ganti-dengan-random-string-yang-panjang
+      - SALT=ganti-dengan-random-string-lain-yang-panjang
+    ports:
+      - "3000:3000"
+    depends_on:
+      - langfuse-db
+
 volumes:
   ollama_data:
   opensearch_data:
   hf_cache:
+  langfuse_db_data:
