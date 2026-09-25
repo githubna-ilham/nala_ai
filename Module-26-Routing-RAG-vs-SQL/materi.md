@@ -201,7 +201,7 @@ GUARDRAIL:
 
 Bagian ini **bukan Langkah** — tidak ada kode yang ditulis, cuma catatan opsi konfigurasi kalau Langkah 2-3 belum cukup.
 
-Sesuai catatan di README utama bagian "Rekomendasi Model LLM": `llama3.2:3b` dipilih sebagai default sepanjang training karena constraint RAM total stack (bukan cuma LLM) yang berjalan bersamaan di laptop kita (Ollama + OpenSearch + PostgreSQL + Airflow + FastAPI + LangGraph + Langfuse). Kalau setelah Langkah 2-3 akurasi routing dua-tool ini **masih** terasa kurang memadai untuk demo/capstone, dan laptop kita punya **RAM 32GB+**, `qwen2.5:7b` bisa dicoba sebagai alternatif opsional:
+Sesuai catatan di README utama bagian "Rekomendasi Model LLM": `llama3.2:3b` dipilih sebagai default sepanjang training karena constraint RAM total stack (bukan cuma LLM) yang berjalan bersamaan di laptop kita (Ollama + OpenSearch + PostgreSQL + Airflow + FastAPI + LangGraph + Langfuse). Kalau setelah Langkah 2-3 akurasi routing dua-tool ini **masih** terasa kurang memadai untuk demo, dan laptop kita punya **RAM 32GB+**, `qwen2.5:7b` bisa dicoba sebagai alternatif opsional:
 
 ```bash
 docker compose exec ollama ollama pull qwen2.5:7b
