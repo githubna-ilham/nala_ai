@@ -10,7 +10,7 @@ Melakukan polish terakhir pada `chat.html` — loading indicator, badge tool RAG
 
 **Tool-used badge** adalah label visual ("📄 Dokumen SOP" atau "🗄️ Data operasional") yang menunjukkan tool mana yang **benar-benar** dipanggil agent (Module 23-27) untuk satu jawaban — diturunkan langsung dari `called_tools`, dan cuma tool dengan `diizinkan: True` yang dihitung, supaya tool yang ditolak RBAC tidak ikut ditandai seolah datanya benar-benar diambil (Bagian 2 Tahap B). Loading/typing indicator mengisi jeda **sebelum token pertama tiba** — beda dari streaming itu sendiri (sudah ada sejak Module 8), indikator ini cuma menutupi waktu tunggu retrieval + routing di backend supaya layar tidak terasa diam (Bagian 1). Kedua fitur ini tetap menjaga `escapeHtml()` di setiap render teks — mencegah **XSS** (*cross-site scripting*, kode berbahaya yang menyusup lewat teks yang di-render mentah) tetap jadi syarat, bukan sesuatu yang boleh dilonggarkan demi polish (Bagian 4).
 
-**Bubble** adalah satu balon pesan berlatar dan bersudut membulat, dirata-kanan untuk pesan user dan rata-kiri untuk jawaban NALA — menggantikan paragraf polos berawalan `Anda:`/`NALA:` dari Module 7, supaya giliran bicara terbaca dari bentuk, bukan dari label (Tahap C Langkah 6). **Lampiran sumber** adalah daftar nama file dokumen yang benar-benar dibaca agent untuk menyusun satu jawaban — diambil dari `metadata.source` yang sudah disimpan `ingest_document()` sejak Module 14, dialirkan lewat `called_tools` yang sama dengan badge, lalu ditampilkan di bawah teks jawaban (Tahap C Langkah 7). Fungsinya bukan hiasan: tanpa itu, penanya tidak punya cara memverifikasi jawaban selain percaya — dan inilah bentuk paling konkret dari transparansi yang dibahas Module 32 Bagian 2.c.
+**Bubble** adalah satu balon pesan berlatar dan bersudut membulat, dirata-kanan untuk pesan user dan rata-kiri untuk jawaban NALA — menggantikan paragraf polos berawalan `Anda:`/`NALA:` dari Module 7, supaya giliran bicara terbaca dari bentuk, bukan dari label (Tahap C Langkah 6). **Lampiran sumber** adalah daftar nama file dokumen yang benar-benar dibaca agent untuk menyusun satu jawaban — diambil dari `metadata.source` yang sudah disimpan `ingest_document()` sejak Module 14, dialirkan lewat `called_tools` yang sama dengan badge, lalu ditampilkan di bawah teks jawaban (Tahap C Langkah 7). Fungsinya bukan hiasan: tanpa itu, penanya tidak punya cara memverifikasi jawaban selain percaya — dan inilah bentuk paling konkret dari transparansi yang dibahas Module 31 Bagian 2.c.
 
 ```mermaid
 sequenceDiagram
@@ -755,6 +755,17 @@ replyEl.innerHTML =
 - **`r["metadata"].get("source", ...)`, bukan `r["metadata"]["source"]`.** Semua dokumen yang di-ingest lewat `ingest_document()` memang punya `source`, tapi dokumen uji yang pernah dimasukkan manual lewat `curl` ke OpenSearch (seperti `test-1` di Module 18) bisa tidak punya — dan `KeyError` di sini akan menjatuhkan seluruh jawaban, bukan cuma lampirannya.
 - **Jawaban dari cache tidak punya lampiran.** `set_cached_answer()` (Module 28 Langkah 3) cuma menyimpan teks jawaban, bukan daftar sumbernya. Jadi pertanyaan yang diulang akan muncul dengan badge "⚡ Dari cache" dan **tanpa** blok sumber. Ini keterbatasan nyata, bukan bug — menutupnya berarti mengubah bentuk data yang disimpan di Redis.
 
+**Enhancement — nama sumber jadi link ke dokumen (di luar Module 29 asli):**
+
+Supaya nama file di blok "Sumber" bisa **diklik** dan membuka dokumennya:
+
+- **Endpoint `GET /kb/{filename}`** (`app/main.py`) menyajikan file dari `knowledge-base/`, **dilindungi login** dan aman dari *path traversal*: hanya `os.path.basename(filename)` yang cocok dengan daftar `list_knowledge_base_documents()` (whitelist ekstensi + keberadaan file) yang dilayani; selain itu `404`.
+- **`sourcesHtml()`** membungkus tiap nama jadi `<a href="/kb/<encodeURIComponent(nama)>" target="_blank" rel="noopener">` — `escapeHtml` tetap dipakai pada teks nama (anti-XSS).
+- **Mode streaming** (`/chat/stream`, non-agent) juga dapat blok sumber: sumber dihitung **sebelum** stream mulai (dari `results`) dan dikirim lewat **response header `X-Sources`** (JSON). Body stream tetap teks polos; UI membaca `response.headers.get("X-Sources")` lalu melampirkan sumber setelah stream selesai. Header dipilih karena aman — tidak mencampur metadata ke dalam aliran teks.
+- Bonus: nama dokumen di halaman **Knowledge Base** (`/upload`) juga jadi link `/kb/...`.
+
+*(Perlu verifikasi runtime setelah rebuild.)* Catatan: PDF terbuka inline di tab baru; `.md`/`.txt` tampil sebagai teks.
+
 **▶️ Jalankan & lihat hasilnya**
 
 ```bash
@@ -806,6 +817,56 @@ GUARDRAIL:
 - JANGAN sentuh /chat/stream — lampiran sumber sengaja hanya untuk
   mode Agent (lihat Bagian 3).
 - JANGAN ubah cara set_cached_answer() menyimpan data di Redis.
+```
+
+</details>
+
+<details>
+<summary><strong>Pakai Claude Code? Salin prompt berikut, paste untuk eksekusi Enhancement (nama sumber jadi link)</strong></summary>
+
+```
+Jadikan nama dokumen sumber sebagai LINK yang bisa dibuka, di kedua
+mode chat (Module 29, enhancement Langkah 7).
+
+GOAL:
+- app/main.py: tambah endpoint GET /kb/{filename} yang menyajikan file
+  dari KNOWLEDGE_BASE_PATH via FileResponse. WAJIB: cek login dulu
+  (get_current_user, 401 kalau None); ambil safe = os.path.basename(
+  filename); kalau safe TIDAK ada di list_knowledge_base_documents()
+  → raise HTTPException(404). Ini pengaman path traversal — jangan
+  join filename mentah ke path. Import FileResponse dari
+  fastapi.responses.
+- app/main.py (/chat/stream): SEBELUM return StreamingResponse, hitung
+  stream_sources = list(dict.fromkeys(r["metadata"]["source"] for r in
+  results)) HANYA kalau request.use_rag dan results tidak kosong (else
+  []). Kirim lewat header: StreamingResponse(..., headers={"X-Sources":
+  json.dumps(stream_sources)}). Body stream TETAP teks polos — jangan
+  campur metadata ke aliran teks. Import json.
+- app/templates/chat.html: sourcesHtml(sources) bungkus tiap nama jadi
+  <a href="/kb/${encodeURIComponent(s)}" target="_blank" rel="noopener">
+  ${escapeHtml(s)}</a> di dalam <li>. Di cabang streaming: setelah
+  fetch, baca streamSources = JSON.parse(response.headers.get(
+  "X-Sources") || "[]") (bungkus try/catch); setelah loop stream
+  selesai, set replyBubble.innerHTML = escapeHtml(fullReply) +
+  sourcesHtml(streamSources).
+- app/templates/upload.html: nama dokumen di daftar Knowledge Base jadi
+  <a href="/kb/{{ doc | urlencode }}" target="_blank" rel="noopener">.
+
+CONTEXT:
+- Fitur ini MEMPERLUAS Langkah 7: mode Agent sudah punya sources di
+  ChatResponse; enhancement ini menambah (a) endpoint penyaji file,
+  (b) link di sourcesHtml, (c) sumber untuk mode streaming lewat header.
+- list_knowledge_base_documents() sudah ada di main.py (whitelist
+  ekstensi .md/.txt/.pdf + keberadaan file).
+
+GUARDRAIL:
+- Endpoint /kb WAJIB login-protected + path-safe (basename + whitelist).
+  JANGAN pernah os.path.join(KNOWLEDGE_BASE_PATH, filename) mentah.
+- escapeHtml tetap dipakai pada teks nama file (anti-XSS) meski sudah
+  jadi link.
+- Enhancement ini SENGAJA menambah sumber ke /chat/stream (lewat header,
+  bukan body) — ini mengesampingkan guardrail "jangan sentuh
+  /chat/stream" dari Langkah 7 asli, dengan cara yang aman.
 ```
 
 </details>
@@ -1086,7 +1147,7 @@ Setelah Tahap A-D selesai, verifikasi semuanya langsung lewat browser (bukan cum
 
 Kalau ada satu poin yang hasilnya tidak sesuai, cek dulu apakah itu memang gap/keterbatasan yang sudah didokumentasikan (Module 26 Bagian 6, Module 27 Bagian 4.b, Module 28 Bagian 4) sebelum menganggapnya bug baru.
 
-Setelah semua poin di atas terpenuhi, lanjutkan ke **Module 30** (`../Module-30-Stress-Testing/materi.md`) untuk menguji perilaku stack di bawah beban, lalu dua module teori penutup: **Module 31** (`../Module-31-Jenis-Arsitektur-RAG/materi.md`) dan **Module 32** (`../Module-32-Ethics-Governance/materi.md`).
+Setelah semua poin di atas terpenuhi, lanjutkan ke dua module teori: **Module 30** (`../Module-30-Jenis-Arsitektur-RAG/materi.md`) dan **Module 31** (`../Module-31-Ethics-Governance/materi.md`), lalu **Module 32** (`../Module-32-Stress-Testing/materi.md`) yang menguji perilaku stack di bawah beban.
 
 ## 3. Apa yang TIDAK Ada di Module Ini
 
@@ -1111,4 +1172,4 @@ Setelah semua poin di atas terpenuhi, lanjutkan ke **Module 30** (`../Module-30-
 
 ## Kesimpulan
 
-Module ini menutup pekerjaan frontend NALA: bukan dengan menambah kompleksitas, tapi dengan membuat kemampuan yang sudah ada (agent routing Module 23-27, streaming Module 7-17, retrieval Module 9-22) **terlihat** oleh orang yang mendemokannya. Tema dan bubble mengurus keterbacaan; badge dan lampiran sumber mengurus sesuatu yang lebih penting dari estetika — **kemampuan penonton memverifikasi jawaban**. Sebuah jawaban yang benar tapi tidak bisa ditelusuri asalnya tetap meminta penontonnya untuk sekadar percaya, dan itu persis kebiasaan yang dibahas Module 32 sebagai *overreliance*. Kelima polish ini kecil secara kode, tapi menentukan apakah orang yang menonton NALA bisa menilai sendiri apa yang sebenarnya terjadi di balik layar — atau cuma bisa menebak.
+Module ini menutup pekerjaan frontend NALA: bukan dengan menambah kompleksitas, tapi dengan membuat kemampuan yang sudah ada (agent routing Module 23-27, streaming Module 7-17, retrieval Module 9-22) **terlihat** oleh orang yang mendemokannya. Tema dan bubble mengurus keterbacaan; badge dan lampiran sumber mengurus sesuatu yang lebih penting dari estetika — **kemampuan penonton memverifikasi jawaban**. Sebuah jawaban yang benar tapi tidak bisa ditelusuri asalnya tetap meminta penontonnya untuk sekadar percaya, dan itu persis kebiasaan yang dibahas Module 31 sebagai *overreliance*. Kelima polish ini kecil secara kode, tapi menentukan apakah orang yang menonton NALA bisa menilai sendiri apa yang sebenarnya terjadi di balik layar — atau cuma bisa menebak.
